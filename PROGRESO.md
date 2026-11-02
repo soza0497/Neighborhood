@@ -15,21 +15,24 @@
   bien y solo se queja de lo que falta instalar.
 - `README.md`, `docs/android.md`, `DECISIONES.md`.
 
+- Entorno Android listo (2026-11-02, comprobado): jdk17-openjdk 17.0.20 por
+  defecto, Android Studio 2026.2.2.8 (Flathub), SDK en `~/Android/Sdk` con
+  build-tools 35.0.1 y platform android-35, plantillas Android 4.7.2,
+  debug.keystore creada, rutas puestas en el editor.
+- **APK de depuración exportado por terminal y verificado**: 29,7 MB,
+  firmado con la clave de depuración, solo arm64-v8a, incluye `catalog.json`.
+
 ### Falta para cerrar la Fase 0
-1. [Dueño] Instalar JDK 17, Android Studio (Flathub) y los componentes del SDK,
-   plantillas de exportación 4.7.2 (ver `docs/android.md`).
-2. [Dueño] Activar depuración USB en el teléfono y conectarlo.
-3. [Claude] Poner la ruta de Java en la configuración del editor, exportar el
-   APK por terminal, instalarlo con `adb` y comprobar que arranca.
-4. [Dueño] Probar en el teléfono: arrastrar, pellizcar, girar, Centrar,
+1. [Dueño] Activar depuración USB en el teléfono y conectarlo (o pasar el APK
+   con LocalSend).
+2. [Dueño] Probar en el teléfono: arrastrar, pellizcar, girar, Centrar,
    cerrar y reabrir (la cámara debe quedar donde estaba). Anotar los FPS.
-5. [Claude] Anotar en la bitácora lo instalado; commit "Fase 0 cerrada".
+3. [Claude] Corregir lo que salga de la prueba; commit "Fase 0 cerrada".
 
 ### Próximo paso exacto
-Cuando el dueño diga que instaló todo (puntos 1 y 2): correr
-`adb devices`, exportar con
-`godot --headless --path . --export-debug "Android" build/neighborhood.apk`
-e instalar con `adb install -r build/neighborhood.apk`.
+Con el teléfono conectado: `~/Android/Sdk/platform-tools/adb devices`,
+exportar con `godot --headless --path . --export-debug "Android" build/neighborhood.apk`
+e instalar con `~/Android/Sdk/platform-tools/adb install -r build/neighborhood.apk`.
 
 ### Preguntas abiertas para el dueño
 - ¿Horizontal te parece bien? (ver DECISIONES.md, "Orientación").
