@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Ícono provisional: una casita sobre fondo celeste -->
+  <rect width="128" height="128" rx="24" fill="#8fd3ff"/>
+  <rect x="14" y="98" width="100" height="16" rx="6" fill="#7ccf6b"/>
+  <rect x="34" y="58" width="60" height="44" rx="4" fill="#fff4dc"/>
+  <path d="M24 62 L64 26 L104 62 Z" fill="#ff7a6b" stroke="#e85d4f" stroke-width="4" stroke-linejoin="round"/>
+  <rect x="56" y="74" width="16" height="28" rx="3" fill="#a86b45"/>
+  <rect x="40" y="68" width="12" height="12" rx="2" fill="#6ec1ff"/>
+  <rect x="76" y="68" width="12" height="12" rx="2" fill="#6ec1ff"/>
+</svg>

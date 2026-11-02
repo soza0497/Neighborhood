@@ -1,0 +1,46 @@
+{
+	"_ayuda": "Catálogo editable. Cada objeto necesita id, name, category y price. Los ids van en inglés, sin espacios, y no se repiten. footprint = celdas que ocupa [ancho, fondo]. build_seconds = tiempo de construcción (se usa desde la Fase 3). color = color provisional hasta tener arte.",
+	"format_version": 1,
+	"categories": [
+		{ "id": "structure", "name": "Estructura" },
+		{ "id": "furniture", "name": "Muebles" }
+	],
+	"items": [
+		{
+			"id": "floor_basic",
+			"name": "Piso de madera",
+			"category": "structure",
+			"price": 10,
+			"build_seconds": 0,
+			"footprint": [1, 1],
+			"color": "#d9a066"
+		},
+		{
+			"id": "wall_basic",
+			"name": "Pared lisa",
+			"category": "structure",
+			"price": 20,
+			"build_seconds": 0,
+			"footprint": [1, 1],
+			"color": "#fff4dc"
+		},
+		{
+			"id": "bed_basic",
+			"name": "Cama sencilla",
+			"category": "furniture",
+			"price": 300,
+			"build_seconds": 0,
+			"footprint": [1, 2],
+			"color": "#7fb3ff"
+		},
+		{
+			"id": "table_basic",
+			"name": "Mesa de comedor",
+			"category": "furniture",
+			"price": 150,
+			"build_seconds": 0,
+			"footprint": [2, 1],
+			"color": "#c98b5a"
+		}
+	]
+}

@@ -1,0 +1,13 @@
+# Caché que Godot regenera solo
+.godot/
+
+# Proyecto de Android que crea Godot si algún día se usa "Gradle build"
+/android/
+
+# APKs y otros archivos exportados
+build/
+*.apk
+*.aab
+
+# Archivos temporales
+*.tmp
