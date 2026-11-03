@@ -26,6 +26,8 @@ signal catalog_loaded(item_count: int)
 # --- Cámara ---
 ## Alguien (por ejemplo, un botón de la interfaz) pide centrar la cámara.
 signal camera_reset_requested
+## Pulido 1: la brújula pide centrar la cámara en el personaje (y su piso).
+signal camera_focus_character_requested
 
 # --- Modos de juego ---
 ## La interfaz pide cambiar de modo: "build" (construir) o "live" (vivir).
@@ -43,6 +45,10 @@ signal build_delete_requested
 signal build_level_change_requested(delta: int)
 ## Pasar a la siguiente vista de paredes (completa → sin techo → bajas).
 signal view_mode_cycle_requested
+## Pulido 1: ir a un piso (la maqueta de pisos), y los íconos de la vista.
+signal build_level_set_requested(level: int)
+signal view_roofs_toggle_requested
+signal view_walls_toggle_requested
 signal build_confirm_requested
 signal build_cancel_requested
 signal undo_requested
@@ -58,6 +64,8 @@ signal build_pending_changed(has_pending: bool)
 signal build_selection_changed(has_selection: bool)
 ## Cambió la vista de paredes (ver HouseView.ViewMode).
 signal view_mode_changed(mode: int)
+## Lo mismo, como los dos íconos: techos visibles y paredes bajas.
+signal view_changed(show_roofs: bool, low_walls: bool)
 ## Para habilitar los botones de deshacer y rehacer.
 signal history_changed(can_undo: bool, can_redo: bool)
 

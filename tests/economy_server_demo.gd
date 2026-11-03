@@ -133,24 +133,24 @@ func _run() -> void:
 
 	print("\n6) Un turno de trabajo: lo hace el personaje, cobra el servidor")
 	# Se abre el juego de verdad (escena principal) con la casa del servidor,
-	# a velocidad x10 y un minuto antes de la hora del turno del día siguiente.
+	# a velocidad x5 y un minuto antes de la hora del turno del día siguiente.
 	GameState.house = house.to_dict()
 	GameState.character = {}
 	var main: Node = preload("res://scenes/main.tscn").instantiate()
 	add_child(main)
-	GameClock.speed = 10
+	GameClock.speed = 5
 	GameClock.minutes = float((GameClock.day() + 1) * 1440 + 9 * 60 - 1)
 	money = Economy.money
 	var xp := Economy.xp
 	_check(await _wait_until(func() -> bool: return Economy.pending_pay, 20.0) and Economy.working_now,
 		"a las 09:00 el personaje sale a la acera y el servidor anota el turno")
-	_check(await Economy.request_shift_pay() == 0 and Economy.money == money, "cobrar enseguida: no (un turno de 4 h dura 24 s a x10)")
-	print("       … esperando que termine el turno (~24 s) …")
-	_check(await _wait_until(func() -> bool: return Economy.money > money, 40.0)
+	_check(await Economy.request_shift_pay() == 0 and Economy.money == money, "cobrar enseguida: no (un turno de 4 h dura 48 s a x5)")
+	print("       … esperando que termine el turno (~48 s) …")
+	_check(await _wait_until(func() -> bool: return Economy.money > money, 70.0)
 		and Economy.money == money + 120 and Economy.xp == xp + 20 and not Economy.pending_pay,
 		"volvió del trabajo: el servidor pagó $%d y 20 de experiencia" % (Economy.money - money))
 	_check(_toasts.any(func(t: String) -> bool: return t.contains("cobró $120")), "aviso: \"cobró $120 del trabajo\"")
-	_check(not await Economy.request_shift_start(), "otro turno enseguida: no (como mucho uno cada 144 s)")
+	_check(not await Economy.request_shift_start(), "otro turno enseguida: no (como mucho uno cada 288 s)")
 	main.queue_free()
 	GameClock.speed = 1
 

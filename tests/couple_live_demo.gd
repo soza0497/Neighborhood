@@ -113,7 +113,7 @@ func _run() -> void:
 	_check(partner._animator.current == "cook", "con la animación de cocinar (\"%s\")" % partner._animator.current)
 	_check(not _main._character.using(0, "o2"), "el personaje de A no usa la cocina mientras la usa B")
 	await _shot("pareja_1_cocinando.png")
-	_check(_hud_text("PartnerLabel").contains("cocinando"), "arriba dice: \"%s\"" % _hud_text("PartnerLabel"))
+	_check(_hud_text("PartnerInfoLabel").contains("cocinando"), "en Info dice: \"%s\"" % _hud_text("PartnerInfoLabel"))
 
 	print("\n3) B se duerme, después se desconecta")
 	_b.socket.update_status(CoupleState.encode_status({"character": "Beto", "state": "walking", "action": "sleep",

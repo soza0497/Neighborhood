@@ -331,7 +331,7 @@ func _test_conflicts() -> void:
 
 func _test_separation() -> void:
 	print("\n8) El sueldo de B va a la caja; después se separan")
-	await _wait_until(func() -> bool: return Time.get_ticks_msec() - _shift_started_msec > 24000, 30.0)
+	await _wait_until(func() -> bool: return Time.get_ticks_msec() - _shift_started_msec > 48000, 60.0)
 	await _wait_until(func() -> bool: return not Economy.busy)
 	var fund_before := Economy.fund
 	var b_before := int((await _b.call_rpc("game_load", {}))["data"]["money"])

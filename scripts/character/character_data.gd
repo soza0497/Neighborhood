@@ -92,33 +92,72 @@ func likes(action: Dictionary) -> float:
 
 ## Ánimo general: promedio de las necesidades (0..100).
 func mood() -> float:
-	var total := 0.0
-	for need in NEEDS:
-		total += needs[need]
-	return total / NEEDS.size()
+	return mood_for(needs)
 
 
 ## Ánimo en palabras.
 func mood_text() -> String:
-	var value := mood()
+	return mood_text_for(needs)
+
+
+## Cómo se siente: una necesidad baja da su emoción (con hambre se enoja),
+## dos o más lo ponen triste, y si todo va bien está feliz.
+func emotion() -> String:
+	return emotion_for(needs)
+
+
+# Las mismas cuentas a partir de un diccionario de necesidades (así la
+# interfaz las puede hacer con lo que le llega por EventBus).
+
+static func mood_for(values: Dictionary) -> float:
+	var total := 0.0
+	for need in NEEDS:
+		total += float(values.get(need, 0.0))
+	return total / NEEDS.size()
+
+
+static func mood_text_for(values: Dictionary) -> String:
+	var value := mood_for(values)
 	if value >= 75:
 		return "Feliz"
 	if value >= 55:
 		return "Bien"
 	if value >= 35:
 		return "Más o menos"
-	return "Decaído"
+	return "Desanimado"
 
 
-## Cómo se siente: una necesidad baja da su emoción (con hambre se enoja),
-## dos o más lo ponen triste, y si todo va bien está feliz.
-func emotion() -> String:
-	var low: Array = NEEDS.filter(func(need): return needs[need] < LOW_NEED)
+static func emotion_for(values: Dictionary) -> String:
+	var low: Array = NEEDS.filter(func(need): return float(values.get(need, 0.0)) < LOW_NEED)
 	if low.size() >= 2:
 		return "sad"
 	if low.size() == 1:
 		return LOW_NEED_EMOTION[low[0]]
-	return "happy" if mood() >= 70.0 else "calm"
+	return "happy" if mood_for(values) >= 70.0 else "calm"
+
+
+## Qué está afectando el ánimo (Pulido 1, tarjeta del ánimo): lista de
+## {emotion, text}. Primero lo que lo baja (necesidades bajas), después lo
+## que lo sube (necesidades muy bien cubiertas).
+const LOW_NEED_REASONS := {
+	"hunger": "Tiene hambre", "energy": "Está cansado", "hygiene": "Necesita bañarse", "fun": "Se aburre",
+}
+const HIGH_NEED_REASONS := {
+	"hunger": "Comió bien", "energy": "Descansó", "hygiene": "Está limpio", "fun": "Se divirtió",
+}
+const HIGH_NEED := 80.0
+
+static func mood_factors(values: Dictionary) -> Array:
+	var result: Array = []
+	for need in NEEDS:
+		if float(values.get(need, 0.0)) < LOW_NEED:
+			result.append({"emotion": LOW_NEED_EMOTION[need], "text": "%s (%s baja)" % [LOW_NEED_REASONS[need], NEED_NAMES[need].to_lower()]})
+	for need in NEEDS:
+		if float(values.get(need, 0.0)) >= HIGH_NEED:
+			result.append({"emotion": "happy", "text": HIGH_NEED_REASONS[need]})
+	if result.is_empty():
+		result.append({"emotion": "calm", "text": "Nada especial: todo más o menos bien"})
+	return result
 
 
 ## Anota algo en el diario, con la hora del juego y la emoción de ahora.

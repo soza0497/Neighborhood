@@ -10,7 +10,7 @@ extends Node
 signal speed_changed(speed: int)
 
 ## Velocidades posibles (el botón de la interfaz pasa de una a otra).
-const SPEEDS := [1, 3, 10]
+const SPEEDS := [1, 2, 5]
 ## Hora a la que empieza una partida nueva (en minutos: 8:00).
 const START_MINUTES := 8 * 60
 
@@ -29,7 +29,7 @@ func game_minutes(delta: float) -> float:
 	return 0.0 if paused else delta * speed
 
 
-## Pasa a la siguiente velocidad (x1 → x3 → x10 → x1).
+## Pasa a la siguiente velocidad (x1 → x2 → x5 → x1).
 func cycle_speed() -> void:
 	speed = SPEEDS[(SPEEDS.find(speed) + 1) % SPEEDS.size()]
 	speed_changed.emit(speed)

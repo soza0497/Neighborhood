@@ -15,8 +15,9 @@ class_name HouseGrid
 ## máxima donde el jugador puede construir (casa, cobertizo, cancha...).
 ## El frente (Z grande) da a la calle.
 const LOT_SIZE := Vector2i(32, 32)
-## Cantidad de pisos (niveles) que se pueden construir: planta baja + 1.
-const MAX_LEVELS := 2
+## Cantidad de pisos (niveles) que se pueden construir: planta baja + 4.
+## (También en el servidor: neighborhood_house.lua y neighborhood_rules.lua.)
+const MAX_LEVELS := 5
 
 ## Alto de los cimientos: la planta baja queda a esta altura del pasto.
 const FOUNDATION_HEIGHT := 0.3

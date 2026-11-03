@@ -55,6 +55,13 @@ func reset_view() -> void:
 	_set_distance(default_distance)
 
 
+## Centra la cámara en un punto del mundo (por ejemplo, el personaje).
+## Conserva el giro y el zoom.
+func focus_on(world_point: Vector3) -> void:
+	position = Vector3(world_point.x, 0.0, world_point.z)
+	_clamp_position()
+
+
 ## Devuelve el estado actual para guardarlo.
 func get_state() -> Dictionary:
 	return {

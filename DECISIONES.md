@@ -559,3 +559,49 @@ Sub-fases (cada una con su commit, probada por separado):
   jugadores en un mismo programa (`couple_demo`, `couple_live_demo`).
 - Las demos que abren la escena principal apartan la partida del jugador y la
   devuelven al terminar (la escena guarda sola).
+
+## Pulido 1 — interfaz limpia y constructor 2.0 (2026-11-03)
+
+Pedido del dueño en `docs/pulido-1.md`. Hecho en una sesión local (la PC del
+dueño), rama `pulido-1`.
+
+### P1A — interfaz
+- **Íconos propios** en `assets/icons/*.svg` (42, dibujados a mano en SVG:
+  trazo blanco redondeado; las necesidades con su color). No se usó Kenney:
+  así no hay licencias que seguir y el estilo es uno solo. `ui/icons.gd`
+  arma los botones con ícono; el texto queda como ayuda (tooltip en la PC).
+- **Barra de arriba**: dinero + nivel (como antes) y el **ánimo**: carita
+  propia (`MoodFace`) + palabra ("Feliz", "Bien", "Más o menos",
+  "Desanimado"; antes "Decaído"). Tocarlo abre una tarjeta con las 4
+  necesidades (ícono + barra), qué hace ahora y **qué afecta el ánimo**
+  (`CharacterData.mood_factors`: necesidades bajas → su emoción y motivo;
+  necesidades muy altas → "Comió bien", "Descansó"...). Tocar afuera la cierra.
+- **Pareja** arriba: solo "● nombre" (rosado en línea, gris fuera). El texto
+  largo (qué hace su personaje) pasó a **Info**.
+- **Info** (Menú → Info): FPS, versión y guardado, conexión, día y hora, caja
+  de la casa y la pareja. Opción **"Mostrar FPS en pantalla"** (apagada por
+  defecto; la opción vieja `show_fps` se ignora, la nueva es
+  `show_fps_overlay`).
+- **Maqueta de pisos** (`ui/floor_map.gd`): un SubViewport con su propio mundo
+  3D y cámara **ortográfica** (todos los pisos del mismo tamaño, fácil de
+  encuadrar), desde la calle y girada 25° para que se note el 3D. Losas y
+  paredes bajitas, el piso actual en naranja, los otros celestes
+  transparentes, y uno vacío arriba para poder subir. Punto rosado que
+  parpadea donde está el personaje. Se redibuja solo cuando la casa cambia.
+  Reemplaza Subir / Bajar / Planta baja.
+- **Techo** y **paredes**: dos íconos independientes. Ver los techos vuelve
+  las paredes altas, y bajar las paredes esconde los techos (un techo sobre
+  paredes bajas taparía todo). La vista vieja de 3 modos sigue existiendo por
+  dentro (`HouseView.view_mode`) para las demos.
+- **Brújula**: flecha de navegador que gira hacia el personaje (en la
+  pantalla); tocarla centra la cámara en él y va a su piso.
+- **Velocidades x1, x2, x5.** El servidor calcula los turnos con la velocidad
+  más rápida: `FASTEST_SPEED = 5` y `DAY_AT_FASTEST = 288` s (antes 10 y 144).
+  Un turno de 4 h dura ahora 48 s reales como mínimo (antes 24): **no da
+  ventaja** (al revés: con x10 se cobraba más rápido). Probado en Lua (a los
+  24 s ya no se cobra) y en `economy_server_demo` / `couple_demo`.
+- **5 pisos** (`MAX_LEVELS = 5` en `house_grid.gd`, `neighborhood_house.lua` y
+  `neighborhood_rules.lua`). Las casas guardadas con 2 se completan solas.
+- Las demos contra el servidor se corrieron contra un **Nakama de prueba
+  aparte** (127.0.0.1:7360, base en memoria, se borró al terminar) para no
+  tocar el servidor ni las cuentas del dueño.

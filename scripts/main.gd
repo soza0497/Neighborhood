@@ -75,6 +75,10 @@ func _ready() -> void:
 	EventBus.build_delete_requested.connect(_builder.delete_selected)
 	EventBus.build_level_change_requested.connect(_on_level_change_requested)
 	EventBus.view_mode_cycle_requested.connect(_on_view_mode_cycle_requested)
+	EventBus.build_level_set_requested.connect(_set_level)
+	EventBus.view_roofs_toggle_requested.connect(_on_roofs_toggle)
+	EventBus.view_walls_toggle_requested.connect(_on_walls_toggle)
+	EventBus.camera_focus_character_requested.connect(_focus_character)
 	EventBus.build_confirm_requested.connect(_builder.confirm_pending)
 	EventBus.build_cancel_requested.connect(_builder.cancel_pending)
 	EventBus.undo_requested.connect(_undo)
@@ -96,7 +100,9 @@ func _ready() -> void:
 
 	set_mode("live")
 	_update_partner_character()
-	EventBus.view_mode_changed.emit(_house_view.view_mode)
+	_emit_view()
+	if has_node("HUD"):
+		$HUD.setup_house(house, _character, _builder)
 	_set_level(_character.level)  # Se empieza viendo el piso del personaje.
 	history.refresh()
 
@@ -171,7 +177,33 @@ func _on_view_mode_cycle_requested() -> void:
 
 func _set_view_mode(view_mode: HouseView.ViewMode) -> void:
 	_house_view.set_view_mode(view_mode)
-	EventBus.view_mode_changed.emit(view_mode)
+	_emit_view()
+
+
+## Ícono del techo: se ven o no. Para ver los techos, las paredes vuelven a
+## ser altas (un techo sobre paredes bajas taparía el cuarto).
+func _on_roofs_toggle() -> void:
+	var roofs := not _house_view.show_roofs
+	_house_view.set_view(roofs, _house_view.low_walls and not roofs)
+	_emit_view()
+
+
+## Ícono de las paredes: altas o bajas (bajas = sin techo, para ver adentro).
+func _on_walls_toggle() -> void:
+	var low := not _house_view.low_walls
+	_house_view.set_view(_house_view.show_roofs and not low, low)
+	_emit_view()
+
+
+func _emit_view() -> void:
+	EventBus.view_mode_changed.emit(_house_view.view_mode)
+	EventBus.view_changed.emit(_house_view.show_roofs, _house_view.low_walls)
+
+
+## Brújula: la cámara va al personaje y se ve su piso.
+func _focus_character() -> void:
+	_set_level(_character.level)
+	_camera_rig.focus_on(_character.global_position)
 
 
 ## Crea el personaje (o lo carga) y descuenta el tiempo que pasó sin jugar.

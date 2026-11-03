@@ -7,6 +7,9 @@
 [ext_resource type="PackedScene" path="res://ui/jobs_panel.tscn" id="5_jobs"]
 [ext_resource type="PackedScene" path="res://ui/couple_panel.tscn" id="6_couple"]
 [ext_resource type="PackedScene" path="res://ui/home_panel.tscn" id="7_home"]
+[ext_resource type="Script" path="res://ui/mood_face.gd" id="8_face"]
+[ext_resource type="Script" path="res://ui/floor_map.gd" id="9_map"]
+[ext_resource type="Script" path="res://ui/compass_button.gd" id="10_compass"]
 
 [sub_resource type="StyleBoxFlat" id="Style_bar"]
 bg_color = Color(0.13, 0.17, 0.25, 0.85)
@@ -19,6 +22,17 @@ content_margin_top = 10.0
 content_margin_right = 12.0
 content_margin_bottom = 10.0
 
+[sub_resource type="StyleBoxFlat" id="Style_pill"]
+bg_color = Color(0.13, 0.17, 0.25, 0.85)
+corner_radius_top_left = 30
+corner_radius_top_right = 30
+corner_radius_bottom_right = 30
+corner_radius_bottom_left = 30
+content_margin_left = 16.0
+content_margin_top = 6.0
+content_margin_right = 16.0
+content_margin_bottom = 6.0
+
 [sub_resource type="StyleBoxFlat" id="Style_hint"]
 bg_color = Color(0.13, 0.17, 0.25, 0.7)
 corner_radius_top_left = 12
@@ -29,6 +43,13 @@ content_margin_left = 14.0
 content_margin_top = 6.0
 content_margin_right = 14.0
 content_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxFlat" id="Style_map"]
+bg_color = Color(0.13, 0.17, 0.25, 0.35)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
 
 [sub_resource type="StyleBoxFlat" id="Style_confirm"]
 bg_color = Color(0.2, 0.62, 0.32, 1)
@@ -60,147 +81,130 @@ theme_override_constants/separation = 8
 [node name="TopRow" type="HBoxContainer" parent="Root/Layout"]
 layout_mode = 2
 mouse_filter = 2
+theme_override_constants/separation = 10
 
-[node name="TopLeft" type="VBoxContainer" parent="Root/Layout/TopRow"]
+[node name="MoneyPill" type="PanelContainer" parent="Root/Layout/TopRow"]
 layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
+size_flags_vertical = 0
+theme_override_styles/panel = SubResource("Style_pill")
 
-[node name="FpsLabel" type="Label" parent="Root/Layout/TopRow/TopLeft"]
-unique_name_in_owner = true
+[node name="Rows" type="VBoxContainer" parent="Root/Layout/TopRow/MoneyPill"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 22
-text = "0 FPS"
+theme_override_constants/separation = 2
 
-[node name="InfoLabel" type="Label" parent="Root/Layout/TopRow/TopLeft"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 15
-text = "Neighborhood"
-
-[node name="ServerLabel" type="Label" parent="Root/Layout/TopRow/TopLeft"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.85, 0.85, 1)
-theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 16
-text = "● Sin conexión"
-
-[node name="PartnerLabel" type="Label" parent="Root/Layout/TopRow/TopLeft"]
-unique_name_in_owner = true
-visible = false
-custom_minimum_size = Vector2(420, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.75, 0.85, 1)
-theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 16
-text = "Pareja: ○ fuera de línea"
-text_overrun_behavior = 3
-
-[node name="ClockLabel" type="Label" parent="Root/Layout/TopRow/TopLeft"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 22
-text = "Día 1 · 08:00"
-
-[node name="MoneyLabel" type="Label" parent="Root/Layout/TopRow/TopLeft"]
+[node name="MoneyLabel" type="Label" parent="Root/Layout/TopRow/MoneyPill/Rows"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.95, 0.6, 1)
-theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
-theme_override_constants/outline_size = 6
 theme_override_font_sizes/font_size = 24
 text = "$ 3000 · Nivel 1"
 
-[node name="FundLabel" type="Label" parent="Root/Layout/TopRow/TopLeft"]
+[node name="XpBar" type="ProgressBar" parent="Root/Layout/TopRow/MoneyPill/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(180, 8)
+layout_mode = 2
+show_percentage = false
+
+[node name="MoodButton" type="PanelContainer" parent="Root/Layout/TopRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+size_flags_vertical = 0
+tooltip_text = "Ánimo: tocá para ver las necesidades"
+theme_override_styles/panel = SubResource("Style_pill")
+
+[node name="Row" type="HBoxContainer" parent="Root/Layout/TopRow/MoodButton"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="MoodFace" type="Control" parent="Root/Layout/TopRow/MoodButton/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+script = ExtResource("8_face")
+
+[node name="MoodLabel" type="Label" parent="Root/Layout/TopRow/MoodButton/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.92, 0.75, 1)
+theme_override_font_sizes/font_size = 22
+text = "Feliz"
+vertical_alignment = 1
+
+[node name="PartnerChip" type="PanelContainer" parent="Root/Layout/TopRow"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.95, 0.8, 1)
+size_flags_vertical = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("Style_pill")
+
+[node name="PartnerLabel" type="Label" parent="Root/Layout/TopRow/PartnerChip"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.75, 0.85, 1)
+theme_override_font_sizes/font_size = 19
+text = "● Pareja"
+vertical_alignment = 1
+
+[node name="BuildsButton" type="Button" parent="Root/Layout/TopRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(190, 60)
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_font_sizes/font_size = 17
+text = "Obras"
+
+[node name="FpsLabel" type="Label" parent="Root/Layout/TopRow"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
 theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 18
-text = "Caja de la casa: $ 0"
+theme_override_font_sizes/font_size = 20
+text = "0 FPS"
 
-[node name="XpBar" type="ProgressBar" parent="Root/Layout/TopRow/TopLeft"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(200, 12)
+[node name="Spacer" type="Control" parent="Root/Layout/TopRow"]
 layout_mode = 2
-size_flags_horizontal = 0
-show_percentage = false
+size_flags_horizontal = 3
+mouse_filter = 2
 
 [node name="TopButtons" type="HBoxContainer" parent="Root/Layout/TopRow"]
 layout_mode = 2
 size_flags_vertical = 0
 theme_override_constants/separation = 8
 
-[node name="BuildsButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
-unique_name_in_owner = true
-visible = false
-custom_minimum_size = Vector2(200, 60)
-layout_mode = 2
-theme_override_font_sizes/font_size = 17
-text = "Obras"
-
-[node name="MenuButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(90, 60)
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "Menú"
-
-[node name="SpeedButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(80, 60)
-layout_mode = 2
-theme_override_font_sizes/font_size = 22
-text = "x1"
-
 [node name="UndoButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(105, 60)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "Deshacer"
 
 [node name="RedoButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(105, 60)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "Rehacer"
 
-[node name="ViewButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
+[node name="SpeedButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(150, 60)
+custom_minimum_size = Vector2(96, 64)
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "Vista"
-
-[node name="CenterButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(100, 60)
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "Centrar"
+focus_mode = 0
+tooltip_text = "Velocidad del tiempo"
+theme_override_font_sizes/font_size = 22
+text = "x1"
 
 [node name="ModeButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(125, 60)
 layout_mode = 2
-theme_override_font_sizes/font_size = 22
-text = "Vivir"
+
+[node name="MenuButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
+unique_name_in_owner = true
+layout_mode = 2
 
 [node name="HintLabel" type="Label" parent="Root/Layout"]
 unique_name_in_owner = true
@@ -216,75 +220,52 @@ layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
 
-[node name="LevelPanel" type="VBoxContainer" parent="Root/Layout/Middle"]
+[node name="LeftColumn" type="VBoxContainer" parent="Root/Layout/Middle"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 4
-theme_override_constants/separation = 6
+mouse_filter = 2
+theme_override_constants/separation = 8
 
-[node name="LevelUpButton" type="Button" parent="Root/Layout/Middle/LevelPanel"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(110, 60)
+[node name="ViewIcons" type="HBoxContainer" parent="Root/Layout/Middle/LeftColumn"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "Subir"
+mouse_filter = 2
+theme_override_constants/separation = 8
 
-[node name="LevelLabel" type="Label" parent="Root/Layout/Middle/LevelPanel"]
+[node name="RoofButton" type="Button" parent="Root/Layout/Middle/LeftColumn/ViewIcons"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="WallsButton" type="Button" parent="Root/Layout/Middle/LeftColumn/ViewIcons"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="MapPanel" type="PanelContainer" parent="Root/Layout/Middle/LeftColumn"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_map")
+
+[node name="FloorMap" type="SubViewportContainer" parent="Root/Layout/Middle/LeftColumn/MapPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 190)
+layout_mode = 2
+tooltip_text = "Pisos: tocá uno para ir"
+script = ExtResource("9_map")
+
+[node name="LevelLabel" type="Label" parent="Root/Layout/Middle/LeftColumn"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
 theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 17
 text = "Planta baja"
 horizontal_alignment = 1
 
-[node name="LevelDownButton" type="Button" parent="Root/Layout/Middle/LevelPanel"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(110, 60)
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "Bajar"
-
-[node name="CharacterPanel" type="PanelContainer" parent="Root/Layout/Middle"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(290, 0)
-layout_mode = 2
-size_flags_vertical = 4
-theme_override_styles/panel = SubResource("Style_bar")
-
-[node name="Rows" type="VBoxContainer" parent="Root/Layout/Middle/CharacterPanel"]
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="NameLabel" type="Label" parent="Root/Layout/Middle/CharacterPanel/Rows"]
+[node name="CompassButton" type="Button" parent="Root/Layout/Middle/LeftColumn"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 22
-text = "Alex"
-
-[node name="MoodLabel" type="Label" parent="Root/Layout/Middle/CharacterPanel/Rows"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.88, 0.6, 1)
-theme_override_font_sizes/font_size = 17
-text = "Ánimo: Feliz"
-
-[node name="NeedsBox" type="VBoxContainer" parent="Root/Layout/Middle/CharacterPanel/Rows"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="IntentionLabel" type="Label" parent="Root/Layout/Middle/CharacterPanel/Rows"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(266, 42)
-layout_mode = 2
-theme_override_font_sizes/font_size = 15
-text = "..."
-autowrap_mode = 3
-clip_text = true
-text_overrun_behavior = 3
-max_lines_visible = 2
+size_flags_horizontal = 0
+script = ExtResource("10_compass")
 
 [node name="BottomBar" type="PanelContainer" parent="Root/Layout"]
 unique_name_in_owner = true
@@ -305,9 +286,14 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
+[node name="ToolRow" type="HBoxContainer" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
 [node name="ConfirmButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(140, 52)
+custom_minimum_size = Vector2(150, 56)
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 theme_override_styles/normal = SubResource("Style_confirm")
@@ -317,34 +303,23 @@ text = "Confirmar"
 
 [node name="CancelButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(120, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "Cancelar"
 
 [node name="RotateButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(110, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "Girar"
 
 [node name="DeleteButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(110, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "Quitar"
 
 [node name="EraseButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(110, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
 toggle_mode = true
-text = "Borrar"
 
 [node name="ItemScroll" type="ScrollContainer" parent="Root/Layout/BottomBar/Rows"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 84)
 layout_mode = 2
 vertical_scroll_mode = 0
@@ -386,8 +361,6 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "Cerrar"
 
-[node name="CharacterEditor" parent="." instance=ExtResource("2_editor")]
-
 [node name="ToastBox" type="MarginContainer" parent="Root"]
 unique_name_in_owner = true
 visible = false
@@ -395,7 +368,7 @@ layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 0
 mouse_filter = 2
-theme_override_constants/margin_top = 235
+theme_override_constants/margin_top = 130
 
 [node name="ToastLabel" type="Label" parent="Root/ToastBox"]
 unique_name_in_owner = true
@@ -440,10 +413,107 @@ text = "Deshacer"
 
 [node name="NoticeCloseButton" type="Button" parent="Root/NoticeBox/NoticePanel/Row"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(48, 48)
+layout_mode = 2
+
+[node name="CardOverlay" type="Control" parent="Root"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="MoodCard" type="MarginContainer" parent="Root"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+mouse_filter = 2
+theme_override_constants/margin_left = 200
+theme_override_constants/margin_top = 76
+
+[node name="Panel" type="PanelContainer" parent="Root/MoodCard"]
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_bar")
+
+[node name="Rows" type="VBoxContainer" parent="Root/MoodCard/Panel"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="InfoPanel" type="PanelContainer" parent="Root"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(440, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/panel = SubResource("Style_bar")
+
+[node name="Rows" type="VBoxContainer" parent="Root/InfoPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="InfoTitle" type="Label" parent="Root/InfoPanel/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Info"
+
+[node name="InfoFpsLabel" type="Label" parent="Root/InfoPanel/Rows"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
-text = "X"
+text = "0 FPS"
+
+[node name="InfoLabel" type="Label" parent="Root/InfoPanel/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+text = "Neighborhood"
+
+[node name="ServerLabel" type="Label" parent="Root/InfoPanel/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.85, 0.85, 1)
+theme_override_font_sizes/font_size = 17
+text = "● Sin conexión"
+
+[node name="ClockLabel" type="Label" parent="Root/InfoPanel/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+text = "Día 1 · 08:00"
+
+[node name="FundLabel" type="Label" parent="Root/InfoPanel/Rows"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.95, 0.8, 1)
+theme_override_font_sizes/font_size = 17
+text = "Caja de la casa: $ 0"
+
+[node name="PartnerInfoLabel" type="Label" parent="Root/InfoPanel/Rows"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.75, 0.85, 1)
+theme_override_font_sizes/font_size = 17
+text = "Pareja: ○ fuera de línea"
+autowrap_mode = 3
+
+[node name="FpsCheck" type="CheckButton" parent="Root/InfoPanel/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Mostrar FPS en pantalla"
+
+[node name="InfoCloseButton" type="Button" parent="Root/InfoPanel/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Cerrar"
 
 [node name="SideMenu" type="PanelContainer" parent="Root"]
 unique_name_in_owner = true
@@ -465,74 +535,76 @@ text = "Menú"
 
 [node name="CharacterButton" type="Button" parent="Root/SideMenu/Rows"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 56)
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 19
 text = "Personaje"
+alignment = 0
+expand_icon = true
 
 [node name="DiaryButton" type="Button" parent="Root/SideMenu/Rows"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 56)
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 19
 text = "Diario"
+alignment = 0
 
 [node name="JobsButton" type="Button" parent="Root/SideMenu/Rows"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 56)
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 19
 text = "Empleos"
+alignment = 0
 
 [node name="CoupleButton" type="Button" parent="Root/SideMenu/Rows"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 56)
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 19
 text = "Pareja"
+alignment = 0
 
 [node name="HomeButton" type="Button" parent="Root/SideMenu/Rows"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 56)
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 19
 text = "Casa"
+alignment = 0
 
-[node name="OptionsTitle" type="Label" parent="Root/SideMenu/Rows"]
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.88, 0.6, 1)
-theme_override_font_sizes/font_size = 18
-text = "Opciones"
-
-[node name="FpsCheck" type="CheckButton" parent="Root/SideMenu/Rows"]
+[node name="InfoButton" type="Button" parent="Root/SideMenu/Rows"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 48)
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
-button_pressed = true
-text = "Mostrar FPS"
+theme_override_font_sizes/font_size = 19
+text = "Info"
+alignment = 0
 
 [node name="HintsCheck" type="CheckButton" parent="Root/SideMenu/Rows"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 48)
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
-button_pressed = true
 text = "Mostrar ayudas"
 
 [node name="LogoutButton" type="Button" parent="Root/SideMenu/Rows"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 48)
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 19
 text = "Cerrar sesión"
+alignment = 0
 
 [node name="SideCloseButton" type="Button" parent="Root/SideMenu/Rows"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 19
 text = "Cerrar"
+
+[node name="CharacterEditor" parent="." instance=ExtResource("2_editor")]
 
 [node name="DiaryPanel" parent="." instance=ExtResource("4_diary")]
 

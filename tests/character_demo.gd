@@ -30,7 +30,7 @@ func _run() -> void:
 	_main.set_mode("live")
 	EventBus.camera_reset_requested.emit()
 	_main._set_view_mode(HouseView.ViewMode.CUTAWAY)
-	GameClock.speed = 10
+	GameClock.speed = 5
 
 	# Esperar a que llegue y empiece a comer.
 	for i in 40:

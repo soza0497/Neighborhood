@@ -77,7 +77,7 @@ func _run() -> void:
 	Economy.last_work_day = 0
 	GameClock.minutes = 9 * 60 + 1.0
 	_main.set_mode("live")
-	GameClock.speed = 10
+	GameClock.speed = 5
 	var character: Character = _main.get_node("House/Character")
 	var money_before := Economy.money
 	var waited := 0.0

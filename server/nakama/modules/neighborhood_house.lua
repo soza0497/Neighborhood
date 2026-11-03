@@ -35,7 +35,7 @@ empiezan en 0, como en el juego.
 local M = {}
 
 M.LOT_SIZE = 32
-M.MAX_LEVELS = 2
+M.MAX_LEVELS = 5
 
 
 -- --- Celdas y bordes (house_grid.gd) ---

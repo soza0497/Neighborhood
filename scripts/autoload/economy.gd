@@ -26,9 +26,9 @@ const MAX_OFFLINE_SHIFTS := 3
 ## Avisos del modo servidor.
 const OFFLINE_TEXT := "Sin conexión al servidor"
 const BUSY_TEXT := "Esperando al servidor…"
-## Lo mismo que rules.DAY_AT_FASTEST en el servidor: un día del juego a x10
-## (como mucho un turno cada 144 s reales).
-const SERVER_SHIFT_GAP := 144
+## Lo mismo que rules.DAY_AT_FASTEST en el servidor: un día del juego a x5
+## (como mucho un turno cada 288 s reales).
+const SERVER_SHIFT_GAP := 288
 
 var money := SaveMigrations.STARTING_MONEY
 var xp := 0
@@ -51,7 +51,7 @@ var server_mode := false
 var busy := false
 ## Diferencia entre la hora del servidor y la del teléfono (segundos).
 var server_offset := 0
-## Hora real del último turno empezado (el servidor deja uno cada 144 s).
+## Hora real del último turno empezado (el servidor deja uno cada 288 s).
 var last_shift_unix := 0
 ## Lo que el servidor permite deshacer y rehacer (su historial manda).
 var server_can_undo := false

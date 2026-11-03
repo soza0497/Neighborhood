@@ -16,7 +16,16 @@ enum ViewMode {
 }
 
 var house: HouseData
-var view_mode := ViewMode.NO_ROOF
+## Pulido 1: la vista se maneja con dos íconos independientes.
+## Techos: se ven o no. Paredes: altas o bajas (siempre del piso actual).
+var show_roofs := false
+var low_walls := false
+## La vista como uno de los tres modos de antes (la usan pruebas y demos).
+var view_mode: ViewMode:
+	get:
+		if low_walls:
+			return ViewMode.CUTAWAY
+		return ViewMode.FULL if show_roofs else ViewMode.NO_ROOF
 ## Piso actual: los de arriba no se dibujan; a este se le aplica la vista.
 var top_visible_level := HouseGrid.MAX_LEVELS - 1
 
@@ -55,9 +64,15 @@ func setup(new_house: HouseData) -> void:
 
 
 func set_view_mode(mode: ViewMode) -> void:
-	if mode == view_mode:
+	set_view(mode == ViewMode.FULL, mode == ViewMode.CUTAWAY)
+
+
+## Techos visibles o no, y paredes del piso actual altas o bajas.
+func set_view(roofs: bool, low: bool) -> void:
+	if roofs == show_roofs and low == low_walls:
 		return
-	view_mode = mode
+	show_roofs = roofs
+	low_walls = low
 	rebuild_all()
 
 
@@ -72,14 +87,14 @@ func set_top_visible_level(level: int) -> void:
 ## Alto con el que se dibujan las paredes de un nivel según la vista: los
 ## pisos de abajo del actual siempre van completos.
 func wall_height(level: int) -> float:
-	if level < top_visible_level or view_mode != ViewMode.CUTAWAY:
+	if level < top_visible_level or not low_walls:
 		return HouseGrid.WALL_HEIGHT
 	return HouseGrid.CUT_WALL_HEIGHT
 
 
 ## ¿Se dibujan los techos de este nivel?
 func roofs_visible(level: int) -> bool:
-	return level < top_visible_level or view_mode == ViewMode.FULL
+	return level < top_visible_level or show_roofs
 
 
 ## Nodo 3D de una pieza (o null). El constructor lo usa para esconder un

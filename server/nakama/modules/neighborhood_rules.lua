@@ -33,7 +33,7 @@ local house_rules = require("neighborhood_house")
 
 -- Medidas de la casa: las mismas que scripts/house/house_grid.gd.
 rules.LOT_SIZE = 32
-rules.MAX_LEVELS = 2
+rules.MAX_LEVELS = 5
 rules.LAYERS = { "foundation", "floors", "walls", "objects", "roofs" }
 -- Capas cuyas piezas tardan en construirse (economy.gd, TIMED_LAYERS).
 local TIMED_LAYERS = { objects = true, roofs = true }
@@ -56,10 +56,12 @@ rules.MAX_HISTORY_BYTES = 400 * 1024
 rules.MAX_WRITES = 3000
 
 -- Empleos (DECISIONES.md, "Cuentas y servidor"): el servidor no conoce el
--- reloj del juego. Un turno se cobra si pasó al menos su duración a x10
--- (hora real) y se empieza como mucho uno cada 144 s reales (un día a x10).
-rules.FASTEST_SPEED = 10
-rules.DAY_AT_FASTEST = 144
+-- reloj del juego. Un turno se cobra si pasó al menos su duración a x5
+-- (hora real) y se empieza como mucho uno cada 288 s reales (un día a x5).
+-- Pulido 1: la velocidad más rápida bajó de x10 a x5 (GameClock.SPEEDS):
+-- los turnos tardan más en tiempo real, así que no da ninguna ventaja.
+rules.FASTEST_SPEED = 5
+rules.DAY_AT_FASTEST = 288
 -- Margen por la demora de la red entre empezar y cobrar.
 rules.SHIFT_GRACE_SECONDS = 2
 -- Pago offline: un turno por cada día del juego sin entrar (a x1, un día =
@@ -755,7 +757,7 @@ function rules.shift_pay(job)
   return math.floor(num(job.pay_per_hour) or 0) * math.floor(num(job.shift_hours) or 0)
 end
 
--- Segundos reales que dura un turno a la velocidad más rápida (x10).
+-- Segundos reales que dura un turno a la velocidad más rápida (x5).
 function rules.min_shift_seconds(job)
   return math.floor(num(job.shift_hours) or 0) * 60 / rules.FASTEST_SPEED
 end
@@ -779,7 +781,7 @@ function rules.shift_start(data, state, now)
   return {}
 end
 
--- Cobra el turno en marcha si ya pasó su duración (a x10, con margen).
+-- Cobra el turno en marcha si ya pasó su duración (a x5, con margen).
 -- Devuelve {pay, xp_gained} o nil si todavía no se puede.
 local function pay_shift(data, state, now)
   local work = state.work
