@@ -1,6 +1,6 @@
 # Progreso
 
-## Fase actual: 5 — Pareja y casa compartida (hecha en la nube; falta probarla en la PC del dueño y en dos teléfonos)
+## Fase actual: 5 — Pareja y casa compartida (verificada en la PC; falta probarla en dos teléfonos)
 
 ### Fase 5 — hecho (2026-11-03, sesión en la nube, rama `fase-5`)
 - **5A — servidor** (`server/nakama/modules/`): reglas de apoyo de la casa en
@@ -26,17 +26,12 @@
   `docs/servidor.md`, README. No se exportó el APK (no hay SDK en la nube).
 
 ### Falta para cerrar la Fase 5
-**En la PC** (con la rama `fase-5`):
-1. [Dueño] Traer la rama: `git fetch origin fase-5` y `git switch fase-5`.
-2. [Dueño] Reiniciar Nakama para que lea el código nuevo:
-   `docker compose restart nakama` (en `server/`). En los logs tiene que decir
-   que leyó el catálogo, sin `"level":"error"`.
-3. [Dueño] Pruebas: las 5 sin red (`test_house`, `test_character`,
-   `test_economy`, `test_server`, `test_couple`), `lua5.1
-   server/tests/test_rules.lua`, y contra el servidor `server_demo`,
-   `economy_server_demo`, `login_demo`, **`couple_demo`** (headless) y
-   **`couple_live_demo`** (con ventana: mirar que el personaje de B cocina).
-4. [Dueño] Exportar el APK 0.6.0.
+**En la PC: verificado (2026-11-03, sesión local).** Rama `fase-5` unida a
+`main`. Nakama reiniciado sin errores (lee los 4 módulos y el catálogo).
+Pruebas sin red 277/277, Lua 188/188, `server_demo` 24/24,
+`economy_server_demo` 39/39, `login_demo` 17/17, `couple_demo` 69/69,
+`couple_live_demo` 12/12 (capturas revisadas: B cocina, paneles bien). La
+partida del dueño quedó intacta. APK 0.6.0 exportado en `build/neighborhood.apk`.
 
 **En dos teléfonos** (o un teléfono y el juego en la PC con F5: sirven como
 dos jugadores), en la red de casa, con dos cuentas:
