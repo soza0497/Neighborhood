@@ -2,6 +2,13 @@
 
 ## Fase actual: 5 — Pareja y casa compartida (verificada en la PC; falta probarla en dos teléfonos)
 
+**Próximo paso (decidido por el dueño, 2026-11-03):** antes de la Fase 6 va el
+**Pulido 1** de `docs/pulido-1.md`: **P1A** interfaz limpia (barra de arriba
+con ánimo, Info en el menú, maqueta 3D de pisos, íconos, x1/x2/x5, 5 pisos) y
+**P1B** constructor 2.0 (Tienda / Obra / Borrar, pintura por cara, 8
+direcciones, soporte y escaleras, cuartos que recomiendan). Ideas de más
+adelante en `VISION.md` ("Ideas del dueño para más adelante").
+
 ### Fase 5 — hecho (2026-11-03, sesión en la nube, rama `fase-5`)
 - **5A — servidor** (`server/nakama/modules/`): reglas de apoyo de la casa en
   el servidor (`neighborhood_house.lua`, copia de `house_rules.gd`); relación

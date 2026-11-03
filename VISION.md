@@ -132,6 +132,61 @@ Clash of Clans con las guerras de clanes, pero sin guerras).
   propuestas, se vota, y el ganador elige de un **menú cerrado** los
   modificadores del mes (ej. "+10 % para restaurantes", "reto de calles").
 
+## Ideas del dueño para más adelante (2026-11-03)
+
+Anotadas para no perderlas; **ninguna entra hasta que el dueño la elija como
+fase**. Lo de interfaz y constructor que va ya está en `docs/pulido-1.md`.
+
+### Muebles base + variantes ("skins")
+- Pocos **muebles base** con su función (silla, silla alta, banquito, mesa,
+  escritorio, cama, sofá…) y muchas **variantes visuales** de cada uno. Lo
+  nuevo que salga cada temporada es casi solo arte; el funcionamiento es el
+  mismo. Conviene definir este modelo de datos **antes de la Fase 7 (arte)**.
+- **Juegos** (mesa con sillas) más baratos que por separado; las sillas se
+  pueden quitar después.
+- Categorías: plantas, adornos, electrónica (tele, consolas), electro-
+  domésticos, muebles, escritorios.
+- **Superficies con lugares fijos**: un escritorio o mesa tiene posiciones
+  predefinidas (con capacidad) donde se pone una PC, parlantes, un adorno…
+  El jugador elige el lugar; nunca atraviesa paredes. Cada mueble dice qué
+  puede llevar encima (una PC no va sobre la cocina).
+- La **PC sobre el escritorio** habilita trabajo remoto: ganar en internet,
+  invertir, hacer de streamer (empleos nuevos).
+
+### El personaje usa lo que tiene enfrente
+- Posturas: de pie, sentado, acostado.
+- Desde el sofá o la cama ve la tele **si la tiene enfrente** y sin pared en
+  medio (si está atrás, no). Agarra el control, puede dormirse con la tele
+  prendida o apagarla.
+- En la mesa come de lo que hay servido.
+
+### Eventos graciosos (la idea son las risas, que se compartan)
+- Una **puerta al vacío** en un piso alto: el personaje se cae, queda
+  golpeado (estrellitas o pajaritos sobre la cabeza), se enoja, y **aprende**
+  después de 3–4 veces. Si está "mareado", se vuelve a caer.
+- Llega una **ambulancia** con dos personajes chibi y se lo lleva.
+- **Nunca se pierde progreso** y por ahora **no hay muertes**.
+- Baño: en el inodoro saca el celular, un libro o lee la etiqueta del champú.
+- Piso mojado en la ducha o un balde derramado: se resbala (animación
+  graciosa), va por el trapeador; si lo mandás a otra cosa puede olvidarse y
+  volver a caerse, o verlo y rodearlo.
+
+**Cuidado con The Sims** (ver `docs/riesgos-legales-ea.md`): la vida
+cotidiana con humor es un género, no es de nadie. Pero hay dos ideas de esta
+lista que son marca de la casa de The Sims y conviene **no** hacer así:
+1. **La Muerte como personaje que aparece** (y la escena graciosa con ella).
+2. **El pixelado** para tapar en el baño o la ducha. Mejor algo propio: una
+   cortina, vapor, una toalla, o la cámara que mira para otro lado.
+
+### Casa compartida
+- Remodelación como **propuesta completa** que la pareja previsualiza y
+  aprueba: ya pasó a `docs/pulido-1.md`.
+
+### Más adelante todavía
+- **Cobertizo / almacén** para guardar lo que se quita y reusarlo sin volver
+  a comprarlo.
+- Escalera de emergencia con plataformas (estilo edificios de EE. UU.).
+
 ## Preguntas abiertas
 
 - ¿Mi pareja usa Android o iPhone? (si es iPhone, iOS deja de ser "después")
