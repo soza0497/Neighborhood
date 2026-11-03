@@ -86,6 +86,20 @@ Hecho con **Godot 4.7.2** (GDScript).
   (`price`, `unlock_level`, `build_seconds`), `data/jobs.json` y
   `data/progression.json`.
 
+## Cuenta y servidor (Fase 4)
+
+- Al abrir el juego aparece la **pantalla de entrada**: la primera vez,
+  escribí un usuario (minúsculas, números o _) y una contraseña (mínimo 8) y
+  tocá **Crear cuenta**. Después el teléfono recuerda la sesión y entra solo.
+- La primera vez que una cuenta entra, se copia la partida del teléfono al
+  servidor (casa, experiencia, piezas descubiertas, personaje y opciones). El
+  dinero del servidor empieza en $3000.
+- Arriba a la izquierda: **● Conectado: usuario** (verde) o **● Sin conexión**.
+  Fuera de casa se puede jugar sin conexión. Menú → **Cerrar sesión**.
+- El servidor corre en esta PC con Docker: cómo arrancarlo, ver sus mensajes,
+  entrar a su consola o cambiar la IP en [`docs/servidor.md`](docs/servidor.md).
+  La dirección que usa el juego está en `data/server.json`.
+
 ## Pruebas automáticas
 
 En la terminal, dentro de la carpeta del proyecto:
@@ -102,12 +116,17 @@ godot --headless --path . res://tests/test_character.tscn
 godot --headless --path . res://tests/test_economy.tscn
 ```
 
+```bash
+godot --headless --path . res://tests/test_server.tscn
+```
+
 La primera revisa las reglas de construcción y el deshacer; la segunda, las
 necesidades, la IA y los caminos; la tercera, precios, niveles, obras, empleos
-y la migración del guardado. Deben terminar con
+y la migración del guardado; la cuarta, el cliente del servidor (sin red). Deben terminar con
 `PRUEBAS: N pasaron, 0 fallaron`. (`tests/visual_demo.tscn`,
 `tests/character_demo.tscn` y `tests/economy_demo.tscn` arman casas de ejemplo y sacan capturas, pero
-**pisan la partida guardada**.)
+**pisan la partida guardada**. `tests/server_demo.tscn` y `tests/login_demo.tscn`
+prueban contra el servidor de verdad: ver `docs/servidor.md`.)
 
 ## Exportar a Android
 
@@ -132,12 +151,13 @@ parecido y cambiale `id`, `name`, `footprint`, `height` y `color`. Si te equivoc
 
 | Carpeta | Qué hay |
 |---|---|
-| `scenes/` | Escenas del mundo 3D (`main.tscn` es la que arranca) |
+| `scenes/` | Escenas del mundo 3D (`main.tscn` = el juego; arranca después de `ui/login_screen.tscn`) |
 | `scripts/` | Código. `autoload/` = sistemas siempre presentes; `house/` = la casa, el constructor y los caminos; `character/` = el personaje y su IA |
 | `data/` | Datos editables: catálogo, acciones, rasgos, opciones del personaje |
 | `ui/` | Interfaz (botones, textos) |
 | `assets/` | Modelos, sonidos, texturas, shaders (casi vacía hasta la Fase 7) |
 | `docs/` | Guías |
+| `server/` | El servidor (Nakama con Docker); Godot no lo mira (`.gdignore`) |
 | `tests/` | Pruebas automáticas (no van en el APK) |
 
 ## Sistemas globales (autoloads)
@@ -151,6 +171,8 @@ Están siempre cargados y se usan desde cualquier script por su nombre:
 - **Economy**: dinero, experiencia, nivel, piezas descubiertas, obras con
   temporizador y empleo. Todo cambio de dinero pasa por aquí.
 - **GameState**: todos los datos de la partida que se guardan.
+- **GameServer**: la conexión con el servidor (cuenta, sesión recordada,
+  indicador de conexión, `game_load`, subir personaje y opciones a la nube).
 - **SaveSystem**: guarda/carga `GameState` en `user://save.json` (con copia de
   respaldo y migración de versiones viejas)
   (en la PC: `~/.local/share/godot/app_userdata/Neighborhood/`).

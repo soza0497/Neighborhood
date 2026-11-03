@@ -11,6 +11,7 @@ extends Node3D
 const AUTOSAVE_DELAY := 1.0
 ## Máximo de minutos sin jugar que se cuentan al volver (3 días del juego).
 const MAX_OFFLINE_MINUTES := 3 * 1440
+const LOGIN_SCENE := "res://ui/login_screen.tscn"
 
 @onready var _camera_rig: CameraRig = $CameraRig
 @onready var _house_view: HouseView = $House
@@ -67,6 +68,7 @@ func _ready() -> void:
 	EventBus.character_edit_finished.connect(_on_character_edit_finished)
 	EventBus.journal_requested.connect(_on_journal_requested)
 	EventBus.construction_accelerate_requested.connect(_on_accelerate_requested)
+	EventBus.logout_requested.connect(_on_logout_requested)
 
 	set_mode("live")
 	EventBus.view_mode_changed.emit(_house_view.view_mode)
@@ -184,6 +186,16 @@ func _on_accelerate_requested() -> void:
 	_house_view.check_construction()
 	EventBus.toast.emit("Obras terminadas (-$%d)" % cost)
 	_autosave_timer.start()
+
+
+## Cierra la sesión: guarda, sube lo que falte a la nube y vuelve a la
+## pantalla de entrada. La partida queda en el teléfono.
+func _on_logout_requested() -> void:
+	SaveSystem.save_game()
+	if GameServer.online:
+		await GameServer.upload_cloud()
+	GameServer.logout()
+	get_tree().change_scene_to_file(LOGIN_SCENE)
 
 
 func _on_journal_requested() -> void:

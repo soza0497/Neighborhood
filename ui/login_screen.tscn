@@ -1,0 +1,157 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/login_screen.gd" id="1_login"]
+
+[sub_resource type="StyleBoxFlat" id="Style_panel"]
+bg_color = Color(0.13, 0.17, 0.25, 0.96)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+content_margin_left = 28.0
+content_margin_top = 18.0
+content_margin_right = 28.0
+content_margin_bottom = 18.0
+
+[node name="LoginScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_login")
+
+[node name="Sky" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.56, 0.83, 1, 1)
+
+[node name="Grass" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -170.0
+grow_horizontal = 2
+grow_vertical = 0
+color = Color(0.49, 0.81, 0.42, 1)
+
+[node name="Top" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+grow_horizontal = 2
+theme_override_constants/margin_top = 24
+
+[node name="Center" type="CenterContainer" parent="Top"]
+layout_mode = 2
+
+[node name="Panel" type="PanelContainer" parent="Top/Center"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_panel")
+
+[node name="Rows" type="VBoxContainer" parent="Top/Center/Panel"]
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Top/Center/Panel/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.88, 0.6, 1)
+theme_override_font_sizes/font_size = 38
+text = "Neighborhood"
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="Top/Center/Panel/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Conectando…"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Form" type="VBoxContainer" parent="Top/Center/Panel/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="UserEdit" type="LineEdit" parent="Top/Center/Panel/Rows/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+placeholder_text = "Usuario"
+max_length = 20
+
+[node name="PasswordEdit" type="LineEdit" parent="Top/Center/Panel/Rows/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+placeholder_text = "Contraseña (mínimo 8)"
+secret = true
+
+[node name="Buttons" type="HBoxContainer" parent="Top/Center/Panel/Rows/Form"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="LoginButton" type="Button" parent="Top/Center/Panel/Rows/Form/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 22
+text = "Entrar"
+
+[node name="RegisterButton" type="Button" parent="Top/Center/Panel/Rows/Form/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 22
+text = "Crear cuenta"
+
+[node name="ErrorLabel" type="Label" parent="Top/Center/Panel/Rows"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.6, 0.55, 1)
+theme_override_font_sizes/font_size = 18
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="RetryBox" type="HBoxContainer" parent="Top/Center/Panel/Rows"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="RetryButton" type="Button" parent="Top/Center/Panel/Rows/RetryBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 20
+text = "Reintentar"
+
+[node name="OfflineButton" type="Button" parent="Top/Center/Panel/Rows/RetryBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 20
+text = "Jugar sin conexión"
+
+[node name="ServerLabel" type="Label" parent="Top/Center/Panel/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.76, 0.85, 1)
+theme_override_font_sizes/font_size = 14
+text = "Servidor: "
+horizontal_alignment = 1

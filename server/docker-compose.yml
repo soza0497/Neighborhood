@@ -1,0 +1,78 @@
+# Servidor del juego Neighborhood: Nakama + su base de datos (PostgreSQL).
+#
+# Se maneja desde esta carpeta (ver docs/servidor.md):
+#   docker compose up -d        → crea y arranca los dos contenedores
+#   docker compose logs -f      → ver lo que pasa (Ctrl+C para salir)
+#   docker compose restart      → reiniciar (por ejemplo, tras cambiar un módulo .lua)
+#
+# Los secretos (contraseñas y llaves) están en .env, que NO va a Git.
+# Puertos (decisión del dueño, ver DECISIONES.md):
+#   7350 (API del juego): en esta PC y en la red de casa (LAN_IP).
+#   7351 (consola web de administración): SOLO en esta PC.
+#   La base de datos no se publica: solo Nakama la ve, por la red interna.
+
+name: neighborhood
+
+services:
+  db:
+    image: postgres:18
+    container_name: neighborhood-db
+    restart: unless-stopped
+    # Corre con el usuario del dueño (1000): así los archivos de db-data/ son
+    # suyos (los puede leer el respaldo y borrar sin permisos de administrador).
+    user: "1000:1000"
+    environment:
+      POSTGRES_DB: nakama
+      POSTGRES_USER: nakama
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Falta DB_PASSWORD en server/.env}
+      TZ: America/Costa_Rica
+    volumes:
+      # PostgreSQL 18 guarda en /var/lib/postgresql/18/docker (adentro de esto).
+      - ./db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "nakama", "-d", "nakama"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  nakama:
+    image: heroiclabs/nakama:3.41.0
+    container_name: neighborhood-nakama
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    # Los secretos llegan como variables de entorno y se pasan a Nakama al
+    # arrancar ($$ = la variable la lee el contenedor, no docker compose).
+    env_file: .env
+    environment:
+      TZ: America/Costa_Rica
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        DB="nakama:$${DB_PASSWORD}@neighborhood-db:5432/nakama"
+        /nakama/nakama migrate up --database.address "$$DB"
+        exec /nakama/nakama --config /nakama/config.yml \
+          --database.address "$$DB" \
+          --session.encryption_key "$${NAKAMA_SESSION_KEY}" \
+          --session.refresh_encryption_key "$${NAKAMA_REFRESH_KEY}" \
+          --runtime.http_key "$${NAKAMA_HTTP_KEY}" \
+          --console.password "$${NAKAMA_CONSOLE_PASSWORD}" \
+          --console.signing_key "$${NAKAMA_CONSOLE_SIGNING_KEY}"
+    volumes:
+      - ./nakama/config.yml:/nakama/config.yml:ro
+      # Código del servidor (Lua).
+      - ./nakama/modules:/nakama/data/modules:ro
+      # Los mismos datos del juego (catalog.json, jobs.json...): un solo lugar
+      # para los precios. Solo lectura: el servidor no los puede cambiar.
+      - ../data:/nakama/data/modules/game_data:ro
+    ports:
+      - "127.0.0.1:7350:7350"
+      - "${LAN_IP:-192.168.100.177}:7350:7350"
+      - "127.0.0.1:7351:7351"
+    healthcheck:
+      test: ["CMD", "/nakama/nakama", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

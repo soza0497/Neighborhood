@@ -1,18 +1,45 @@
 # Progreso
 
-## Fase actual: 4 — Cuentas y servidor (diseño decidido; sin empezar el código)
+## Fase actual: 4 — Cuentas y servidor (4A hecha, sin probar en el teléfono; falta la 4B)
 
-### Fase 4 — plan (2026-11-03)
-Decisiones del dueño y diseño completos en DECISIONES.md ("Cuentas y servidor").
-Modelo: **Opus, esfuerzo alto**. Conviene una conversación nueva.
-- **4A — servidor y cuentas**: `server/` con docker-compose (Nakama 3.41.0 +
-  postgres:18, puertos según DECISIONES), secretos en `server/.env`,
-  levantarlo y comprobar (127.0.0.1 y 192.168.100.177 responden en 7350; 7351
-  solo local). Cliente REST propio (autoload `GameServer`): registrar/entrar con
-  usuario + contraseña, sesión recordada, indicador de conexión, pantalla de
-  entrada. RPC `game_load` + importación única de la partida local; personaje
-  y opciones guardados en la nube. Guía `docs/servidor.md` para principiante.
-  Bitácora: anotar los contenedores nuevos.
+### Fase 4A — hecho (2026-11-03)
+- Servidor en `server/` (Docker): `neighborhood-nakama` (Nakama 3.41.0) y
+  `neighborhood-db` (PostgreSQL 18). Andando y comprobado: 7350 responde en
+  127.0.0.1 y 192.168.100.177; la consola 7351 solo en 127.0.0.1; la base sin
+  publicar. Secretos en `server/.env`, datos en `server/db-data/` (fuera de Git).
+  El servidor lee el mismo `data/catalog.json`.
+- Módulo Lua `neighborhood.lua`: RPC `game_load` y `game_import` (importación
+  única: casa, experiencia, descubierto, personaje, opciones; dinero $3000 en la
+  billetera de Nakama). Casa y progreso solo los escribe el servidor.
+- Cliente propio `GameServer` (autoload, REST): crear cuenta / entrar con
+  usuario y contraseña, sesión recordada (`user://session.json`, sin
+  contraseña, se renueva sola), indicador "● Conectado / Sin conexión",
+  subida de personaje y opciones a la nube, "Cerrar sesión" en el Menú.
+  Dirección en `data/server.json`. Lógica pura en `ServerSession` y `CloudSync`.
+- Pantalla de entrada (`ui/login_screen.tscn`, ahora es la escena que arranca)
+  con "Jugar sin conexión" si no hay servidor.
+- Pruebas: 53 casa + 34 personaje + 66 economía + **51 servidor** (sin red),
+  todas OK. Demos contra el servidor real: `tests/server_demo.tscn` 24/24 y
+  `tests/login_demo.tscn` 7/7 (con capturas).
+- Guía `docs/servidor.md`. Bitácora del equipo actualizada. APK 0.4.0
+  exportado (con permiso INTERNET).
+
+### Falta para cerrar la 4A
+1. [Dueño] Instalar el APK 0.4.0 y probar en el teléfono, en la red de casa
+   (checklist del chat): crear cuenta, ver "Conectado", cerrar y abrir (entra
+   solo), y con el wifi apagado ("Jugar sin conexión").
+2. [Claude] Corregir lo que salga.
+
+### Fase 4B — próximo paso exacto
+En una conversación nueva (Opus, esfuerzo alto): "Leé CLAUDE.md, PROGRESO.md,
+DECISIONES.md y VISION.md y hacé la Fase 4B". Primero: re-sincronizar una vez
+casa/experiencia/descubierto de las cuentas importadas en la 4A (ver
+DECISIONES, "Transición 4A → 4B"). Después: RPC en Lua para construir (precio,
+nivel, obra), deshacer/rehacer, acelerar, empleos y turnos, pago offline;
+wallet de Nakama. Sin conexión: Construir deshabilitado. Pruebas del servidor.
+
+### Fase 4 — plan original (2026-11-03)
+- **4A — servidor y cuentas**: hecha (arriba).
 - **4B — servidor autoritativo**: RPC en Lua para construir (precio, nivel,
   obra), deshacer/rehacer, acelerar, empleos y turnos, pago offline; wallet de
   Nakama. Sin conexión: Construir deshabilitado. Pruebas del servidor.
@@ -85,10 +112,6 @@ Todo en un solo tramo (1A + 1B + 1C):
 1. [Dueño] Instalar el APK nuevo y probar las Fases 1, 2 y 3 (checklist del chat).
 2. [Claude] Corregir lo que salga; commit "Fases 1 a 3 cerradas".
 
-### Próximo paso exacto
-En una conversación nueva (Opus, esfuerzo alto): "Leé CLAUDE.md, PROGRESO.md,
-DECISIONES.md y VISION.md y hacé la Fase 4A". En paralelo, el dueño puede
-probar el APK 0.3.0 (`~/Android/Sdk/platform-tools/adb install -r build/neighborhood.apk`).
 
 ### Pendientes anotados para más adelante
 - Balance de la economía (precios, sueldos, niveles): se ajusta con lo que
@@ -101,6 +124,12 @@ probar el APK 0.3.0 (`~/Android/Sdk/platform-tools/adb install -r build/neighbor
 - Interruptor para no unir ventanas, si hace falta.
 - Personaje: si dos acciones del mismo mueble, o dos personajes, se cruzan
   (Fase 5), hará falta "reservar" el mueble.
+- Servidor: al reiniciar la PC, Nakama puede no engancharse a la IP de la LAN
+  (como AdGuard); si pasa, un servicio que espere la IP (pregunta al dueño).
+- Servidor: respaldo de `server/db-data` (volcado `pg_dump` en el respaldo)
+  antes de jugar en serio. "Recuperar contraseña" no existe todavía.
+- Android 16+ podría pedir permiso de "red local" para hablar con la PC: si el
+  teléfono no conecta en casa, es lo primero a revisar.
 
 .
 
@@ -109,4 +138,5 @@ probar el APK 0.3.0 (`~/Android/Sdk/platform-tools/adb install -r build/neighbor
 - ¿Tu pareja usa Android o iPhone? (VISION.md)
 
 ## Fases siguientes
-- Fase 4 — Cuentas y servidor (**Opus, esfuerzo alto**).
+- Fase 4B — Servidor autoritativo (**Opus, esfuerzo alto**).
+- Fase 5 — Pareja y casa compartida (**Opus, esfuerzo alto**).

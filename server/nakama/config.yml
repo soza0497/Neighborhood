@@ -1,0 +1,29 @@
+# Configuración de Nakama (sin secretos: esos llegan desde server/.env).
+# Referencia: https://heroiclabs.com/docs/nakama/getting-started/configuration/
+
+name: neighborhood
+data_dir: /nakama/data
+
+logger:
+  level: INFO
+  stdout: true
+
+session:
+  # Token de acceso: dura 2 horas; el juego lo renueva solo.
+  token_expiry_sec: 7200
+  # Token de renovación ("acceso único"): el teléfono lo guarda y con él
+  # entra sin pedir la contraseña. Dura 1 año y se renueva cada vez que se
+  # usa, así que solo se pierde si se borran los datos de la app.
+  refresh_token_expiry_sec: 31536000
+
+socket:
+  # Llave del cliente: NO es secreta (viaja dentro del APK y está en
+  # data/server.json). Solo identifica al juego; las cuentas se protegen con
+  # su contraseña.
+  server_key: neighborhood-family
+
+runtime:
+  path: /nakama/data/modules
+
+console:
+  username: dueno

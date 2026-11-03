@@ -11,3 +11,7 @@ build/
 
 # Archivos temporales
 *.tmp
+
+# Servidor: secretos y datos de la base (nunca a Git)
+server/.env
+server/db-data/

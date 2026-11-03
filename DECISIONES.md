@@ -255,7 +255,7 @@ Lo marcado **(pregunta)** necesita tu visto bueno antes de cambiarse.
   al servidor; por eso todo cambio de dinero pasa por `Economy.add_money()`
   y todo precio sale del catálogo, listo para validarse allá.
 
-## Cuentas y servidor (Fase 4) — decidido el 2026-11-03, sin implementar todavía
+## Cuentas y servidor (Fase 4) — decidido el 2026-11-03; 4A hecha, 4B pendiente
 
 Decisiones del dueño:
 - **Sin servidor (fuera de casa): se puede Vivir, no Construir.** Construir,
@@ -304,4 +304,56 @@ Decisiones técnicas (de Claude, cambiables):
   dos (Fase 5).
 - Las 153 pruebas locales siguen valiendo: la economía local queda como
   "modo de prueba" (sin cuenta), no se ofrece en la interfaz.
+
+### Fase 4A — decisiones de la implementación (2026-11-03)
+
+- **Usuario + contraseña sobre la cuenta "email" de Nakama**: Nakama pide un
+  correo para entrar con contraseña, así que el juego usa uno inventado
+  (`usuario@neighborhood.local`) y el jugador solo ve su usuario. Usuario: 3 a
+  20 minúsculas, números o `_`; contraseña: mínimo 8 (lo exige Nakama). Si
+  algún día hay correo real o SSO, se vincula a la misma cuenta.
+- **Sesión**: token de 2 horas y token de renovación de 1 año. Comprobado: cada
+  renovación da un token de renovación NUEVO con otro año, así que jugando no
+  vence nunca; y las sesiones sobreviven a reiniciar Nakama. Se guardan en
+  `user://session.json` (los dos tokens; nunca la contraseña).
+- **Llave del cliente (`server_key`) pública**: `neighborhood-family`, en
+  `server/nakama/config.yml` y `data/server.json`. No es secreta (viaja en el
+  APK); lo secreto (llaves de sesión, base, consola) está en `server/.env`.
+- **Dirección del servidor en `data/server.json`** (host, puerto, llave,
+  espera máxima). Cambiar la IP = ese archivo + `LAN_IP` en `server/.env`.
+- **Pantalla de entrada como escena principal** (`ui/login_screen.tscn`): con
+  sesión recordada entra sola; sin servidor y con cuenta ofrece "Jugar sin
+  conexión"; sin cuenta, la primera vez hay que estar en la red de casa.
+  "Cerrar sesión" en el Menú.
+- **Transición 4A → 4B**: en la 4A la casa y la economía **siguen mandando en
+  el teléfono** (construir funciona como en la Fase 3); el servidor guarda la
+  copia importada la primera vez. Se usa la del servidor solo si el teléfono no
+  tiene casa (reinstalación) o la partida es de otra cuenta. **Al empezar la
+  4B** hay que re-sincronizar una última vez casa, experiencia y descubierto
+  (si `game/house.source == "import"`), para no perder lo construido durante
+  las pruebas de la 4A; el dinero sí empieza en $3000 (ya está en la billetera).
+- **Personaje y opciones en la nube** (`cloud/character`, `cloud/settings`, los
+  escribe el teléfono): se suben después de guardar (como mucho cada 15 s) y al
+  pasar a segundo plano. Personaje: gana el guardado más nuevo; opciones: las
+  del teléfono, salvo que no tenga. Casa y progreso (`game/*`) solo los escribe
+  el servidor (comprobado: el teléfono recibe "permission denied").
+- **Casa, personaje y opciones viajan como texto JSON** dentro del objeto
+  (`{"json": "...", "saved_unix": N}`): el JSON de Lua convierte una lista
+  vacía en `{}` y la casa tiene capas vacías. En la 4B, el servidor que lea la
+  casa tendrá que cuidar eso (o seguir guardándola como texto).
+- **Otra cuenta en el mismo teléfono**: la partida de la anterior se aparta en
+  `user://save.account_<id>.json` y vuelve si esa cuenta entra de nuevo.
+- **PostgreSQL corre como el usuario del dueño (uid 1000)**: los archivos de
+  `server/db-data/` son suyos (el respaldo los puede leer y se pueden borrar
+  sin permisos de administrador). `server/` tiene `.gdignore`: Godot no lo
+  mira ni lo mete en el APK.
+- **Permiso INTERNET** agregado al APK (sin él Android corta la conexión). El
+  HTTP sin cifrar funciona porque Godot usa sus propios sockets (las reglas de
+  "cleartext" de Android son para el HTTP de Java). Sin comprobar en el teléfono.
+- **Consola de Nakama: usuario `dueno`** (Nakama avisa si se llama `admin`).
+- **Arranque con la PC**: los contenedores tienen `restart: unless-stopped`,
+  pero Nakama se publica en la IP de la LAN y al arrancar la PC puede no estar
+  lista (a AdGuard le pasaba). **(pregunta)** Si pasa, la solución es un
+  servicio que espere la IP (como `adguard-arranque`), que es un cambio del
+  sistema aparte.
 

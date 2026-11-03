@@ -99,6 +99,28 @@ func load_game() -> bool:
 	return true
 
 
+## Fase 4: si en este teléfono entra otra cuenta, la partida de la anterior
+## se aparta en su propio archivo (no se pisa) y vuelve si esa cuenta entra.
+func account_save_path(user_id: String) -> String:
+	return "user://save.account_%s.json" % user_id.validate_filename()
+
+
+## Aparta la partida actual (del archivo) como la de `user_id`.
+func stash_for_account(user_id: String) -> void:
+	if has_save() and user_id != "":
+		DirAccess.copy_absolute(SAVE_PATH, account_save_path(user_id))
+
+
+## La partida apartada de `user_id` (como GameState.to_dict()), o {} si no hay.
+func load_account_stash(user_id: String) -> Dictionary:
+	var data := _read_file(account_save_path(user_id))
+	if data.is_empty() or int(data.get("format_version", 0)) > FORMAT_VERSION:
+		return {}
+	if int(data.get("format_version", 0)) < FORMAT_VERSION:
+		data = SaveMigrations.migrate(data, FORMAT_VERSION)
+	return data.get("state", {})
+
+
 ## Lee un archivo de guardado. Devuelve {} si no existe o está dañado.
 func _read_file(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):

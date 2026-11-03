@@ -1,0 +1,8 @@
+{
+	"_ayuda": "Dónde está el servidor del juego (Nakama). host = IP de la PC que corre el servidor en la red de casa (si el router le cambia la IP, cambiala aquí y en server/.env, y exportá el APK de nuevo). port = 7350. server_key = la misma de server/nakama/config.yml (no es secreta). timeout_seconds = cuánto esperar una respuesta antes de decir 'sin conexión'.",
+	"host": "192.168.100.177",
+	"port": 7350,
+	"use_ssl": false,
+	"server_key": "neighborhood-family",
+	"timeout_seconds": 8
+}

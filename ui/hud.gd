@@ -25,6 +25,8 @@ const NEED_COLORS := {
 @onready var _info_label: Label = %InfoLabel
 @onready var _hint_label: Label = %HintLabel
 @onready var _clock_label: Label = %ClockLabel
+@onready var _server_label: Label = %ServerLabel
+@onready var _logout_button: Button = %LogoutButton
 @onready var _speed_button: Button = %SpeedButton
 @onready var _character_panel: Control = %CharacterPanel
 @onready var _name_label: Label = %NameLabel
@@ -125,6 +127,9 @@ func _ready() -> void:
 	_fps_check.toggled.connect(_on_setting_toggled.bind("show_fps"))
 	_hints_check.toggled.connect(_on_setting_toggled.bind("show_hints"))
 	_menu_close_button.pressed.connect(_action_menu.hide)
+	_logout_button.pressed.connect(_open_from_menu.bind(EventBus.logout_requested))
+	EventBus.server_status_changed.connect(_on_server_status_changed)
+	_on_server_status_changed(GameServer.online, GameServer.username())
 	GameClock.speed_changed.connect(_on_speed_changed)
 	EventBus.character_needs_changed.connect(_on_needs_changed)
 	EventBus.character_intention_changed.connect(_on_intention_changed)
@@ -356,6 +361,19 @@ func _on_setting_toggled(on: bool, setting: String) -> void:
 func _apply_settings() -> void:
 	_fps_label.visible = GameState.settings.get("show_fps", true)
 	_hint_label.visible = _mode == "build" and GameState.settings.get("show_hints", true)
+
+
+# --- Servidor ---
+
+## Indicador de conexión: verde con el usuario, o gris "sin conexión".
+func _on_server_status_changed(online: bool, username: String) -> void:
+	_logout_button.visible = username != ""
+	if online and username != "":
+		_server_label.text = "● Conectado: %s" % username
+		_server_label.add_theme_color_override("font_color", Color("#7bed9f"))
+	else:
+		_server_label.text = "● Sin conexión" + (" (%s)" % username if username != "" else "")
+		_server_label.add_theme_color_override("font_color", Color("#d0d0d0"))
 
 
 # --- Avisos ---

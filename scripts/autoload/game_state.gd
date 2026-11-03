@@ -19,6 +19,9 @@ var clock: Dictionary = {}
 var economy: Dictionary = {}
 ## Opciones del jugador (menú): {"show_fps": bool, "show_hints": bool}.
 var settings: Dictionary = {}
+## Cuenta del servidor a la que pertenece esta partida: {"user_id", "username"}.
+## Vacío = partida de antes de la Fase 4 (todavía sin cuenta).
+var account: Dictionary = {}
 
 
 ## Vuelve todo a una partida nueva.
@@ -29,6 +32,7 @@ func reset() -> void:
 	clock = {}
 	economy = {}
 	settings = {}
+	account = {}
 
 
 ## Convierte el estado en un diccionario simple que se puede escribir en JSON.
@@ -40,6 +44,7 @@ func to_dict() -> Dictionary:
 		"clock": clock,
 		"economy": economy,
 		"settings": settings,
+		"account": account,
 	}
 
 
@@ -52,3 +57,4 @@ func from_dict(data: Dictionary) -> void:
 	clock = data.get("clock", {})
 	economy = data.get("economy", {})
 	settings = data.get("settings", {})
+	account = data.get("account", {})

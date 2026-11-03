@@ -98,3 +98,10 @@ signal construction_accelerate_requested
 signal jobs_requested
 ## Cambió el empleo o el currículum (para refrescar el panel de empleos).
 signal jobs_changed
+
+# --- Servidor (Fase 4) ---
+## Cambió la conexión con el servidor. `username` = cuenta con la que se
+## entró ("" si no hay sesión).
+signal server_status_changed(online: bool, username: String)
+## La interfaz pide cerrar la sesión de la cuenta.
+signal logout_requested

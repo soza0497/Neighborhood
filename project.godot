@@ -11,8 +11,8 @@ config_version=5
 [application]
 
 config/name="Neighborhood"
-config/version="0.3.0"
-run/main_scene="res://scenes/main.tscn"
+config/version="0.4.0"
+run/main_scene="res://ui/login_screen.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 
@@ -24,6 +24,7 @@ GameState="*res://scripts/autoload/game_state.gd"
 SaveSystem="*res://scripts/autoload/save_system.gd"
 GameClock="*res://scripts/autoload/game_clock.gd"
 Economy="*res://scripts/autoload/economy.gd"
+GameServer="*res://scripts/autoload/game_server.gd"
 
 [display]
 
