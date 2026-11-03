@@ -9,6 +9,8 @@ const CATALOG_PATH := "res://data/catalog.json"
 const ACTIONS_PATH := "res://data/actions.json"
 const TRAITS_PATH := "res://data/traits.json"
 const CHARACTER_OPTIONS_PATH := "res://data/character_options.json"
+const PROGRESSION_PATH := "res://data/progression.json"
+const JOBS_PATH := "res://data/jobs.json"
 
 ## Campos que todo objeto del catálogo debe tener.
 const REQUIRED_ITEM_FIELDS := ["id", "name", "category", "kind", "price"]
@@ -25,6 +27,10 @@ var traits: Dictionary = {}
 var max_traits := 2
 ## Colores y valores por defecto del editor de personaje.
 var character_options: Dictionary = {}
+## Niveles, reventa, aceleradores (ver data/progression.json).
+var progression: Dictionary = {}
+## Empleos por id (ver data/jobs.json).
+var jobs: Dictionary = {}
 
 
 func _ready() -> void:
@@ -76,6 +82,11 @@ func get_items_in_category(category_id: String) -> Array:
 	return result
 
 
+## Nivel que hace falta para usar una pieza (1 si no dice nada).
+func unlock_level(item_id: String) -> int:
+	return int(get_item(item_id).get("unlock_level", 1))
+
+
 ## Acciones que ofrece un mueble (diccionarios de actions.json).
 func get_item_actions(item_id: String) -> Array:
 	var result: Array = []
@@ -96,6 +107,10 @@ func _load_character_data() -> void:
 		traits[t["id"]] = t
 	max_traits = int(trait_data.get("max_per_character", 2))
 	character_options = _read_json(CHARACTER_OPTIONS_PATH)
+	progression = _read_json(PROGRESSION_PATH)
+	jobs.clear()
+	for job in _read_json(JOBS_PATH).get("jobs", []):
+		jobs[job["id"]] = job
 
 	# Avisa si un mueble pide una acción que no existe.
 	for item in items.values():

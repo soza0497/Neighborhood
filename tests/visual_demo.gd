@@ -23,6 +23,7 @@ func _ready() -> void:
 		_shot_dir = OS.get_user_data_dir()
 	_main = preload("res://scenes/main.tscn").instantiate()
 	add_child(_main)
+	Economy.debug_unlock_all()  # Sin límites de dinero ni de nivel.
 	_builder = _main.get_node("House/Builder")
 	_house = _main.get_node("House")
 	_camera = get_viewport().get_camera_3d()

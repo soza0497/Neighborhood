@@ -1,32 +1,28 @@
 # Progreso
 
-## Fase actual: 2 — Personaje y su IA (código listo; falta probar en el teléfono)
+## Fase actual: 3 — Progresión y economía local (código listo; falta probar en el teléfono)
 
-La Fase 1 tiene ajustes sin probar en el teléfono (ver abajo): probar las
-dos fases juntas.
+Las Fases 1, 2 y 3 están sin probar en el teléfono con los últimos cambios:
+probarlas juntas.
 
-### Fase 2 — hecho (2026-11-03)
-- Datos: `data/actions.json` (10 acciones), `data/traits.json` (6 rasgos),
-  `data/character_options.json` (colores). Muebles con `actions` en el
-  catálogo; nuevos: Televisor, Computadora, Librero.
-- Reloj `GameClock` (autoload): x1/x3/x10, pausa en Construir.
-- `scripts/character/`: `character_data.gd` (necesidades con mínimo),
-  `character_brain.gd` (IA de prioridades), `character.gd` (estados, caminar,
-  usar objetos, burbujas, intención), `character_look.gd` (chibi de
-  cápsulas), `character_animator.gd` (ganchos de animación),
-  `live_controller.gd` (tocar muebles en modo Vivir).
-- `scripts/house/house_nav.gd`: caminos con paredes, puertas y escaleras;
-  se rehace solo al construir.
-- Interfaz: panel con necesidades, ánimo e intención; reloj y velocidad;
-  menú de acciones de un mueble; editor de personaje (`ui/character_editor.*`).
-- Guardado: personaje y reloj; al volver se descuenta el tiempo sin jugar.
-- Pruebas: 27 nuevas (`tests/test_character.tscn`) + 44 de la casa, todas OK.
-  Demo (`tests/character_demo.tscn`): con hambre cocina, con sueño duerme,
-  obedece "ver tele".
-
-### Fase 0 — cerrada (2026-11-03)
-Base del proyecto, cámara, guardado, exportación a Android. APK probado en el
-teléfono del dueño.
+### Fase 3 — hecho (2026-11-03)
+- Dinero: precios del catálogo, cobro al construir, reventa 50 %, deshacer
+  que devuelve lo pagado (`economy.gd`, `undo_history.gd`).
+- Niveles y experiencia (por primera vez de cada pieza y por trabajar),
+  piezas bloqueadas con `unlock_level` (`data/progression.json`).
+- Obras con temporizador (muebles, escaleras, techos) en hora real, con
+  aspecto naranja transparente y botón "Acelerar".
+- Empleos (`data/jobs.json`): currículum con espera, turnos que sacan al
+  personaje a la acera, sueldo y experiencia; panel en Menú → Empleos.
+- Nada castiga por desconectarse: turno a medias y días fuera se pagan (tope 3).
+- Guardado formato 2: migraciones (`save_migrations.gd`), respaldo
+  `save.json.bak` y copia antes de migrar.
+- Interfaz: dinero, nivel y barra de experiencia; avisos; piezas bloqueadas;
+  "Confirmar ($X)".
+- Regla nueva en CLAUDE.md: revisar modelo y esfuerzo antes de cada fase.
+- Pruebas: 66 de economía + 53 de la casa + 34 del personaje, todas OK.
+  Demo `tests/economy_demo.tscn`: precios reales, bloqueo por nivel, obra,
+  acelerar, empleos, y turno completo (sale, desaparece, cobra).
 
 ### Ajustes de la prueba de la Fase 2 (2026-11-03) — hechos, sin probar
 1. Panel del personaje sin saltos; Personaje y Diario en un menú oculto.
@@ -69,15 +65,17 @@ Todo en un solo tramo (1A + 1B + 1C):
 - Pruebas: 44 automáticas OK; demo: mouse real, fuera del lote y manijas OK.
 
 ### Falta para cerrar las Fases 1 y 2
-1. [Dueño] Instalar el APK nuevo y probar los ajustes de las Fases 1 y 2 y
-   el personaje (checklist del chat).
-2. [Claude] Corregir lo que salga; commit "Fases 1 y 2 cerradas".
+1. [Dueño] Instalar el APK nuevo y probar las Fases 1, 2 y 3 (checklist del chat).
+2. [Claude] Corregir lo que salga; commit "Fases 1 a 3 cerradas".
 
 ### Próximo paso exacto
 Instalar con `~/Android/Sdk/platform-tools/adb install -r build/neighborhood.apk`
-(el APK ya está exportado) y probar. Después: Fase 3 (Sonnet alcanza).
+(el APK ya está exportado) y probar. Después: **Fase 4 (servidor Nakama): usar Opus con esfuerzo alto.**
 
 ### Pendientes anotados para más adelante
+- Balance de la economía (precios, sueldos, niveles): se ajusta con lo que
+  salga de jugar; todo está en `data/*.json`.
+- Si hace falta probar rápido: un "truco" para dar dinero/nivel en el menú.
 - Visión de la parcela (VISION.md): zonas casa/trabajo, varias casas,
   alquiler, muros, robos y seguridad del barrio.
 - Tutorial de primeros pasos (el dueño no adivinó "cuarto antes que piso").
@@ -93,4 +91,4 @@ Instalar con `~/Android/Sdk/platform-tools/adb install -r build/neighborhood.apk
 - ¿Tu pareja usa Android o iPhone? (VISION.md)
 
 ## Fases siguientes
-- Fase 3 — Progresión y economía local (conviene Sonnet).
+- Fase 4 — Cuentas y servidor (**Opus, esfuerzo alto**).

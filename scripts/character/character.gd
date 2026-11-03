@@ -12,7 +12,7 @@ extends Node3D
 ## Su estado se puede resumir en una "intención" (get_intention), lo que en la
 ## Fase 5 se mandará a la pareja para animar al personaje en su pantalla.
 
-enum State { IDLE, WALKING, ACTING }
+enum State { IDLE, WALKING, ACTING, WORKING }
 
 ## Metros por segundo real a velocidad x1.
 const WALK_SPEED := 1.6
@@ -24,6 +24,8 @@ const WANDER_RADIUS := 4
 const NEEDS_REPORT_SECONDS := 0.5
 ## Dónde aparece un personaje nuevo: al frente de la parcela, en el pasto.
 const SPAWN_CELL := Vector2i(HouseGrid.LOT_SIZE.x / 2, HouseGrid.LOT_SIZE.y - 2)
+## Por dónde sale (y vuelve) cuando va a trabajar: la acera, al frente.
+const WORK_CELL := Vector2i(HouseGrid.LOT_SIZE.x / 2, HouseGrid.LOT_SIZE.y - 1)
 
 var data: CharacterData
 var house: HouseData
@@ -43,6 +45,7 @@ var _path := PackedVector3Array()
 var _path_index := 0
 var _idle_minutes := 0.0
 var _act_minutes := 0.0
+var _work_minutes := 0.0
 ## Desde cuándo (hora real, segundos Unix) hace lo que está haciendo.
 var _since := 0
 var _report_timer := 0.0
@@ -101,6 +104,8 @@ func place_at(new_level: int, new_cell: Vector2i) -> void:
 ## Después de construir: cancela lo que hacía y, si le pusieron algo encima,
 ## lo mueve a la celda libre más cercana.
 func reset_after_build() -> void:
+	if state == State.WORKING:
+		return  # Sigue en el trabajo; no está en la casa.
 	_stop_action()
 	if not nav.is_walkable(level, cell):
 		var spot := nav.nearest_walkable(position)
@@ -116,6 +121,9 @@ func reset_after_build() -> void:
 func order(object_level: int, key: String, action_id: String) -> void:
 	var action: Dictionary = Catalog.actions.get(action_id, {})
 	if action.is_empty():
+		return
+	if state == State.WORKING:
+		EventBus.toast.emit("%s está trabajando." % data.name)
 		return
 	var option := _option_for(object_level, key, action)
 	if option.is_empty():
@@ -134,6 +142,9 @@ func _process(delta: float) -> void:
 	var minutes := GameClock.game_minutes(delta)
 	if minutes > 0.0:
 		data.decay(minutes)
+		# Si ya va camino al trabajo, no se vuelve a empezar.
+		if state != State.WORKING and not _plan.has("work") and Economy.shift_due():
+			_go_to_work()
 		match state:
 			State.IDLE:
 				_idle_minutes -= minutes
@@ -143,9 +154,11 @@ func _process(delta: float) -> void:
 				_walk(WALK_SPEED * delta * GameClock.speed)
 			State.ACTING:
 				_act(minutes)
+			State.WORKING:
+				_work(minutes)
 
 	# Si construyen en la planta baja, no se ve al personaje que está arriba.
-	visible = view == null or level <= view.top_visible_level
+	visible = (view == null or level <= view.top_visible_level) and state != State.WORKING
 
 	_report_timer -= delta
 	if _report_timer <= 0.0:
@@ -174,7 +187,10 @@ func _gather_options() -> Array:
 	var options: Array = []
 	for object_level in HouseGrid.MAX_LEVELS:
 		for key in house.get_layer(object_level, "objects"):
-			var item_id: String = house.get_piece(object_level, "objects", key)["item"]
+			var piece: Dictionary = house.get_piece(object_level, "objects", key)
+			if HouseData.is_under_construction(piece):
+				continue
+			var item_id: String = piece["item"]
 			for action in Catalog.get_item_actions(item_id):
 				var option := _option_for(object_level, key, action)
 				if not option.is_empty():
@@ -244,7 +260,9 @@ func _walk(distance: float) -> void:
 func _arrive() -> void:
 	level = _plan.get("level", level)
 	cell = _plan.get("spot", cell)
-	if _plan.has("action"):
+	if _plan.has("work"):
+		_start_work()
+	elif _plan.has("action"):
 		_start_action()
 	else:
 		_set_idle()
@@ -312,6 +330,41 @@ func _set_idle() -> void:
 	_mark_intention()
 
 
+# --- Trabajo ---
+
+## Es hora del turno: sale de la casa caminando hasta la acera.
+func _go_to_work() -> void:
+	_stop_action()
+	_order = {}
+	var path := nav.find_path(level, cell, 0, WORK_CELL)
+	_go({"level": 0, "spot": WORK_CELL, "path": path, "work": true})
+
+
+## Llegó a la acera: desaparece (está en el trabajo) hasta que termina el turno.
+func _start_work() -> void:
+	place_at(0, WORK_CELL)
+	Economy.start_shift()
+	state = State.WORKING
+	_work_minutes = 0.0
+	data.add_journal("Se fue a trabajar (%s)" % Economy.current_job().get("name", ""))
+	_animator.play("idle")
+	_mark_intention()
+
+
+func _work(minutes: float) -> void:
+	var job := Economy.current_job()
+	# Si renunció en medio del turno, vuelve sin cobrar.
+	if not job.is_empty():
+		_work_minutes += minutes
+		if _work_minutes < float(job.get("shift_hours", 4)) * 60.0:
+			return
+		var pay := Economy.complete_shift()
+		data.add_journal("Terminó el turno y cobró $%d" % pay)
+		EventBus.toast.emit("%s cobró $%d del trabajo." % [data.name, pay])
+	place_at(0, WORK_CELL)
+	_set_idle()
+
+
 # --- Burbuja, diario e intención ---
 
 ## Si cambió cómo se siente, lo anota en el diario.
@@ -341,7 +394,7 @@ func _update_bubble() -> void:
 func get_intention() -> Dictionary:
 	var intention := {
 		"character": data.name,
-		"state": ["idle", "walking", "acting"][state],
+		"state": ["idle", "walking", "acting", "working"][state],
 		"action": "",
 		"verb": "paseando",
 		"object": "",
@@ -355,6 +408,9 @@ func get_intention() -> Dictionary:
 		intention["object"] = Catalog.get_item(object["item"]).get("name", "") if object != null else ""
 		if state == State.WALKING:
 			intention["verb"] = "yendo a: " + _plan["action"].get("name", "").to_lower()
+	elif state == State.WORKING or _plan.has("work"):
+		intention["verb"] = "trabajando" if state == State.WORKING else "yendo a trabajar"
+		intention["object"] = Economy.current_job().get("name", "")
 	elif state == State.IDLE:
 		intention["verb"] = "pensando qué hacer"
 	return intention

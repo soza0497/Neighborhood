@@ -156,6 +156,13 @@ func select_item(item_id: String) -> void:
 	else:
 		item = Catalog.get_item(item_id)
 		tool = KIND_TO_TOOL.get(item.get("kind", ""), Tool.NONE)
+		# Una pieza bloqueada por nivel no se puede elegir.
+		if not item.is_empty() and not Economy.is_unlocked(item_id):
+			EventBus.build_hint.emit("%s se desbloquea en el nivel %d." % [item["name"], Catalog.unlock_level(item_id)])
+			item = {}
+			tool = Tool.NONE
+			_update_camera_pan()
+			return
 	place_rotation = 0
 	_cursor.visible = false
 	_update_camera_pan()
@@ -184,7 +191,7 @@ func rotate_object() -> void:
 		value["rot"] = (int(value.get("rot", 0)) + 1) % 4
 		var check := _check(_object_writes(selected_key, value))
 		if check["blocked"].is_empty():
-			history.commit(check["ok"])
+			_apply(check["ok"])
 		else:
 			EventBus.build_hint.emit("No hay lugar para girarlo aquí.")
 	elif tool == Tool.OBJECT:
@@ -196,7 +203,8 @@ func rotate_object() -> void:
 func delete_selected() -> void:
 	if selected_key == "":
 		return
-	history.commit([HouseData.write(level, "objects", selected_key, null)])
+	if _apply([HouseData.write(level, "objects", selected_key, null)]):
+		EventBus.build_hint.emit("Quitaste el mueble.")
 	select_object("")
 
 
@@ -206,6 +214,11 @@ func confirm_pending() -> void:
 		return
 	var ok := _pending_ok
 	var blocked := _pending_blocked
+	# Si no alcanza el dinero, la selección se conserva para ajustarla.
+	var money_change: int = Economy.quote(house, ok)["money"]
+	if not Economy.can_change(money_change):
+		EventBus.build_hint.emit("Te faltan $%d. Achicá la selección o cancelá." % (-money_change - Economy.money))
+		return
 	_cancel_gesture()
 	_commit(ok, blocked)
 
@@ -330,6 +343,8 @@ func _update(screen_pos: Vector2) -> void:
 	var check := _check(writes)
 	_pending_ok = check["ok"]
 	_pending_blocked = check["blocked"]
+	if tool in HANDLE_TOOLS and _pressing:
+		EventBus.build_cost_changed.emit(-Economy.quote(house, _pending_ok)["money"])
 	_show_preview()
 
 
@@ -375,16 +390,36 @@ func _on_second_finger() -> void:
 
 ## Aplica las escrituras como un paso de deshacer y avisa qué pasó.
 func _commit(ok: Array, blocked: Array) -> void:
-	# Lo nuevo recibe su id definitivo ahora.
-	for w in ok:
-		if w["key"] == NEW_KEY:
-			w["key"] = house.new_id()
-	history.commit(ok)
-
+	var applied := _apply(ok)
+	if not applied:
+		return  # _apply ya explicó por qué (no alcanza el dinero).
 	if not blocked.is_empty():
 		EventBus.build_hint.emit(_blocked_hint())
 	elif not ok.is_empty():
 		_show_tool_hint()
+
+
+## Cobra (o devuelve) el dinero, aplica las escrituras como UN paso de
+## deshacer y anota lo construido. Devuelve false si no alcanza el dinero.
+func _apply(writes: Array) -> bool:
+	if writes.is_empty():
+		return true
+	# Lo nuevo recibe su id definitivo ahora.
+	for w in writes:
+		if w["key"] == NEW_KEY:
+			w["key"] = house.new_id()
+	var quote := Economy.quote(house, writes)
+	var money_change: int = quote["money"]
+	if not Economy.can_change(money_change):
+		EventBus.build_hint.emit("Te faltan $%d para construir esto." % (-money_change - Economy.money))
+		return false
+	history.commit(quote["writes"], money_change)
+	Economy.record_build(quote["writes"])
+	if money_change < 0:
+		EventBus.build_hint.emit("Pagaste $%d." % -money_change)
+	elif money_change > 0:
+		EventBus.build_hint.emit("Te devolvieron $%d." % money_change)
+	return true
 
 
 ## Mouse moviéndose sin apretar (solo en la PC): muestra dónde caería.

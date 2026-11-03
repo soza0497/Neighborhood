@@ -180,8 +180,18 @@ decoraciones, iOS, y publicación en tiendas.
 ## 7. Modelo
 
 Conviene Opus para la Fase 0 (la base que todo hereda) y para las Fases 4 y 5
-(servidor y sincronización). Para el resto alcanza Sonnet. Si estás en el
-modelo equivocado para la fase, avisame en una línea.
+(servidor y sincronización). Para el resto alcanza Sonnet.
+
+**Regla (pedida por el dueño, 2026-11-03):** antes de empezar cada fase o tarea
+grande, revisá el modelo y el **esfuerzo** de la sesión (herramienta
+`get_session` con `"self"`) y corregime en una línea si no corresponden:
+- Opus donde alcanza Sonnet (o esfuerzo alto donde alcanza medio): avisame
+  para bajar y ahorrar uso.
+- Sonnet en una tarea compleja (diseño difícil, servidor, sincronización,
+  bugs raros): avisame para pasar a Opus.
+- Esfuerzo sugerido: **medio** para fases normales y ajustes; **alto** para
+  diseño complejo o sincronización.
+- Esperá a que cambie, salvo que yo diga "ignoralo".
 
 ## Primera instrucción
 

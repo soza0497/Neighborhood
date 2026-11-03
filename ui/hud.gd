@@ -31,6 +31,12 @@ const NEED_COLORS := {
 @onready var _mood_label: Label = %MoodLabel
 @onready var _needs_box: VBoxContainer = %NeedsBox
 @onready var _intention_label: Label = %IntentionLabel
+@onready var _money_label: Label = %MoneyLabel
+@onready var _xp_bar: ProgressBar = %XpBar
+@onready var _builds_button: Button = %BuildsButton
+@onready var _toast_box: Control = %ToastBox
+@onready var _toast_label: Label = %ToastLabel
+@onready var _jobs_button: Button = %JobsButton
 @onready var _menu_button: Button = %MenuButton
 @onready var _side_menu: Control = %SideMenu
 @onready var _character_button: Button = %CharacterButton
@@ -69,6 +75,10 @@ var _selected_kind := ""
 var _has_selection := false
 ## Barras de necesidades: nombre → ProgressBar.
 var _need_bars: Dictionary = {}
+## Categoría que se está mostrando y nivel del jugador (para refrescar bloqueos).
+var _current_category := ""
+var _last_level := 0
+var _toast_tween: Tween
 
 
 func _ready() -> void:
@@ -101,6 +111,15 @@ func _ready() -> void:
 	_side_close_button.pressed.connect(_side_menu.hide)
 	_character_button.pressed.connect(_open_from_menu.bind(EventBus.character_editor_requested))
 	_diary_button.pressed.connect(_open_from_menu.bind(EventBus.journal_requested))
+	_jobs_button.pressed.connect(_open_from_menu.bind(EventBus.jobs_requested))
+	_builds_button.pressed.connect(EventBus.construction_accelerate_requested.emit)
+	EventBus.economy_changed.connect(_on_economy_changed)
+	EventBus.toast.connect(_on_toast)
+	EventBus.build_cost_changed.connect(_on_build_cost_changed)
+	EventBus.construction_changed.connect(_on_construction_changed)
+	_setup_xp_bar()
+	var progress := Economy.xp_progress()
+	_on_economy_changed(Economy.money, Economy.level(), progress.x, progress.y)
 	_fps_check.button_pressed = GameState.settings.get("show_fps", true)
 	_hints_check.button_pressed = GameState.settings.get("show_hints", true)
 	_fps_check.toggled.connect(_on_setting_toggled.bind("show_fps"))
@@ -146,6 +165,7 @@ func _create_category_buttons() -> void:
 
 ## Llena la fila de piezas con las de una categoría.
 func _show_category(category_id: String) -> void:
+	_current_category = category_id
 	for child in _items_box.get_children():
 		child.queue_free()
 	_select_item("", "")
@@ -161,10 +181,13 @@ func _show_category(category_id: String) -> void:
 		if item["kind"] == "paint":
 			text = item["name"]
 		var color := Color.from_string(item.get("color", "#ffffff"), Color.WHITE)
-		_add_item_button(item["id"], text, color, item["kind"])
+		var unlocked := Economy.is_unlocked(item["id"])
+		if not unlocked:
+			text = "%s\nNivel %d" % [item["name"], Catalog.unlock_level(item["id"])]
+		_add_item_button(item["id"], text, color, item["kind"]).disabled = not unlocked
 
 
-func _add_item_button(item_id: String, text: String, color: Color, kind: String) -> void:
+func _add_item_button(item_id: String, text: String, color: Color, kind: String) -> Button:
 	var button := Button.new()
 	button.text = text
 	button.toggle_mode = true
@@ -174,6 +197,7 @@ func _add_item_button(item_id: String, text: String, color: Color, kind: String)
 	button.add_theme_font_size_override("font_size", 16)
 	button.toggled.connect(_on_item_toggled.bind(item_id, kind))
 	_items_box.add_child(button)
+	return button
 
 
 func _on_item_toggled(on: bool, item_id: String, kind: String) -> void:
@@ -266,6 +290,56 @@ func _on_speed_changed(speed: int) -> void:
 	_speed_button.text = "x%d" % speed
 
 
+# --- Dinero, nivel, avisos y obras ---
+
+func _setup_xp_bar() -> void:
+	var background := StyleBoxFlat.new()
+	background.bg_color = Color(1, 1, 1, 0.2)
+	background.set_corner_radius_all(6)
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = Color("#ffd166")
+	fill.set_corner_radius_all(6)
+	_xp_bar.add_theme_stylebox_override("background", background)
+	_xp_bar.add_theme_stylebox_override("fill", fill)
+
+
+func _on_economy_changed(money: int, level: int, xp_in_level: int, xp_needed: int) -> void:
+	_money_label.text = "$ %d · Nivel %d" % [money, level]
+	_xp_bar.max_value = maxi(xp_needed, 1)
+	_xp_bar.value = xp_in_level
+	# Si subió de nivel, se actualizan las piezas bloqueadas.
+	if level != _last_level:
+		_last_level = level
+		if _current_category != "":
+			_show_category(_current_category)
+
+
+## Lo que cuesta (o devuelve) la selección que espera Confirmar.
+func _on_build_cost_changed(cost: int) -> void:
+	if cost > 0:
+		_confirm_button.text = "Confirmar ($%d)" % cost
+	elif cost < 0:
+		_confirm_button.text = "Confirmar (+$%d)" % -cost
+	else:
+		_confirm_button.text = "Confirmar"
+	_confirm_button.disabled = cost > Economy.money
+
+
+func _on_toast(text: String) -> void:
+	_toast_label.text = text
+	_toast_box.show()
+	if _toast_tween != null:
+		_toast_tween.kill()
+	_toast_tween = create_tween()
+	_toast_tween.tween_interval(3.5)
+	_toast_tween.tween_callback(_toast_box.hide)
+
+
+func _on_construction_changed(count: int, accelerate_cost: int) -> void:
+	_builds_button.visible = count > 0
+	_builds_button.text = "Obras: %d · Acelerar $%d" % [count, accelerate_cost]
+
+
 # --- Menú y opciones ---
 
 ## Cierra el menú y pide abrir otra ventana (personaje o diario).
@@ -318,6 +392,8 @@ func _on_level_changed(level: int) -> void:
 
 func _on_pending_changed(has_pending: bool) -> void:
 	_confirm_button.visible = has_pending
+	_confirm_button.text = "Confirmar"
+	_confirm_button.disabled = false
 	_cancel_button.visible = has_pending
 
 

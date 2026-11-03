@@ -64,6 +64,28 @@ Hecho con **Godot 4.7.2** (GDScript).
 - En modo Construir el tiempo se detiene. Las necesidades nunca bajan de un
   mínimo, y si no jugás un tiempo, solo bajan un poco.
 
+## Dinero, niveles, obras y empleos
+
+- Arriba a la izquierda: tu **dinero**, tu **nivel** y la barra de experiencia.
+  Empezás con $3000.
+- **Construir cuesta**: cada pieza tiene su precio en la barra. Al soltar o
+  confirmar, ves cuánto pagaste. Borrar piezas devuelve el 50 %. **Deshacer
+  devuelve todo lo que pagaste** (si todavía te alcanza el dinero).
+- **Piezas bloqueadas**: algunas dicen "Nivel 2" o "Nivel 3". La experiencia
+  sale de construir **por primera vez** cada tipo de pieza y de trabajar.
+- **Obras**: muebles, escaleras y techos tardan unos segundos o minutos
+  (reales, siguen corriendo con el juego cerrado) y se ven en naranja
+  transparente. El botón **Obras: N · Acelerar $X** arriba las termina todas.
+- **Empleos** (Menú → Empleos): mandás un currículum, esperás la respuesta
+  (5, 10 o 30 minutos reales; se puede acelerar con monedas) y te contratan.
+  Cada día, a su hora, tu personaje sale a trabajar (desaparece unas horas)
+  y cobra al volver. Si cerrás el juego, el turno igual se cobra.
+- **Nada castiga por desconectarse**: mientras no jugás, el trabajo sigue
+  pagando hasta 3 turnos y las obras y currículos avanzan solos.
+- Para cambiar precios, niveles o sueldos: `data/catalog.json`
+  (`price`, `unlock_level`, `build_seconds`), `data/jobs.json` y
+  `data/progression.json`.
+
 ## Pruebas automáticas
 
 En la terminal, dentro de la carpeta del proyecto:
@@ -76,10 +98,15 @@ godot --headless --path . res://tests/test_house.tscn
 godot --headless --path . res://tests/test_character.tscn
 ```
 
+```bash
+godot --headless --path . res://tests/test_economy.tscn
+```
+
 La primera revisa las reglas de construcción y el deshacer; la segunda, las
-necesidades, la IA y los caminos. Deben terminar con
-`PRUEBAS: N pasaron, 0 fallaron`. (`tests/visual_demo.tscn` y
-`tests/character_demo.tscn` arman casas de ejemplo y sacan capturas, pero
+necesidades, la IA y los caminos; la tercera, precios, niveles, obras, empleos
+y la migración del guardado. Deben terminar con
+`PRUEBAS: N pasaron, 0 fallaron`. (`tests/visual_demo.tscn`,
+`tests/character_demo.tscn` y `tests/economy_demo.tscn` arman casas de ejemplo y sacan capturas, pero
 **pisan la partida guardada**.)
 
 ## Exportar a Android
@@ -121,6 +148,9 @@ Están siempre cargados y se usan desde cualquier script por su nombre:
 - **Catalog**: lee `data/catalog.json` (piezas) y `actions.json`,
   `traits.json`, `character_options.json` (personaje). `Catalog.get_item("bed_basic")`.
 - **GameClock**: el reloj del juego (velocidad, pausa, día y hora).
+- **Economy**: dinero, experiencia, nivel, piezas descubiertas, obras con
+  temporizador y empleo. Todo cambio de dinero pasa por aquí.
 - **GameState**: todos los datos de la partida que se guardan.
-- **SaveSystem**: guarda/carga `GameState` en `user://save.json`
+- **SaveSystem**: guarda/carga `GameState` en `user://save.json` (con copia de
+  respaldo y migración de versiones viejas)
   (en la PC: `~/.local/share/godot/app_userdata/Neighborhood/`).

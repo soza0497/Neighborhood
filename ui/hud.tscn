@@ -4,6 +4,7 @@
 [ext_resource type="PackedScene" path="res://ui/character_editor.tscn" id="2_editor"]
 [ext_resource type="Script" path="res://ui/drag_scroll.gd" id="3_drag"]
 [ext_resource type="PackedScene" path="res://ui/diary_panel.tscn" id="4_diary"]
+[ext_resource type="PackedScene" path="res://ui/jobs_panel.tscn" id="5_jobs"]
 
 [sub_resource type="StyleBoxFlat" id="Style_bar"]
 bg_color = Color(0.13, 0.17, 0.25, 0.85)
@@ -90,56 +91,80 @@ theme_override_constants/outline_size = 6
 theme_override_font_sizes/font_size = 22
 text = "Día 1 · 08:00"
 
+[node name="MoneyLabel" type="Label" parent="Root/Layout/TopRow/TopLeft"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.95, 0.6, 1)
+theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 24
+text = "$ 3000 · Nivel 1"
+
+[node name="XpBar" type="ProgressBar" parent="Root/Layout/TopRow/TopLeft"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 12)
+layout_mode = 2
+size_flags_horizontal = 0
+show_percentage = false
+
 [node name="TopButtons" type="HBoxContainer" parent="Root/Layout/TopRow"]
 layout_mode = 2
 size_flags_vertical = 0
 theme_override_constants/separation = 8
 
+[node name="BuildsButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+text = "Obras"
+
 [node name="MenuButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(100, 60)
+custom_minimum_size = Vector2(90, 60)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Menú"
 
 [node name="SpeedButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(90, 60)
+custom_minimum_size = Vector2(80, 60)
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "x1"
 
 [node name="UndoButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(120, 60)
+custom_minimum_size = Vector2(105, 60)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Deshacer"
 
 [node name="RedoButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(120, 60)
+custom_minimum_size = Vector2(105, 60)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Rehacer"
 
 [node name="ViewButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(170, 60)
+custom_minimum_size = Vector2(150, 60)
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "Vista"
 
 [node name="CenterButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(110, 60)
+custom_minimum_size = Vector2(100, 60)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Centrar"
 
 [node name="ModeButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(140, 60)
+custom_minimum_size = Vector2(125, 60)
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "Vivir"
@@ -330,6 +355,24 @@ text = "Cerrar"
 
 [node name="CharacterEditor" parent="." instance=ExtResource("2_editor")]
 
+[node name="ToastBox" type="MarginContainer" parent="Root"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 0
+mouse_filter = 2
+theme_override_constants/margin_top = 235
+
+[node name="ToastLabel" type="Label" parent="Root/ToastBox"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 20
+theme_override_styles/normal = SubResource("Style_hint")
+horizontal_alignment = 1
+
 [node name="SideMenu" type="PanelContainer" parent="Root"]
 unique_name_in_owner = true
 visible = false
@@ -362,6 +405,13 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Diario"
 
+[node name="JobsButton" type="Button" parent="Root/SideMenu/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Empleos"
+
 [node name="OptionsTitle" type="Label" parent="Root/SideMenu/Rows"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.88, 0.6, 1)
@@ -392,3 +442,5 @@ theme_override_font_sizes/font_size = 18
 text = "Cerrar"
 
 [node name="DiaryPanel" parent="." instance=ExtResource("4_diary")]
+
+[node name="JobsPanel" parent="." instance=ExtResource("5_jobs")]

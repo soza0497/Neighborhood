@@ -66,6 +66,7 @@ func _ready() -> void:
 	EventBus.character_editor_requested.connect(_on_character_editor_requested)
 	EventBus.character_edit_finished.connect(_on_character_edit_finished)
 	EventBus.journal_requested.connect(_on_journal_requested)
+	EventBus.construction_accelerate_requested.connect(_on_accelerate_requested)
 
 	set_mode("live")
 	EventBus.view_mode_changed.emit(_house_view.view_mode)
@@ -149,12 +150,40 @@ func _load_character() -> void:
 		# A velocidad x1, 1 segundo real = 1 minuto del juego.
 		var away_minutes := clampf(away_seconds, 0.0, MAX_OFFLINE_MINUTES)
 		character_data.decay(away_minutes, CharacterData.OFFLINE_FLOOR)
+		# El trabajo no se pierde por desconectarse.
+		Economy.settle_pending_shift()
+		Economy.simulate_offline(away_minutes)
 	GameClock.minutes = float(GameState.clock.get("minutes", GameClock.minutes))
 	_character.setup(character_data, house, nav, _house_view)
 
 
 func _on_character_editor_requested() -> void:
 	EventBus.character_editor_opened.emit(character_data.to_dict())
+
+
+## Paga para terminar todas las obras en marcha de una vez.
+func _on_accelerate_requested() -> void:
+	var pending := house.pending_construction()
+	if pending.is_empty():
+		return
+	var now := Economy.now()
+	var seconds := 0
+	for p in pending:
+		seconds += int(p[3]) - now
+	var cost := Economy.accelerate_cost(seconds)
+	if not Economy.can_change(-cost):
+		EventBus.toast.emit("Te faltan $%d para acelerar." % (cost - Economy.money))
+		return
+	Economy.add_money(-cost)
+	var writes: Array = []
+	for p in pending:
+		var value: Dictionary = house.get_piece(p[0], p[1], p[2]).duplicate(true)
+		value.erase("ready_at")
+		writes.append(HouseData.write(p[0], p[1], p[2], value))
+	house.apply(writes)  # Directo, sin historial: no se "des-acelera".
+	_house_view.check_construction()
+	EventBus.toast.emit("Obras terminadas (-$%d)" % cost)
+	_autosave_timer.start()
 
 
 func _on_journal_requested() -> void:

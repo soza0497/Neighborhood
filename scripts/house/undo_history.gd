@@ -23,11 +23,14 @@ func _init(house: HouseData) -> void:
 
 
 ## Aplica una acción nueva. No hace nada si la lista está vacía.
-func commit(writes: Array) -> void:
+## `money_change` = lo que cambió el dinero (negativo = se pagó): deshacer
+## lo devuelve y rehacer lo vuelve a cobrar.
+func commit(writes: Array, money_change := 0) -> void:
 	if writes.is_empty():
 		return
 	var inverse := _house.apply(writes)
-	_undo_steps.append({"do": writes, "undo": inverse})
+	_undo_steps.append({"do": writes, "undo": inverse, "money": money_change})
+	Economy.add_money(money_change)
 	if _undo_steps.size() > MAX_STEPS:
 		_undo_steps.pop_front()
 	_redo_steps.clear()
@@ -45,8 +48,14 @@ func can_redo() -> bool:
 func undo() -> void:
 	if not can_undo():
 		return
-	var step: Dictionary = _undo_steps.pop_back()
+	var step: Dictionary = _undo_steps.back()
+	# Si ya se gastó el dinero que había devuelto, no se puede deshacer.
+	if not Economy.can_change(-int(step["money"])):
+		EventBus.build_hint.emit("No alcanza el dinero para deshacer esto.")
+		return
+	_undo_steps.pop_back()
 	_house.apply(step["undo"])
+	Economy.add_money(-int(step["money"]))
 	_redo_steps.append(step)
 	_notify()
 
@@ -54,8 +63,13 @@ func undo() -> void:
 func redo() -> void:
 	if not can_redo():
 		return
-	var step: Dictionary = _redo_steps.pop_back()
+	var step: Dictionary = _redo_steps.back()
+	if not Economy.can_change(int(step["money"])):
+		EventBus.build_hint.emit("Te faltan $%d para rehacerlo." % (-int(step["money"]) - Economy.money))
+		return
+	_redo_steps.pop_back()
 	_house.apply(step["do"])
+	Economy.add_money(int(step["money"]))
 	_undo_steps.append(step)
 	_notify()
 

@@ -1,0 +1,9 @@
+{
+	"_ayuda": "Empleos. level = nivel necesario. pay_per_hour = monedas por hora del juego trabajada. start_hour = hora (0-23) a la que empieza el turno. shift_hours = horas del juego que dura. resume_minutes = minutos REALES de espera tras mandar el currículum. xp_per_shift = experiencia por turno. A x1, 1 hora del juego = 1 minuto real.",
+	"format_version": 1,
+	"jobs": [
+		{ "id": "courier", "name": "Repartidor", "description": "Entrega paquetes por el barrio.", "level": 1, "pay_per_hour": 30, "start_hour": 9, "shift_hours": 4, "resume_minutes": 5, "xp_per_shift": 20 },
+		{ "id": "cashier", "name": "Cajero", "description": "Atiende la caja de una tienda.", "level": 2, "pay_per_hour": 45, "start_hour": 10, "shift_hours": 6, "resume_minutes": 10, "xp_per_shift": 40 },
+		{ "id": "office", "name": "Oficinista", "description": "Trabajo de escritorio, con buen sueldo.", "level": 3, "pay_per_hour": 70, "start_hour": 8, "shift_hours": 8, "resume_minutes": 30, "xp_per_shift": 80 }
+	]
+}

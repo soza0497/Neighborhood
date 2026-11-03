@@ -211,3 +211,47 @@ Lo marcado **(pregunta)** necesita tu visto bueno antes de cambiarse.
 - **Panel del personaje de tamaño fijo**: la intención ocupa siempre 2
   líneas (lo que sobra termina en "…"), así el panel no salta.
 
+## Progresión y economía local (Fase 3)
+
+- **Dinero inicial $3000** (también para las partidas viejas migradas). Se
+  gana trabajando; no hay otra fuente. Todo precio sale de `catalog.json`.
+- **Cobros por "diferencia"**: poner algo nuevo paga su precio; pintar y
+  mover es gratis; cambiar de pieza paga solo la diferencia; borrar o bajar
+  de valor **devuelve el 50 %** (`resale_percent`). Una pared suma el precio
+  de su puerta o ventana y el techo cuesta **por celda cubierta**.
+- **Deshacer devuelve exactamente lo que se pagó** y rehacer lo vuelve a
+  cobrar (cada paso guarda su cambio de dinero). Si el dinero ya se gastó y no
+  alcanza para deshacer un borrado, se avisa y no se deshace.
+- **Experiencia solo por "primera vez" y por trabajar**: construir un tipo de
+  pieza por primera vez da 10 % de su precio (mínimo 5); un turno da la
+  experiencia de su empleo. Deshacer/rehacer no la repiten (no se puede
+  "farmear" poniendo y quitando).
+- **Niveles** (0, 100, 250, 500, 900, 1400 de experiencia) y piezas
+  bloqueadas por `unlock_level`. Las ya colocadas no se quitan si algo se
+  bloquea. En las partidas viejas, lo ya construido cuenta como descubierto.
+- **Obras con temporizador solo para muebles, escaleras y techos**
+  (`build_seconds`). Paredes y pisos son instantáneos para que armar un cuarto
+  no sea eterno. El tiempo es **hora real** (Unix) y sigue corriendo con el
+  juego cerrado. Una obra no se puede usar hasta terminar (el personaje la
+  ignora, las escaleras no conectan).
+- **Acelerador = monedas** (6 por minuto real que falta, mínimo 1); "acelerar
+  todo" juntas las obras. No hay moneda aparte: VISION dice que hay una sola.
+  El mismo precio sirve para acelerar la respuesta de un currículum.
+- **Empleos**: 3 ofertas por nivel (Repartidor, Cajero, Oficinista; se editan
+  en `jobs.json`). Respuesta a los 5, 10 o 30 minutos **reales**. Si se cumple
+  el nivel, siempre te contratan (la espera ya es el costo). El primer turno
+  es al día siguiente.
+- **Turno**: a su hora, el personaje camina hasta la acera y desaparece hasta
+  terminar; el sueldo se cobra al volver. El día del juego solo avanza en
+  modo Vivir (en Construir el tiempo se detiene).
+- **"Nada castiga por desconectarse"**: un turno a medias al cerrar se cobra al
+  volver, y por cada día del juego sin conectarse (tope: 3) se paga un turno
+  completo.
+- **Guardado robusto (formato 2)**: `SaveMigrations` convierte versiones
+  viejas paso a paso (1 → 2 agrega la economía); antes de migrar se copia la
+  partida vieja (`save.pre_migration.json`); cada guardado conserva el
+  anterior (`save.json.bak`) y, si el principal se daña, se usa ese.
+- **Todavía sin servidor**: el dinero vive en el teléfono. En la Fase 4 pasa
+  al servidor; por eso todo cambio de dinero pasa por `Economy.add_money()`
+  y todo precio sale del catálogo, listo para validarse allá.
+

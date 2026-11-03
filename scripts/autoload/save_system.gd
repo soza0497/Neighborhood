@@ -9,10 +9,14 @@ extends Node
 
 const SAVE_PATH := "user://save.json"
 const TEMP_PATH := "user://save.json.tmp"
+## Copia del guardado anterior: si el archivo principal se daña, se usa esta.
+const BACKUP_PATH := "user://save.json.bak"
+## Copia de una partida vieja, antes de convertirla a un formato nuevo.
+const PRE_MIGRATION_PATH := "user://save.pre_migration.json"
 
 ## Versión del formato del archivo. Subila cuando cambie la forma de los
 ## datos guardados (la Fase 3 agrega migraciones de versiones viejas).
-const FORMAT_VERSION := 1
+const FORMAT_VERSION := 2
 
 
 func _ready() -> void:
@@ -50,6 +54,10 @@ func save_game() -> bool:
 	file.store_string(JSON.stringify(data, "\t"))
 	file.close()
 
+	# El guardado bueno anterior se conserva como respaldo.
+	if has_save():
+		DirAccess.copy_absolute(SAVE_PATH, BACKUP_PATH)
+
 	var err := DirAccess.rename_absolute(TEMP_PATH, SAVE_PATH)
 	if err != OK:
 		push_error("Guardado: no se pudo reemplazar el archivo (%s)" % error_string(err))
@@ -61,24 +69,41 @@ func save_game() -> bool:
 
 
 ## Carga la partida en GameState. Si no hay archivo, empieza una nueva.
+## Si el archivo está dañado, prueba con la copia de respaldo.
 func load_game() -> bool:
 	if not has_save():
 		GameState.reset()
 		return false
 
-	var json := JSON.new()
-	if json.parse(FileAccess.get_file_as_string(SAVE_PATH)) != OK:
-		push_error("Carga: el archivo de guardado está dañado; se empieza de cero")
+	var data := _read_file(SAVE_PATH)
+	if data.is_empty():
+		push_error("Carga: el archivo de guardado está dañado; se prueba con el respaldo")
+		data = _read_file(BACKUP_PATH)
+	if data.is_empty():
+		push_error("Carga: no hay respaldo que sirva; se empieza de cero")
 		GameState.reset()
 		return false
 
-	var data: Dictionary = json.data
 	var version: int = data.get("format_version", 0)
 	if version > FORMAT_VERSION:
 		push_error("Carga: el guardado es de una versión más nueva del juego (%d)" % version)
 		GameState.reset()
 		return false
+	if version < FORMAT_VERSION:
+		# Antes de convertirla, se guarda una copia de la partida vieja.
+		DirAccess.copy_absolute(SAVE_PATH, PRE_MIGRATION_PATH)
+		data = SaveMigrations.migrate(data, FORMAT_VERSION)
 
 	GameState.from_dict(data.get("state", {}))
 	EventBus.game_loaded.emit()
 	return true
+
+
+## Lee un archivo de guardado. Devuelve {} si no existe o está dañado.
+func _read_file(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	var json := JSON.new()
+	if json.parse(FileAccess.get_file_as_string(path)) != OK or not json.data is Dictionary:
+		return {}
+	return json.data

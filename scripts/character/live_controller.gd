@@ -57,7 +57,9 @@ func _on_tap(screen_pos: Vector2) -> void:
 	for level in range(view.top_visible_level, -1, -1):
 		var key := view.pick_object(origin, direction, level)
 		if key != "":
-			var item_id: String = view.house.get_piece(level, "objects", key)["item"]
-			if not Catalog.get_item_actions(item_id).is_empty():
-				EventBus.object_menu_requested.emit(level, key, item_id)
+			var piece: Dictionary = view.house.get_piece(level, "objects", key)
+			if HouseData.is_under_construction(piece):
+				EventBus.toast.emit("Todavía se está construyendo.")
+			elif not Catalog.get_item_actions(piece["item"]).is_empty():
+				EventBus.object_menu_requested.emit(level, key, piece["item"])
 			return

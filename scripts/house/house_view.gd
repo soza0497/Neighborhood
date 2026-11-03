@@ -26,6 +26,9 @@ var _levels: Array[Node3D] = []
 var _nodes: Dictionary = {}
 ## Columnas de las esquinas: "nivel|x,z" → Node3D.
 var _posts: Dictionary = {}
+## Piezas en obra: "nivel|capa|clave" → [nivel, capa, clave].
+var _pending: Dictionary = {}
+var _last_pending_count := -1
 
 
 func _ready() -> void:
@@ -35,6 +38,12 @@ func _ready() -> void:
 		container.position.y = HouseGrid.level_y(i)
 		add_child(container)
 		_levels.append(container)
+	# Cada segundo se revisa si alguna obra terminó.
+	var timer := Timer.new()
+	timer.wait_time = 1.0
+	timer.autostart = true
+	timer.timeout.connect(check_construction)
+	add_child(timer)
 
 
 ## Conecta la vista con una casa y la dibuja completa.
@@ -79,6 +88,33 @@ func get_piece_node(level: int, layer: String, key: String) -> Node3D:
 	return _nodes.get(_node_id(level, layer, key))
 
 
+## Revisa las obras: las que terminaron se dibujan normales y avisan a la
+## navegación; además avisa cuántas quedan y cuánto cuesta acelerarlas.
+func check_construction() -> void:
+	if house == null:
+		return
+	var now := Economy.now()
+	var count := 0
+	var seconds_left := 0
+	for id in _pending.keys():
+		var info: Array = _pending[id]
+		var value: Variant = house.get_piece(info[0], info[1], info[2])
+		if value == null:
+			_pending.erase(id)
+			continue
+		var left := int(value.get("ready_at", 0)) - now
+		if left <= 0:
+			_pending.erase(id)
+			EventBus.toast.emit("Terminó: %s" % Catalog.get_item(value["item"]).get("name", ""))
+			house.piece_changed.emit(info[0], info[1], info[2])  # Se redibuja y la navegación se entera.
+		else:
+			count += 1
+			seconds_left += left
+	if count > 0 or _last_pending_count != 0:
+		EventBus.construction_changed.emit(count, Economy.accelerate_cost(seconds_left))
+	_last_pending_count = count
+
+
 ## Mueble que toca un rayo (en coordenadas de la casa) en un nivel.
 ## Devuelve su clave, o "" si no toca ninguno.
 func pick_object(origin: Vector3, direction: Vector3, level: int) -> String:
@@ -112,6 +148,7 @@ func rebuild_all() -> void:
 		node.queue_free()
 	_nodes.clear()
 	_posts.clear()
+	_pending.clear()
 	if house == null:
 		return
 	for level in HouseGrid.MAX_LEVELS:
@@ -168,7 +205,11 @@ func _refresh_piece(level: int, layer: String, key: String) -> void:
 	if value == null:
 		return
 	var node := make_piece(level, layer, key, value)
+	_pending.erase(id)
 	if node != null:
+		if HouseData.is_under_construction(value):
+			HousePieces.make_construction(node)
+			_pending[id] = [level, layer, key]
 		_levels[level].add_child(node)
 		_nodes[id] = node
 

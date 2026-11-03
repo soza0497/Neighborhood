@@ -66,6 +66,11 @@ static func piece_color(value: Dictionary) -> Color:
 	return Color.from_string(item.get("color", "#ff00ff"), Color.MAGENTA)
 
 
+## Pinta una pieza que todavía se está construyendo (naranja transparente).
+static func make_construction(node: Node) -> void:
+	_apply_override(node, transparent_material(Color(1.0, 0.7, 0.2, 0.5)))
+
+
 ## Pinta todo un nodo (y sus hijos) de verde o rojo transparente.
 static func make_ghost(node: Node, valid: bool) -> void:
 	var color := Color(0.3, 1.0, 0.45, 0.55) if valid else Color(1.0, 0.25, 0.2, 0.55)

@@ -163,7 +163,7 @@ func _connect_diagonal(level: int, a: Vector2i, step: Vector2i) -> void:
 ## Una escalera: entrada abajo → escalones → salida arriba.
 func _add_stairs(level: int, key: String) -> void:
 	var value: Dictionary = _house.get_piece(level, "objects", key)
-	if Catalog.get_item(value["item"]).get("kind", "") != "stairs":
+	if Catalog.get_item(value["item"]).get("kind", "") != "stairs" or HouseData.is_under_construction(value):
 		return
 	# Hacia dónde sube la escalera según su giro (ver HousePieces._build_stairs).
 	var up: Vector2i = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)][int(value.get("rot", 0)) % 4]

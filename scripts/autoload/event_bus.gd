@@ -80,3 +80,21 @@ signal character_edit_finished(data: Dictionary)
 signal journal_requested
 ## Se abre el diario: nombre, emoción actual y entradas (ver CharacterData.journal).
 signal journal_opened(character_name: String, emotion: String, entries: Array)
+
+# --- Economía y progreso ---
+## Cambió el dinero, el nivel o la experiencia.
+signal economy_changed(money: int, level: int, xp_in_level: int, xp_needed: int)
+## Se subió de nivel; `unlocked_names` = piezas que se desbloquean.
+signal level_up(level: int, unlocked_names: Array)
+## Aviso corto para mostrar en pantalla (se apaga solo).
+signal toast(text: String)
+## Lo que cuesta la selección que espera Confirmar (negativo = se devuelve dinero).
+signal build_cost_changed(cost: int)
+## Obras en marcha: cuántas hay y cuánto cuesta acelerarlas todas.
+signal construction_changed(count: int, accelerate_cost: int)
+## El jugador pidió acelerar todas las obras.
+signal construction_accelerate_requested
+## La interfaz pide abrir el panel de empleos.
+signal jobs_requested
+## Cambió el empleo o el currículum (para refrescar el panel de empleos).
+signal jobs_changed

@@ -15,6 +15,8 @@ var house: Dictionary = {}
 var character: Dictionary = {}
 ## Reloj del juego: {"minutes": minutos desde el inicio}.
 var clock: Dictionary = {}
+## Dinero, experiencia, piezas descubiertas y empleo (ver Economy.to_dict).
+var economy: Dictionary = {}
 ## Opciones del jugador (menú): {"show_fps": bool, "show_hints": bool}.
 var settings: Dictionary = {}
 
@@ -25,6 +27,7 @@ func reset() -> void:
 	house = {}
 	character = {}
 	clock = {}
+	economy = {}
 	settings = {}
 
 
@@ -35,6 +38,7 @@ func to_dict() -> Dictionary:
 		"house": house,
 		"character": character,
 		"clock": clock,
+		"economy": economy,
 		"settings": settings,
 	}
 
@@ -46,4 +50,5 @@ func from_dict(data: Dictionary) -> void:
 	house = data.get("house", {})
 	character = data.get("character", {})
 	clock = data.get("clock", {})
+	economy = data.get("economy", {})
 	settings = data.get("settings", {})

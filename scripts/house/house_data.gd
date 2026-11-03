@@ -96,6 +96,24 @@ func apply(writes: Array) -> Array:
 	return inverse
 
 
+## ¿Esta pieza todavía se está construyendo? (obras con temporizador)
+static func is_under_construction(value: Variant) -> bool:
+	return value != null and int(value.get("ready_at", 0)) > Economy.now()
+
+
+## Piezas en obra: lista de [nivel, capa, clave, hora en que terminan].
+func pending_construction() -> Array:
+	var result: Array = []
+	var now := Economy.now()
+	for level in HouseGrid.MAX_LEVELS:
+		for layer in Economy.TIMED_LAYERS:
+			for key in levels[level][layer]:
+				var ready_at := int(levels[level][layer][key].get("ready_at", 0))
+				if ready_at > now:
+					result.append([level, layer, key, ready_at])
+	return result
+
+
 ## Busca el objeto que ocupa una celda. Devuelve su clave o "" si no hay.
 func object_at(level: int, cell: Vector2i) -> String:
 	for key in get_layer(level, "objects"):
