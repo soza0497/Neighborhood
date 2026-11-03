@@ -1,0 +1,125 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/character_editor.gd" id="1_editor"]
+
+[sub_resource type="StyleBoxFlat" id="Style_panel"]
+bg_color = Color(0.13, 0.17, 0.25, 0.96)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+content_margin_left = 22.0
+content_margin_top = 14.0
+content_margin_right = 22.0
+content_margin_bottom = 14.0
+
+[node name="CharacterEditor" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_editor")
+
+[node name="Dim" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.35)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Center"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_panel")
+
+[node name="Columns" type="HBoxContainer" parent="Center/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 28
+
+[node name="Left" type="VBoxContainer" parent="Center/Panel/Columns"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Center/Panel/Columns/Left"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Tu personaje"
+
+[node name="NameRow" type="HBoxContainer" parent="Center/Panel/Columns/Left"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Center/Panel/Columns/Left/NameRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Nombre"
+
+[node name="NameEdit" type="LineEdit" parent="Center/Panel/Columns/Left/NameRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 46)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+max_length = 16
+
+[node name="PartsBox" type="VBoxContainer" parent="Center/Panel/Columns/Left"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Right" type="VBoxContainer" parent="Center/Panel/Columns"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TraitsLabel" type="Label" parent="Center/Panel/Columns/Right"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Rasgos"
+
+[node name="TraitsGrid" type="GridContainer" parent="Center/Panel/Columns/Right"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="TraitInfo" type="Label" parent="Center/Panel/Columns/Right"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(308, 60)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.88, 0.6, 1)
+theme_override_font_sizes/font_size = 16
+autowrap_mode = 3
+
+[node name="Spacer" type="Control" parent="Center/Panel/Columns/Right"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Buttons" type="HBoxContainer" parent="Center/Panel/Columns/Right"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 2
+
+[node name="CancelButton" type="Button" parent="Center/Panel/Columns/Right/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Cancelar"
+
+[node name="DoneButton" type="Button" parent="Center/Panel/Columns/Right/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Listo"

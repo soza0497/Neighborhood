@@ -1,20 +1,27 @@
 extends Node3D
-## Escena principal: crea la casa del jugador y conecta todo.
+## Escena principal: crea la casa del jugador, su personaje y conecta todo.
 ##
 ## - La casa (datos) vive en `house`; su historial de deshacer en `history`.
 ## - La vista 3D ($House) la dibuja; el constructor ($House/Builder) la edita.
+## - El personaje ($House/Character) camina por `nav` y vive con su IA.
 ## - La interfaz no toca nada directo: pide cosas por EventBus y aquí se hacen.
 ## - Cada cambio en la casa se guarda solo, un segundo después.
 
 ## Segundos de espera después de un cambio antes de guardar.
 const AUTOSAVE_DELAY := 1.0
+## Máximo de minutos sin jugar que se cuentan al volver (3 días del juego).
+const MAX_OFFLINE_MINUTES := 3 * 1440
 
 @onready var _camera_rig: CameraRig = $CameraRig
 @onready var _house_view: HouseView = $House
 @onready var _builder: HouseBuilder = $House/Builder
+@onready var _character: Character = $House/Character
+@onready var _live: LiveController = $House/LiveController
 
 var house := HouseData.new()
 var history: UndoHistory
+var nav: HouseNav
+var character_data: CharacterData
 ## "build" (construir) o "live" (vivir).
 var mode := ""
 
@@ -29,8 +36,11 @@ func _ready() -> void:
 		house.from_dict(GameState.house)
 
 	history = UndoHistory.new(house)
+	nav = HouseNav.new(house)
 	_house_view.setup(house)
 	_builder.setup(house, history, _house_view, _camera_rig)
+	_live.view = _house_view
+	_load_character()
 
 	_autosave_timer = Timer.new()
 	_autosave_timer.one_shot = true
@@ -52,8 +62,11 @@ func _ready() -> void:
 	EventBus.build_cancel_requested.connect(_builder.cancel_pending)
 	EventBus.undo_requested.connect(_undo)
 	EventBus.redo_requested.connect(_redo)
+	EventBus.character_order_requested.connect(_character.order)
+	EventBus.character_editor_requested.connect(_on_character_editor_requested)
+	EventBus.character_edit_finished.connect(_on_character_edit_finished)
 
-	set_mode("build")
+	set_mode("live")
 	EventBus.view_mode_changed.emit(_house_view.view_mode)
 	EventBus.build_level_changed.emit(_builder.level)
 	EventBus.history_changed.emit(false, false)
@@ -85,6 +98,12 @@ func set_mode(new_mode: String) -> void:
 		return
 	mode = new_mode
 	_builder.set_active(mode == "build")
+	_live.active = mode == "live"
+	# En modo construir el tiempo se detiene; al volver, el personaje se
+	# reubica (la casa pudo cambiar).
+	GameClock.set_paused(mode == "build")
+	if mode == "live":
+		_character.reset_after_build()
 	EventBus.game_mode_changed.emit(mode)
 
 
@@ -110,6 +129,36 @@ func _set_view_mode(view_mode: HouseView.ViewMode) -> void:
 	EventBus.view_mode_changed.emit(view_mode)
 
 
+## Crea el personaje (o lo carga) y descuenta el tiempo que pasó sin jugar.
+func _load_character() -> void:
+	character_data = CharacterData.create_default()
+	var saved := GameState.character
+	if not saved.is_empty():
+		character_data.from_dict(saved.get("data", {}))
+		var cell_array: Array = saved.get("cell", [Character.SPAWN_CELL.x, Character.SPAWN_CELL.y])
+		_character.level = int(saved.get("level", 0))
+		_character.cell = Vector2i(int(cell_array[0]), int(cell_array[1]))
+		var away_seconds := Time.get_unix_time_from_system() - float(saved.get("saved_unix", 0))
+		# A velocidad x1, 1 segundo real = 1 minuto del juego.
+		var away_minutes := clampf(away_seconds, 0.0, MAX_OFFLINE_MINUTES)
+		character_data.decay(away_minutes, CharacterData.OFFLINE_FLOOR)
+	GameClock.minutes = float(GameState.clock.get("minutes", GameClock.minutes))
+	_character.setup(character_data, house, nav, _house_view)
+
+
+func _on_character_editor_requested() -> void:
+	EventBus.character_editor_opened.emit(character_data.to_dict())
+
+
+func _on_character_edit_finished(data: Dictionary) -> void:
+	character_data.from_dict(data)
+	_character.refresh_look()
+	EventBus.character_intention_changed.emit(_character.get_intention())
+	_autosave_timer.start()
+
+
 func _on_game_saving() -> void:
 	GameState.camera = _camera_rig.get_state()
 	GameState.house = house.to_dict()
+	GameState.character = _character.to_dict()
+	GameState.clock = {"minutes": GameClock.minutes}

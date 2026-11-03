@@ -1,0 +1,9 @@
+{
+	"_ayuda": "Opciones del editor de personaje (colores provisionales hasta la Fase 7). default = cómo empieza un personaje nuevo.",
+	"format_version": 1,
+	"skin": ["#ffe0c7", "#f5c9a6", "#e0a67c", "#c68657", "#9c6440", "#6e4429"],
+	"hair": ["#2b1d14", "#5a3a22", "#a8693a", "#e8c36a", "#d9573c", "#9a9aa8", "#6f5bd6", "#ff8fb8"],
+	"shirt": ["#ff8f6b", "#ffd966", "#7fd18b", "#6fb7ff", "#b48cff", "#ff9db5", "#f2f2f2", "#3b4a5e"],
+	"pants": ["#3b4a5e", "#5577aa", "#7a5a3e", "#2f2f35", "#c9b48a", "#8f4a6a"],
+	"default": { "name": "Alex", "skin": "#f5c9a6", "hair": "#5a3a22", "shirt": "#6fb7ff", "pants": "#3b4a5e", "traits": ["chef", "lazy"] }
+}

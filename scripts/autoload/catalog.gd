@@ -6,6 +6,9 @@ extends Node
 ## se muestra en la consola de Godot y el juego sigue con lo que pudo leer.
 
 const CATALOG_PATH := "res://data/catalog.json"
+const ACTIONS_PATH := "res://data/actions.json"
+const TRAITS_PATH := "res://data/traits.json"
+const CHARACTER_OPTIONS_PATH := "res://data/character_options.json"
 
 ## Campos que todo objeto del catálogo debe tener.
 const REQUIRED_ITEM_FIELDS := ["id", "name", "category", "kind", "price"]
@@ -14,10 +17,19 @@ const REQUIRED_ITEM_FIELDS := ["id", "name", "category", "kind", "price"]
 var categories: Dictionary = {}
 ## Objetos por id. Ejemplo: items["bed_basic"] = {"id": ..., "price": 300, ...}
 var items: Dictionary = {}
+## Acciones que anuncian los muebles, por id (ver data/actions.json).
+var actions: Dictionary = {}
+## Rasgos de personalidad, por id (ver data/traits.json).
+var traits: Dictionary = {}
+## Cuántos rasgos puede tener un personaje.
+var max_traits := 2
+## Colores y valores por defecto del editor de personaje.
+var character_options: Dictionary = {}
 
 
 func _ready() -> void:
 	load_catalog()
+	_load_character_data()
 
 
 ## Lee el archivo de datos y llena `categories` e `items`.
@@ -62,6 +74,43 @@ func get_items_in_category(category_id: String) -> Array:
 		if item["category"] == category_id:
 			result.append(item)
 	return result
+
+
+## Acciones que ofrece un mueble (diccionarios de actions.json).
+func get_item_actions(item_id: String) -> Array:
+	var result: Array = []
+	for action_id in get_item(item_id).get("actions", []):
+		if actions.has(action_id):
+			result.append(actions[action_id])
+	return result
+
+
+## Lee acciones, rasgos y opciones del personaje.
+func _load_character_data() -> void:
+	actions.clear()
+	for action in _read_json(ACTIONS_PATH).get("actions", []):
+		actions[action["id"]] = action
+	var trait_data := _read_json(TRAITS_PATH)
+	traits.clear()
+	for t in trait_data.get("traits", []):
+		traits[t["id"]] = t
+	max_traits = int(trait_data.get("max_per_character", 2))
+	character_options = _read_json(CHARACTER_OPTIONS_PATH)
+
+	# Avisa si un mueble pide una acción que no existe.
+	for item in items.values():
+		for action_id in item.get("actions", []):
+			if not actions.has(action_id):
+				push_warning("Catálogo: '%s' usa una acción que no existe: '%s'" % [item["id"], action_id])
+	print("Personaje: %d acciones, %d rasgos" % [actions.size(), traits.size()])
+
+
+func _read_json(path: String) -> Dictionary:
+	var json := JSON.new()
+	if json.parse(FileAccess.get_file_as_string(path)) != OK:
+		push_error("No se pudo leer %s (línea %d: %s)" % [path, json.get_error_line(), json.get_error_message()])
+		return {}
+	return json.data
 
 
 ## Revisa que un objeto tenga lo mínimo y avisa si algo está mal.

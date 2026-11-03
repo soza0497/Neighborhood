@@ -45,7 +45,20 @@ Hecho con **Godot 4.7.2** (GDScript).
 9. **Deshacer / Rehacer** arriba (en la PC también Ctrl+Z / Ctrl+Y).
 10. **Vista** cambia entre: completa (con techo), sin techo, paredes bajas.
 11. Tocar otra vez la pieza elegida la suelta (vuelve el dedo a mover la cámara).
-12. **Vivir** oculta las herramientas (en la Fase 2 ahí vive el personaje).
+12. **Vivir** vuelve al modo vivir (el juego arranca ahí).
+
+## Vivir (modo Vivir)
+
+- Tu personaje vive solo: cuando tiene hambre, sueño, está sucio o aburrido,
+  busca un mueble que lo ayude (refrigeradora, cocina, cama, ducha, tele...).
+- A la izquierda: sus necesidades (Comida, Energía, Limpieza, Diversión), su
+  ánimo y qué está haciendo. Arriba: el reloj del juego y la velocidad
+  (**x1**, x3, x10). A x1, 1 segundo real = 1 minuto del juego.
+- **Tocá un mueble** para darle una orden (por ejemplo, "Ver tele").
+- **Personaje**: cambia nombre, colores y hasta 2 rasgos (Cocinero,
+  Perezoso, Gamer...). Los rasgos cambian lo que prefiere hacer.
+- En modo Construir el tiempo se detiene. Las necesidades nunca bajan de un
+  mínimo, y si no jugás un tiempo, solo bajan un poco.
 
 ## Pruebas automáticas
 
@@ -55,9 +68,15 @@ En la terminal, dentro de la carpeta del proyecto:
 godot --headless --path . res://tests/test_house.tscn
 ```
 
-Revisa las reglas de construcción y el deshacer. Debe terminar con
-`PRUEBAS: N pasaron, 0 fallaron`. (`tests/visual_demo.tscn` arma una casa de
-ejemplo y saca capturas, pero **pisa la partida guardada**.)
+```bash
+godot --headless --path . res://tests/test_character.tscn
+```
+
+La primera revisa las reglas de construcción y el deshacer; la segunda, las
+necesidades, la IA y los caminos. Deben terminar con
+`PRUEBAS: N pasaron, 0 fallaron`. (`tests/visual_demo.tscn` y
+`tests/character_demo.tscn` arman casas de ejemplo y sacan capturas, pero
+**pisan la partida guardada**.)
 
 ## Exportar a Android
 
@@ -83,8 +102,8 @@ parecido y cambiale `id`, `name`, `footprint`, `height` y `color`. Si te equivoc
 | Carpeta | Qué hay |
 |---|---|
 | `scenes/` | Escenas del mundo 3D (`main.tscn` es la que arranca) |
-| `scripts/` | Código. `autoload/` = sistemas siempre presentes; `house/` = la casa y el constructor |
-| `data/` | Datos editables (catálogo) |
+| `scripts/` | Código. `autoload/` = sistemas siempre presentes; `house/` = la casa, el constructor y los caminos; `character/` = el personaje y su IA |
+| `data/` | Datos editables: catálogo, acciones, rasgos, opciones del personaje |
 | `ui/` | Interfaz (botones, textos) |
 | `assets/` | Modelos, sonidos, texturas, shaders (casi vacía hasta la Fase 7) |
 | `docs/` | Guías |
@@ -95,7 +114,9 @@ parecido y cambiale `id`, `name`, `footprint`, `height` y `color`. Si te equivoc
 Están siempre cargados y se usan desde cualquier script por su nombre:
 
 - **EventBus**: señales globales; los sistemas se avisan cosas sin conocerse.
-- **Catalog**: lee `data/catalog.json`. `Catalog.get_item("bed_basic")`.
+- **Catalog**: lee `data/catalog.json` (piezas) y `actions.json`,
+  `traits.json`, `character_options.json` (personaje). `Catalog.get_item("bed_basic")`.
+- **GameClock**: el reloj del juego (velocidad, pausa, día y hora).
 - **GameState**: todos los datos de la partida que se guardan.
 - **SaveSystem**: guarda/carga `GameState` en `user://save.json`
   (en la PC: `~/.local/share/godot/app_userdata/Neighborhood/`).

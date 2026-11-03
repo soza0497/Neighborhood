@@ -1,9 +1,10 @@
 extends CanvasLayer
 ## Interfaz del juego.
 ##
-## Arriba: FPS, deshacer/rehacer, vista de paredes, centrar y cambio de modo.
-## Izquierda: subir/bajar de piso (modo construir).
+## Arriba: FPS, reloj, velocidad, deshacer/rehacer, vista, centrar y modo.
+## Izquierda: subir/bajar de piso (construir) o el panel del personaje (vivir).
 ## Abajo (modo construir): categorías del catálogo y sus piezas.
+## Centro (modo vivir): menú de acciones al tocar un mueble.
 ##
 ## La interfaz no cambia la casa directamente: pide cosas por EventBus.
 ## Los botones de categorías y piezas se crean solos a partir del catálogo.
@@ -12,10 +13,29 @@ const VIEW_MODE_NAMES := ["Vista: completa", "Vista: sin techo", "Vista: paredes
 const LEVEL_NAMES := ["Planta baja", "Primer piso"]
 const ITEM_BUTTON_SIZE := Vector2(150, 76)
 const CATEGORY_BUTTON_SIZE := Vector2(150, 52)
+## Color de cada barra de necesidad (paleta propia del juego).
+const NEED_COLORS := {
+	"hunger": Color("#ff9f43"),
+	"energy": Color("#feca57"),
+	"hygiene": Color("#54a0ff"),
+	"fun": Color("#ff6b9d"),
+}
 
 @onready var _fps_label: Label = %FpsLabel
 @onready var _info_label: Label = %InfoLabel
 @onready var _hint_label: Label = %HintLabel
+@onready var _clock_label: Label = %ClockLabel
+@onready var _speed_button: Button = %SpeedButton
+@onready var _character_panel: Control = %CharacterPanel
+@onready var _name_label: Label = %NameLabel
+@onready var _mood_label: Label = %MoodLabel
+@onready var _needs_box: VBoxContainer = %NeedsBox
+@onready var _intention_label: Label = %IntentionLabel
+@onready var _edit_character_button: Button = %EditCharacterButton
+@onready var _action_menu: Control = %ActionMenu
+@onready var _menu_title: Label = %MenuTitle
+@onready var _menu_buttons: VBoxContainer = %MenuButtons
+@onready var _menu_close_button: Button = %MenuCloseButton
 @onready var _undo_button: Button = %UndoButton
 @onready var _redo_button: Button = %RedoButton
 @onready var _view_button: Button = %ViewButton
@@ -41,6 +61,8 @@ var _item_group := ButtonGroup.new()
 ## Tipo ("kind") de la pieza elegida, para saber si mostrar "Girar".
 var _selected_kind := ""
 var _has_selection := false
+## Barras de necesidades: nombre → ProgressBar.
+var _need_bars: Dictionary = {}
 
 
 func _ready() -> void:
@@ -68,6 +90,15 @@ func _ready() -> void:
 	EventBus.view_mode_changed.connect(_on_view_mode_changed)
 	EventBus.history_changed.connect(_on_history_changed)
 
+	_speed_button.pressed.connect(GameClock.cycle_speed)
+	_edit_character_button.pressed.connect(EventBus.character_editor_requested.emit)
+	_menu_close_button.pressed.connect(_action_menu.hide)
+	GameClock.speed_changed.connect(_on_speed_changed)
+	EventBus.character_needs_changed.connect(_on_needs_changed)
+	EventBus.character_intention_changed.connect(_on_intention_changed)
+	EventBus.object_menu_requested.connect(_on_object_menu_requested)
+	_create_need_bars()
+
 	if SaveSystem.has_save():
 		_last_save_text = "partida cargada"
 	_update_info()
@@ -78,6 +109,7 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	_fps_label.text = "%d FPS" % Engine.get_frames_per_second()
+	_clock_label.text = "Día %d · %s" % [GameClock.day(), GameClock.time_text()]
 
 
 # --- Categorías y piezas ---
@@ -156,6 +188,68 @@ func _update_object_buttons() -> void:
 	_delete_button.visible = _has_selection
 
 
+# --- Personaje (modo vivir) ---
+
+## Una fila por necesidad: nombre + barra de su color.
+func _create_need_bars() -> void:
+	for need in CharacterData.NEEDS:
+		var row := HBoxContainer.new()
+		var label := Label.new()
+		label.text = CharacterData.NEED_NAMES[need]
+		label.custom_minimum_size = Vector2(92, 0)
+		label.add_theme_font_size_override("font_size", 16)
+		row.add_child(label)
+		var bar := ProgressBar.new()
+		bar.custom_minimum_size = Vector2(150, 20)
+		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		bar.show_percentage = false
+		var background := StyleBoxFlat.new()
+		background.bg_color = Color(1, 1, 1, 0.15)
+		background.set_corner_radius_all(10)
+		var fill := StyleBoxFlat.new()
+		fill.bg_color = NEED_COLORS[need]
+		fill.set_corner_radius_all(10)
+		bar.add_theme_stylebox_override("background", background)
+		bar.add_theme_stylebox_override("fill", fill)
+		row.add_child(bar)
+		_needs_box.add_child(row)
+		_need_bars[need] = bar
+
+
+func _on_needs_changed(needs: Dictionary, mood_text: String) -> void:
+	for need in _need_bars:
+		_need_bars[need].value = needs.get(need, 0.0)
+	_mood_label.text = "Ánimo: " + mood_text
+
+
+func _on_intention_changed(intention: Dictionary) -> void:
+	_name_label.text = intention["character"]
+	_intention_label.text = Character.intention_text(intention)
+
+
+func _on_object_menu_requested(level: int, key: String, item_id: String) -> void:
+	for child in _menu_buttons.get_children():
+		child.queue_free()
+	_menu_title.text = Catalog.get_item(item_id).get("name", "")
+	for action in Catalog.get_item_actions(item_id):
+		var button := Button.new()
+		button.text = action["name"]
+		button.custom_minimum_size = Vector2(240, 56)
+		button.add_theme_font_size_override("font_size", 20)
+		button.pressed.connect(_on_menu_action.bind(level, key, action["id"]))
+		_menu_buttons.add_child(button)
+	_action_menu.show()
+
+
+func _on_menu_action(level: int, key: String, action_id: String) -> void:
+	_action_menu.hide()
+	EventBus.character_order_requested.emit(level, key, action_id)
+
+
+func _on_speed_changed(speed: int) -> void:
+	_speed_button.text = "x%d" % speed
+
+
 # --- Avisos ---
 
 func _on_mode_button_pressed() -> void:
@@ -171,6 +265,9 @@ func _on_game_mode_changed(mode: String) -> void:
 	_hint_label.visible = building
 	_undo_button.visible = building
 	_redo_button.visible = building
+	_character_panel.visible = not building
+	_speed_button.visible = not building
+	_action_menu.hide()
 	if not building:
 		# Al volver a construir se empieza sin pieza elegida.
 		var pressed := _item_group.get_pressed_button()

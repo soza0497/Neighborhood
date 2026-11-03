@@ -11,12 +11,18 @@ extends Node
 var camera: Dictionary = {}
 ## La casa del jugador (ver HouseData.to_dict). Vacío = lote sin construir.
 var house: Dictionary = {}
+## El personaje del jugador (ver Character.to_dict). Vacío = personaje nuevo.
+var character: Dictionary = {}
+## Reloj del juego: {"minutes": minutos desde el inicio}.
+var clock: Dictionary = {}
 
 
 ## Vuelve todo a una partida nueva.
 func reset() -> void:
 	camera = {}
 	house = {}
+	character = {}
+	clock = {}
 
 
 ## Convierte el estado en un diccionario simple que se puede escribir en JSON.
@@ -24,6 +30,8 @@ func to_dict() -> Dictionary:
 	return {
 		"camera": camera,
 		"house": house,
+		"character": character,
+		"clock": clock,
 	}
 
 
@@ -32,3 +40,5 @@ func from_dict(data: Dictionary) -> void:
 	reset()
 	camera = data.get("camera", {})
 	house = data.get("house", {})
+	character = data.get("character", {})
+	clock = data.get("clock", {})

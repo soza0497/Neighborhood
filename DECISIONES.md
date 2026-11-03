@@ -143,3 +143,43 @@ Lo marcado **(pregunta)** necesita tu visto bueno antes de cambiarse.
   referencias y pedidos como prueba de creación independiente.
 - **(pregunta)** Antes de publicar al público o cobrar: abogado de propiedad
   intelectual y búsqueda de marca del nombre definitivo.
+
+## Personaje y su IA (Fase 2)
+
+- **Necesidades: Comida, Energía, Limpieza, Diversión** (0 a 100, 100 =
+  perfecto). El **ánimo** no es una necesidad aparte: es el promedio, con
+  una palabra (Feliz / Bien / Más o menos / Decaído). Social llega con la
+  pareja (Fase 5).
+- **Nunca bajan de 10** jugando, y el tiempo sin jugar solo las baja hasta
+  30 (principio "tranquilo" de VISION). Lo que esté por debajo no baja más.
+- **Tiempo: 1 segundo real = 1 minuto del juego a x1** (un día = 24 min).
+  Velocidades x1, x3, x10. El reloj se detiene en modo Construir. La
+  intención guarda la **hora real** ("desde las 14:02"), que es la que
+  verá la pareja en la Fase 5.
+- **IA de prioridades (utility AI)**: puntaje = lo que sube cada necesidad ×
+  urgencia (curva al cuadrado) × gusto por rasgos ÷ distancia. Se sortea
+  entre las opciones de al menos 75 % del mejor puntaje. Si nada pasa de un
+  mínimo, pasea. Pura lógica en `character_brain.gd` (el servidor podría
+  usarla igual para el personaje "offline" de la Fase 5).
+- **Los muebles anuncian acciones** con ids en `catalog.json` (`actions`); las
+  acciones viven en `data/actions.json` (duración, cuánto sube cada
+  necesidad, animación, burbuja). Los rasgos en `data/traits.json`.
+- **Órdenes del jugador**: tocar un mueble en modo Vivir muestra sus
+  acciones; la orden tiene prioridad sobre la IA. No estaba pedido
+  explícitamente, pero sin esto el modo Vivir no tiene nada que tocar.
+- **Caminos con AStar3D de Godot** sobre las celdas (con diagonales que no
+  cortan esquinas); paredes bloquean, puertas no, ventanas sí. Las escaleras
+  unen la planta baja con el primer piso. La red se rehace sola cuando la
+  casa cambia. Al volver de Construir, si le pusieron algo encima al
+  personaje, se lo mueve a la celda libre más cercana.
+- **Editor con botones de opciones** (colores y rasgos), nada de arrastrar
+  partes del cuerpo: evita la patente de EA (ver `docs/riesgos-legales-ea.md`).
+- **Barras con colores propios** (naranja, amarillo, azul, rosado), no el
+  verde→rojo de otros juegos.
+- **Ganchos de animación**: el personaje pide `idle`, `walk`, `sleep`, `sit`,
+  `cook`, `eat`, `shower`, `use`. Hoy son movimientos simples por código; si
+  el modelo de la Fase 7 trae un AnimationPlayer con esos nombres, se usa.
+- **El juego arranca en modo Vivir** (antes, Construir).
+- **Un solo personaje por casa** por ahora; los datos (`CharacterData`) ya
+  están separados de la escena, así en la Fase 5 se suma el de la pareja.
+

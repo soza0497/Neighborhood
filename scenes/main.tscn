@@ -6,6 +6,8 @@
 [ext_resource type="PackedScene" path="res://scenes/tree.tscn" id="4_tree"]
 [ext_resource type="Script" path="res://scripts/house/house_view.gd" id="5_view"]
 [ext_resource type="Script" path="res://scripts/house/house_builder.gd" id="6_builder"]
+[ext_resource type="Script" path="res://scripts/character/character.gd" id="7_character"]
+[ext_resource type="Script" path="res://scripts/character/live_controller.gd" id="8_live"]
 
 [sub_resource type="Environment" id="Env_main"]
 background_mode = 1
@@ -52,6 +54,12 @@ script = ExtResource("5_view")
 
 [node name="Builder" type="Node3D" parent="House"]
 script = ExtResource("6_builder")
+
+[node name="Character" type="Node3D" parent="House"]
+script = ExtResource("7_character")
+
+[node name="LiveController" type="Node3D" parent="House"]
+script = ExtResource("8_live")
 
 [node name="Trees" type="Node3D" parent="."]
 

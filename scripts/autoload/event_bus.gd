@@ -60,3 +60,19 @@ signal build_selection_changed(has_selection: bool)
 signal view_mode_changed(mode: int)
 ## Para habilitar los botones de deshacer y rehacer.
 signal history_changed(can_undo: bool, can_redo: bool)
+
+# --- Personaje ---
+## Cada medio segundo: necesidades (nombre → 0..100) y ánimo en palabras.
+signal character_needs_changed(needs: Dictionary, mood_text: String)
+## Cambió lo que hace el personaje (ver Character.get_intention).
+signal character_intention_changed(intention: Dictionary)
+## En modo vivir se tocó un mueble que ofrece acciones.
+signal object_menu_requested(level: int, key: String, item_id: String)
+## El jugador eligió una acción del menú de un mueble.
+signal character_order_requested(level: int, key: String, action_id: String)
+## La interfaz pide abrir el editor de personaje.
+signal character_editor_requested
+## Se abre el editor con los datos actuales (ver CharacterData.to_dict).
+signal character_editor_opened(data: Dictionary)
+## El editor terminó: nombre, apariencia y rasgos nuevos.
+signal character_edit_finished(data: Dictionary)

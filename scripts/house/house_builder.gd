@@ -787,21 +787,7 @@ func _pick_wall(screen_pos: Vector2, use_nearby := true) -> String:
 ## Mueble bajo la pantalla ("" si no hay).
 func _pick_object(screen_pos: Vector2) -> String:
 	var ray := _ray(screen_pos)
-	var best_key := ""
-	var best_dist := INF
-	var base := HouseGrid.level_y(level)
-	for key in house.get_layer(level, "objects"):
-		var value: Dictionary = house.get_piece(level, "objects", key)
-		var object_item := Catalog.get_item(value["item"])
-		var size := HouseGrid.rotated_size(HouseData.item_footprint(object_item), int(value.get("rot", 0)))
-		var anchor := HouseData.object_anchor(value)
-		var height := HouseGrid.WALL_HEIGHT if object_item.get("kind", "") == "stairs" else float(object_item.get("height", 1.0))
-		var box := AABB(Vector3(anchor.x, base, anchor.y), Vector3(size.x, height, size.y))
-		var hit: Variant = box.intersects_ray(ray[0], ray[1])
-		if hit != null and ray[0].distance_to(hit) < best_dist:
-			best_dist = ray[0].distance_to(hit)
-			best_key = key
-	return best_key
+	return view.pick_object(ray[0], ray[1], level)
 
 
 ## Con un dedo: ¿la cámara se mueve o el dedo construye?

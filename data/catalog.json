@@ -1,5 +1,5 @@
 {
-	"_ayuda": "Catálogo editable. Cada objeto necesita id, name, category, kind y price. Los ids van en inglés, sin espacios, y no se repiten. kind = qué tipo de pieza es: foundation, floor, wall, room, door, window, stairs, roof, furniture o paint. footprint = celdas que ocupa [ancho, fondo]. height = alto en metros (muebles). shape = forma provisional: box, table, bed, chair, sofa. opening = hueco en la pared [desde, hasta] en metros (puertas y ventanas). build_seconds = tiempo de construcción (se usa desde la Fase 3). color = color provisional hasta tener arte.",
+	"_ayuda": "Catálogo editable. Cada objeto necesita id, name, category, kind y price. Los ids van en inglés, sin espacios, y no se repiten. kind = qué tipo de pieza es: foundation, floor, wall, room, door, window, stairs, roof, furniture o paint. footprint = celdas que ocupa [ancho, fondo]. height = alto en metros (muebles). shape = forma provisional: box, table, bed, chair, sofa. opening = hueco en la pared [desde, hasta] en metros (puertas y ventanas). actions = acciones que el mueble ofrece al personaje (ver actions.json). build_seconds = tiempo de construcción (se usa desde la Fase 3). color = color provisional hasta tener arte.",
 	"format_version": 1,
 	"categories": [
 		{ "id": "structure", "name": "Estructura" },
@@ -22,15 +22,18 @@
 		{ "id": "window_basic", "name": "Ventana", "category": "openings", "kind": "window", "price": 60, "build_seconds": 0, "opening": [0.9, 2.0], "color": "#bfe6ff" },
 		{ "id": "window_tall", "name": "Ventanal", "category": "openings", "kind": "window", "price": 90, "build_seconds": 0, "opening": [0.3, 2.2], "color": "#bfe6ff" },
 
-		{ "id": "bed_basic", "name": "Cama sencilla", "category": "furniture", "kind": "furniture", "price": 300, "build_seconds": 0, "footprint": [1, 2], "height": 0.55, "shape": "bed", "color": "#7fb3ff" },
-		{ "id": "bed_double", "name": "Cama doble", "category": "furniture", "kind": "furniture", "price": 500, "build_seconds": 0, "footprint": [2, 2], "height": 0.55, "shape": "bed", "color": "#ff9db5" },
+		{ "id": "bed_basic", "name": "Cama sencilla", "category": "furniture", "kind": "furniture", "price": 300, "build_seconds": 0, "footprint": [1, 2], "height": 0.55, "shape": "bed", "color": "#7fb3ff", "actions": ["sleep"] },
+		{ "id": "bed_double", "name": "Cama doble", "category": "furniture", "kind": "furniture", "price": 500, "build_seconds": 0, "footprint": [2, 2], "height": 0.55, "shape": "bed", "color": "#ff9db5", "actions": ["sleep"] },
 		{ "id": "table_basic", "name": "Mesa de comedor", "category": "furniture", "kind": "furniture", "price": 150, "build_seconds": 0, "footprint": [2, 1], "height": 0.78, "shape": "table", "color": "#c98b5a" },
-		{ "id": "chair_basic", "name": "Silla", "category": "furniture", "kind": "furniture", "price": 40, "build_seconds": 0, "footprint": [1, 1], "height": 0.9, "shape": "chair", "color": "#e3a857" },
-		{ "id": "sofa_basic", "name": "Sofá", "category": "furniture", "kind": "furniture", "price": 250, "build_seconds": 0, "footprint": [2, 1], "height": 0.8, "shape": "sofa", "color": "#78c49a" },
-		{ "id": "fridge_basic", "name": "Refrigeradora", "category": "furniture", "kind": "furniture", "price": 350, "build_seconds": 0, "footprint": [1, 1], "height": 1.8, "shape": "box", "color": "#f2f6fa" },
-		{ "id": "stove_basic", "name": "Cocina", "category": "furniture", "kind": "furniture", "price": 300, "build_seconds": 0, "footprint": [1, 1], "height": 0.9, "shape": "box", "color": "#9aa3ad" },
-		{ "id": "toilet_basic", "name": "Inodoro", "category": "furniture", "kind": "furniture", "price": 120, "build_seconds": 0, "footprint": [1, 1], "height": 0.45, "shape": "chair", "color": "#ffffff" },
-		{ "id": "shower_basic", "name": "Ducha", "category": "furniture", "kind": "furniture", "price": 200, "build_seconds": 0, "footprint": [1, 1], "height": 2.0, "shape": "box", "color": "#a9dcef" },
+		{ "id": "chair_basic", "name": "Silla", "category": "furniture", "kind": "furniture", "price": 40, "build_seconds": 0, "footprint": [1, 1], "height": 0.9, "shape": "chair", "color": "#e3a857", "actions": ["sit"] },
+		{ "id": "sofa_basic", "name": "Sofá", "category": "furniture", "kind": "furniture", "price": 250, "build_seconds": 0, "footprint": [2, 1], "height": 0.8, "shape": "sofa", "color": "#78c49a", "actions": ["rest_sofa"] },
+		{ "id": "fridge_basic", "name": "Refrigeradora", "category": "furniture", "kind": "furniture", "price": 350, "build_seconds": 0, "footprint": [1, 1], "height": 1.8, "shape": "box", "color": "#f2f6fa", "actions": ["snack"] },
+		{ "id": "stove_basic", "name": "Cocina", "category": "furniture", "kind": "furniture", "price": 300, "build_seconds": 0, "footprint": [1, 1], "height": 0.9, "shape": "box", "color": "#9aa3ad", "actions": ["cook"] },
+		{ "id": "toilet_basic", "name": "Inodoro", "category": "furniture", "kind": "furniture", "price": 120, "build_seconds": 0, "footprint": [1, 1], "height": 0.45, "shape": "chair", "color": "#ffffff", "actions": ["toilet"] },
+		{ "id": "shower_basic", "name": "Ducha", "category": "furniture", "kind": "furniture", "price": 200, "build_seconds": 0, "footprint": [1, 1], "height": 2.0, "shape": "box", "color": "#a9dcef", "actions": ["shower"] },
+		{ "id": "tv_basic", "name": "Televisor", "category": "furniture", "kind": "furniture", "price": 400, "build_seconds": 0, "footprint": [1, 1], "height": 1.0, "shape": "box", "color": "#2f3542", "actions": ["watch_tv"] },
+		{ "id": "computer_basic", "name": "Computadora", "category": "furniture", "kind": "furniture", "price": 600, "build_seconds": 0, "footprint": [1, 1], "height": 1.1, "shape": "box", "color": "#5c6b80", "actions": ["play_games"] },
+		{ "id": "bookshelf_basic", "name": "Librero", "category": "furniture", "kind": "furniture", "price": 180, "build_seconds": 0, "footprint": [1, 1], "height": 1.7, "shape": "box", "color": "#a0673f", "actions": ["read"] },
 
 		{ "id": "paint_cream", "name": "Crema", "category": "paint", "kind": "paint", "price": 0, "build_seconds": 0, "color": "#fff4dc" },
 		{ "id": "paint_yellow", "name": "Amarillo", "category": "paint", "kind": "paint", "price": 0, "build_seconds": 0, "color": "#ffd966" },

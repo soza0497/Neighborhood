@@ -1,0 +1,13 @@
+{
+	"_ayuda": "Rasgos de personalidad. decay = multiplica lo rápido que baja cada necesidad (1.2 = baja 20 % más rápido). likes = multiplica las ganas de hacer acciones con esa etiqueta (ver tags en actions.json). Cada personaje elige hasta 2 rasgos.",
+	"format_version": 1,
+	"max_per_character": 2,
+	"traits": [
+		{ "id": "neat", "name": "Ordenado", "description": "Le gusta estar limpio; se ensucia más lento.", "decay": { "hygiene": 0.7 }, "likes": { "clean": 1.4 } },
+		{ "id": "chef", "name": "Cocinero", "description": "Prefiere cocinar a picar algo.", "decay": {}, "likes": { "cook": 1.6 } },
+		{ "id": "lazy", "name": "Perezoso", "description": "Se cansa rápido y ama descansar.", "decay": { "energy": 1.25 }, "likes": { "rest": 1.5 } },
+		{ "id": "social", "name": "Sociable", "description": "Se aburre rápido estando solo.", "decay": { "fun": 1.2 }, "likes": { "screen": 1.2 } },
+		{ "id": "athletic", "name": "Deportista", "description": "Tiene energía de sobra.", "decay": { "energy": 0.8 }, "likes": { "rest": 0.8 } },
+		{ "id": "gamer", "name": "Gamer", "description": "Los videojuegos lo divierten más que nada.", "decay": { "fun": 1.1 }, "likes": { "games": 1.8 } }
+	]
+}

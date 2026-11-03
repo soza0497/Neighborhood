@@ -68,6 +68,26 @@ func get_piece_node(level: int, layer: String, key: String) -> Node3D:
 	return _nodes.get(_node_id(level, layer, key))
 
 
+## Mueble que toca un rayo (en coordenadas de la casa) en un nivel.
+## Devuelve su clave, o "" si no toca ninguno.
+func pick_object(origin: Vector3, direction: Vector3, level: int) -> String:
+	var best_key := ""
+	var best_dist := INF
+	var base := HouseGrid.level_y(level)
+	for key in house.get_layer(level, "objects"):
+		var value: Dictionary = house.get_piece(level, "objects", key)
+		var item := Catalog.get_item(value["item"])
+		var size := HouseGrid.rotated_size(HouseData.item_footprint(item), int(value.get("rot", 0)))
+		var anchor := HouseData.object_anchor(value)
+		var height := HouseGrid.WALL_HEIGHT if item.get("kind", "") == "stairs" else float(item.get("height", 1.0))
+		var box := AABB(Vector3(anchor.x, base, anchor.y), Vector3(size.x, height, size.y))
+		var hit: Variant = box.intersects_ray(origin, direction)
+		if hit != null and origin.distance_to(hit) < best_dist:
+			best_dist = origin.distance_to(hit)
+			best_key = key
+	return best_key
+
+
 ## Contenedor de un nivel (para poner cosas a la altura de ese piso).
 func get_level_container(level: int) -> Node3D:
 	return _levels[level]
