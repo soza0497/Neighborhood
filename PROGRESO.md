@@ -1,6 +1,23 @@
 # Progreso
 
-## Fase actual: 3 — Progresión y economía local (código listo; falta probar en el teléfono)
+## Fase actual: 4 — Cuentas y servidor (diseño decidido; sin empezar el código)
+
+### Fase 4 — plan (2026-11-03)
+Decisiones del dueño y diseño completos en DECISIONES.md ("Cuentas y servidor").
+Modelo: **Opus, esfuerzo alto**. Conviene una conversación nueva.
+- **4A — servidor y cuentas**: `server/` con docker-compose (Nakama 3.41.0 +
+  postgres:18, puertos según DECISIONES), secretos en `server/.env`,
+  levantarlo y comprobar (127.0.0.1 y 192.168.100.177 responden en 7350; 7351
+  solo local). Cliente REST propio (autoload `GameServer`): registrar/entrar con
+  usuario + contraseña, sesión recordada, indicador de conexión, pantalla de
+  entrada. RPC `game_load` + importación única de la partida local; personaje
+  y opciones guardados en la nube. Guía `docs/servidor.md` para principiante.
+  Bitácora: anotar los contenedores nuevos.
+- **4B — servidor autoritativo**: RPC en Lua para construir (precio, nivel,
+  obra), deshacer/rehacer, acelerar, empleos y turnos, pago offline; wallet de
+  Nakama. Sin conexión: Construir deshabilitado. Pruebas del servidor.
+
+### Fase 3 (estado anterior)
 
 Las Fases 1, 2 y 3 están sin probar en el teléfono con los últimos cambios:
 probarlas juntas.
@@ -69,8 +86,9 @@ Todo en un solo tramo (1A + 1B + 1C):
 2. [Claude] Corregir lo que salga; commit "Fases 1 a 3 cerradas".
 
 ### Próximo paso exacto
-Instalar con `~/Android/Sdk/platform-tools/adb install -r build/neighborhood.apk`
-(el APK ya está exportado) y probar. Después: **Fase 4 (servidor Nakama): usar Opus con esfuerzo alto.**
+En una conversación nueva (Opus, esfuerzo alto): "Leé CLAUDE.md, PROGRESO.md,
+DECISIONES.md y VISION.md y hacé la Fase 4A". En paralelo, el dueño puede
+probar el APK 0.3.0 (`~/Android/Sdk/platform-tools/adb install -r build/neighborhood.apk`).
 
 ### Pendientes anotados para más adelante
 - Balance de la economía (precios, sueldos, niveles): se ajusta con lo que

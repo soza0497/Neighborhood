@@ -255,3 +255,53 @@ Lo marcado **(pregunta)** necesita tu visto bueno antes de cambiarse.
   al servidor; por eso todo cambio de dinero pasa por `Economy.add_money()`
   y todo precio sale del catálogo, listo para validarse allá.
 
+## Cuentas y servidor (Fase 4) — decidido el 2026-11-03, sin implementar todavía
+
+Decisiones del dueño:
+- **Sin servidor (fuera de casa): se puede Vivir, no Construir.** Construir,
+  cobrar el trabajo, mandar currículos y acelerar esperan a reconectar. El
+  botón Construir avisa "Sin conexión al servidor".
+- **Red: Nakama publicado en 192.168.100.177:7350 (solo la red de casa)** y
+  también en 127.0.0.1:7350. La consola de administración (7351) solo en
+  127.0.0.1. La base de datos no se publica. Ojo: la IP de la PC no tiene
+  reserva DHCP en el router y podría cambiar (la dirección del servidor va en
+  un archivo de configuración del juego, fácil de cambiar).
+- **Cuentas: usuario + contraseña, "acceso único"**: se entra una vez y el
+  teléfono recuerda la sesión (token de renovación de larga duración guardado
+  en user://, nunca la contraseña) hasta que se borren los datos de la app.
+  Más adelante: SSO de otras apps (Nakama permite vincular Google/Apple).
+- **Docker autorizado** para descargar `heroiclabs/nakama:3.41.0` (60 MB) y
+  crear, arrancar y reiniciar SOLO `neighborhood-nakama` y `neighborhood-db`.
+  La base usa la imagen `postgres:18` que ya estaba en la PC.
+
+Decisiones técnicas (de Claude, cambiables):
+- **Carpeta `server/` dentro del repo**: `docker-compose.yml`, `nakama/config.yml`,
+  `nakama/modules/*.lua`; secretos en `server/.env` (fuera de Git, generados
+  con `openssl rand -hex 16`); datos de Postgres en `server/db-data/` (fuera de
+  Git). La carpeta `data/` del juego se monta de solo lectura en el servidor:
+  **los precios se leen del mismo catalog.json**.
+- **Código del servidor en Lua** (runtime de Nakama): no necesita compilar
+  nada (TypeScript pide Node; Go pide compilar con la versión exacta).
+- **Cliente propio y chico (HTTPRequest a la API REST de Nakama)** en vez del
+  addon oficial: el addon `nakama-godot` no tiene versión nueva desde marzo de
+  2024 (v3.4.0) y no está probado con Godot 4.7; para la Fase 4 alcanzan
+  pocas llamadas (autenticar, renovar sesión, leer/escribir storage, RPC). En
+  la Fase 5 (tiempo real) se evalúa de nuevo el addon o un socket propio.
+- **El servidor manda en**: billetera (wallet de Nakama, con historial), casa
+  (storage escrito solo por el servidor), experiencia, nivel, desbloqueos,
+  obras (hora del servidor), empleos y turnos. El cliente sigue calculando
+  precios solo para mostrarlos; el servidor los recalcula y decide.
+- **Deshacer con servidor**: el servidor guarda los pasos (hasta 100) y
+  deshace/rehace su propio último paso, devolviendo exactamente lo cobrado.
+- **Turnos con velocidad x10**: el servidor no conoce el reloj del juego;
+  acepta cobrar un turno si pasó al menos su duración a velocidad x10 (hora
+  real) y como mucho un turno cada 144 s reales (un día a x10).
+- **Primera conexión**: si la cuenta es nueva, se importa una sola vez la
+  casa, la experiencia y lo descubierto de la partida local; el dinero
+  empieza en el inicial ($3000).
+- **Reglas de apoyo (pisos, paredes…)** siguen en el teléfono por ahora: no
+  tocan dinero. Pasarlas al servidor queda para cuando se edite la casa entre
+  dos (Fase 5).
+- Las 153 pruebas locales siguen valiendo: la economía local queda como
+  "modo de prueba" (sin cuenta), no se ofrece en la interfaz.
+
