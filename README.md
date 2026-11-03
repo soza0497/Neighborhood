@@ -32,18 +32,20 @@ Hecho con **Godot 4.7.2** (GDScript).
    soltar. Cimientos, pisos, paredes, cuartos y techos quedan **esperando**:
    aparecen dos círculos (manijas) que podés arrastrar para ajustar, y se
    aplican con **Confirmar** (en la PC, Enter; Cancelar o Escape descarta).
-3. Tocar **fuera del lote** siempre mueve la cámara, aunque haya una pieza elegida.
+3. Tocar **fuera de la parcela** siempre mueve la cámara, aunque haya una
+   pieza elegida. La parcela mide 32 × 32 m: cabe más de una construcción.
 4. Orden lógico: **Cimientos** → **Cuarto** (o Piso + Pared) → **Puertas y
    ventanas** → **Muebles** → **Pintura** → **Techo**.
 5. **Subir / Bajar** (izquierda) cambia de piso. Arriba, el piso va sobre
    otro piso o junto a una pared de abajo (sirve para balcones). La
    **Escalera** se pone en la planta baja.
-6. Dos ventanas iguales una al lado de la otra se unen solas en una ventana larga.
+6. Dos ventanas iguales una al lado de la otra se unen solas en una ventana
+   larga. Con **Unir / separar** (en Puertas y ventanas) se tocan para separarlas o volver a unirlas.
 7. **Borrar** (abajo a la derecha): la pieza elegida pasa a quitar en vez de poner.
 8. Muebles: **Mover (mano)** toca un mueble para elegirlo, arrastralo para
    moverlo; **Girar** y **Quitar** actúan sobre el elegido.
 9. **Deshacer / Rehacer** arriba (en la PC también Ctrl+Z / Ctrl+Y).
-10. **Vista** cambia entre: completa (con techo), sin techo, paredes bajas.
+10. **Vista** (solo afecta al piso actual; los de abajo se ven completos y los de arriba no se dibujan) cambia entre: completa (con techo), sin techo, paredes bajas.
 11. Tocar otra vez la pieza elegida la suelta (vuelve el dedo a mover la cámara).
 12. **Vivir** vuelve al modo vivir (el juego arranca ahí).
 
@@ -55,8 +57,10 @@ Hecho con **Godot 4.7.2** (GDScript).
   ánimo y qué está haciendo. Arriba: el reloj del juego y la velocidad
   (**x1**, x3, x10). A x1, 1 segundo real = 1 minuto del juego.
 - **Tocá un mueble** para darle una orden (por ejemplo, "Ver tele").
-- **Personaje**: cambia nombre, colores y hasta 2 rasgos (Cocinero,
-  Perezoso, Gamer...). Los rasgos cambian lo que prefiere hacer.
+- **Menú** (arriba): **Personaje** cambia nombre, colores y hasta 2 rasgos
+  (Cocinero, Perezoso, Gamer...); **Diario** muestra lo que hizo y cómo se
+  sentía, con caritas; **Opciones** muestra u oculta FPS y ayudas.
+- **Subir / Bajar** también funciona en Vivir: se ve solo hasta ese piso.
 - En modo Construir el tiempo se detiene. Las necesidades nunca bajan de un
   mínimo, y si no jugás un tiempo, solo bajan un poco.
 

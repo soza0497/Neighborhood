@@ -183,3 +183,31 @@ Lo marcado **(pregunta)** necesita tu visto bueno antes de cambiarse.
 - **Un solo personaje por casa** por ahora; los datos (`CharacterData`) ya
   están separados de la escena, así en la Fase 5 se suma el de la pareja.
 
+## Ajustes después de probar la Fase 2 (2026-11-03)
+
+- **Parcela de 32 × 32 m** (antes, lote de 12 × 12), con calle y acera al
+  frente (solo decorado por ahora). Es la extensión máxima del jugador; cabe
+  más de una construcción (visión: casa + cobertizo + negocio). Las casas
+  guardadas con el lote viejo se **centran solas** al cargar (primera
+  migración de datos, `HouseData.from_dict`). Ampliar la parcela más
+  adelante es cambiar `LOT_SIZE` (la migración ya centra).
+- **Vista por piso**: "sin techo" y "paredes bajas" afectan solo al piso
+  actual; los de abajo se ven completos (con sus techos) y los de arriba no
+  se dibujan. Vale también en modo Vivir (Subir / Bajar visibles siempre).
+- **Las puertas no se cortan** con "paredes bajas": se ven enteras para saber
+  dónde están.
+- **Ventanas**: se unen solas si son iguales y seguidas; cada ventana se puede
+  marcar "separada" con la herramienta Unir / separar (campo `separate` de la
+  pared). El vidrio ahora es un plano, no una caja: no queda línea en la unión.
+- **Diario y emociones**: Feliz, Tranquilo, Cansado, Enojado (con hambre),
+  Aburrido, Incómodo (sucio), Triste (dos o más necesidades bajas). Caritas
+  **dibujadas por el juego** (no emojis del sistema: no se ven igual en todos
+  los teléfonos y así el arte es propio). Solo en el diario, no en el panel.
+  Se guardan las últimas 60 entradas.
+- **Menú oculto** (botón Menú): Personaje, Diario y Opciones (FPS, ayudas).
+  Las opciones se guardan en la partida (`settings`).
+- **Barra de piezas**: se desliza arrastrando el dedo sobre los botones; si
+  el dedo se movió, soltar no elige nada.
+- **Panel del personaje de tamaño fijo**: la intención ocupa siempre 2
+  líneas (lo que sobra termina en "…"), así el panel no salta.
+

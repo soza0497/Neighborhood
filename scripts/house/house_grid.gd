@@ -11,8 +11,10 @@ class_name HouseGrid
 ##
 ## Todo está en coordenadas LOCALES de la casa: la celda (0,0) empieza en (0,0,0).
 
-## Tamaño del lote en celdas (ancho X, fondo Z).
-const LOT_SIZE := Vector2i(12, 12)
+## Tamaño de la parcela en celdas (ancho X, fondo Z). Es la extensión
+## máxima donde el jugador puede construir (casa, cobertizo, cancha...).
+## El frente (Z grande) da a la calle.
+const LOT_SIZE := Vector2i(32, 32)
 ## Cantidad de pisos (niveles) que se pueden construir: planta baja + 1.
 const MAX_LEVELS := 2
 

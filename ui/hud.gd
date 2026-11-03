@@ -31,7 +31,13 @@ const NEED_COLORS := {
 @onready var _mood_label: Label = %MoodLabel
 @onready var _needs_box: VBoxContainer = %NeedsBox
 @onready var _intention_label: Label = %IntentionLabel
-@onready var _edit_character_button: Button = %EditCharacterButton
+@onready var _menu_button: Button = %MenuButton
+@onready var _side_menu: Control = %SideMenu
+@onready var _character_button: Button = %CharacterButton
+@onready var _diary_button: Button = %DiaryButton
+@onready var _fps_check: CheckButton = %FpsCheck
+@onready var _hints_check: CheckButton = %HintsCheck
+@onready var _side_close_button: Button = %SideCloseButton
 @onready var _action_menu: Control = %ActionMenu
 @onready var _menu_title: Label = %MenuTitle
 @onready var _menu_buttons: VBoxContainer = %MenuButtons
@@ -91,7 +97,14 @@ func _ready() -> void:
 	EventBus.history_changed.connect(_on_history_changed)
 
 	_speed_button.pressed.connect(GameClock.cycle_speed)
-	_edit_character_button.pressed.connect(EventBus.character_editor_requested.emit)
+	_menu_button.pressed.connect(_side_menu.show)
+	_side_close_button.pressed.connect(_side_menu.hide)
+	_character_button.pressed.connect(_open_from_menu.bind(EventBus.character_editor_requested))
+	_diary_button.pressed.connect(_open_from_menu.bind(EventBus.journal_requested))
+	_fps_check.button_pressed = GameState.settings.get("show_fps", true)
+	_hints_check.button_pressed = GameState.settings.get("show_hints", true)
+	_fps_check.toggled.connect(_on_setting_toggled.bind("show_fps"))
+	_hints_check.toggled.connect(_on_setting_toggled.bind("show_hints"))
 	_menu_close_button.pressed.connect(_action_menu.hide)
 	GameClock.speed_changed.connect(_on_speed_changed)
 	EventBus.character_needs_changed.connect(_on_needs_changed)
@@ -140,6 +153,9 @@ func _show_category(category_id: String) -> void:
 	# En Muebles, la primera opción es la mano para mover lo ya colocado.
 	if category_id == "furniture":
 		_add_item_button(HouseBuilder.MOVE_TOOL_ID, "Mover\n(mano)", Color(1, 0.85, 0.2), "move")
+	# En Puertas y ventanas, la primera opción une o separa ventanas vecinas.
+	if category_id == "openings":
+		_add_item_button(HouseBuilder.WINDOW_JOIN_TOOL_ID, "Unir /\nseparar", Color(0.75, 0.9, 1), "window_join")
 	for item in Catalog.get_items_in_category(category_id):
 		var text := "%s\n$ %d" % [item["name"], int(item["price"])]
 		if item["kind"] == "paint":
@@ -250,6 +266,24 @@ func _on_speed_changed(speed: int) -> void:
 	_speed_button.text = "x%d" % speed
 
 
+# --- Menú y opciones ---
+
+## Cierra el menú y pide abrir otra ventana (personaje o diario).
+func _open_from_menu(request: Signal) -> void:
+	_side_menu.hide()
+	request.emit()
+
+
+func _on_setting_toggled(on: bool, setting: String) -> void:
+	GameState.settings[setting] = on
+	_apply_settings()
+
+
+func _apply_settings() -> void:
+	_fps_label.visible = GameState.settings.get("show_fps", true)
+	_hint_label.visible = _mode == "build" and GameState.settings.get("show_hints", true)
+
+
 # --- Avisos ---
 
 func _on_mode_button_pressed() -> void:
@@ -261,13 +295,13 @@ func _on_game_mode_changed(mode: String) -> void:
 	var building := mode == "build"
 	_mode_button.text = "Vivir" if building else "Construir"
 	_bottom_bar.visible = building
-	_level_panel.visible = building
-	_hint_label.visible = building
 	_undo_button.visible = building
 	_redo_button.visible = building
 	_character_panel.visible = not building
 	_speed_button.visible = not building
 	_action_menu.hide()
+	_side_menu.hide()
+	_apply_settings()
 	if not building:
 		# Al volver a construir se empieza sin pieza elegida.
 		var pressed := _item_group.get_pressed_button()

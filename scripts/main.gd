@@ -65,10 +65,11 @@ func _ready() -> void:
 	EventBus.character_order_requested.connect(_character.order)
 	EventBus.character_editor_requested.connect(_on_character_editor_requested)
 	EventBus.character_edit_finished.connect(_on_character_edit_finished)
+	EventBus.journal_requested.connect(_on_journal_requested)
 
 	set_mode("live")
 	EventBus.view_mode_changed.emit(_house_view.view_mode)
-	EventBus.build_level_changed.emit(_builder.level)
+	_set_level(_character.level)  # Se empieza viendo el piso del personaje.
 	EventBus.history_changed.emit(false, false)
 
 
@@ -114,8 +115,14 @@ func _on_build_item_selected(item_id: String) -> void:
 		_set_view_mode(HouseView.ViewMode.FULL)
 
 
+## Cambia el piso que se ve (y donde se construye). Los de arriba se ocultan.
 func _on_level_change_requested(delta: int) -> void:
-	var new_level := _builder.set_level(_builder.level + delta)
+	_set_level(_builder.level + delta)
+
+
+func _set_level(level: int) -> void:
+	var new_level := _builder.set_level(level)
+	_house_view.set_top_visible_level(new_level)
 	EventBus.build_level_changed.emit(new_level)
 
 
@@ -137,7 +144,7 @@ func _load_character() -> void:
 		character_data.from_dict(saved.get("data", {}))
 		var cell_array: Array = saved.get("cell", [Character.SPAWN_CELL.x, Character.SPAWN_CELL.y])
 		_character.level = int(saved.get("level", 0))
-		_character.cell = Vector2i(int(cell_array[0]), int(cell_array[1]))
+		_character.cell = Vector2i(int(cell_array[0]), int(cell_array[1])) + house.migrated_offset
 		var away_seconds := Time.get_unix_time_from_system() - float(saved.get("saved_unix", 0))
 		# A velocidad x1, 1 segundo real = 1 minuto del juego.
 		var away_minutes := clampf(away_seconds, 0.0, MAX_OFFLINE_MINUTES)
@@ -150,8 +157,15 @@ func _on_character_editor_requested() -> void:
 	EventBus.character_editor_opened.emit(character_data.to_dict())
 
 
+func _on_journal_requested() -> void:
+	EventBus.journal_opened.emit(character_data.name, character_data.emotion(), character_data.journal)
+
+
 func _on_character_edit_finished(data: Dictionary) -> void:
+	data.erase("needs")  # El editor no toca las necesidades (siguen bajando).
+	data.erase("journal")
 	character_data.from_dict(data)
+	character_data.add_journal("Cambió de look")
 	_character.refresh_look()
 	EventBus.character_intention_changed.emit(_character.get_intention())
 	_autosave_timer.start()

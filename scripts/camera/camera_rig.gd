@@ -13,14 +13,14 @@ extends Node3D
 
 ## Distancia mínima y máxima al punto que se mira (zoom).
 @export var min_distance := 6.0
-@export var max_distance := 45.0
+@export var max_distance := 60.0
 @export var default_distance := 22.0
 ## Inclinación de la vista, en grados (más negativo = más desde arriba).
 @export var pitch_degrees := -50.0
 ## Giro inicial, en grados.
 @export var default_yaw_degrees := 45.0
 ## Hasta dónde se puede mover el punto que se mira, desde el centro del mapa.
-@export var bounds_half_size := 20.0
+@export var bounds_half_size := 28.0
 ## Grados que gira la cámara por cada píxel que se mueve el mouse.
 @export var mouse_rotate_speed := 0.3
 ## Cuánto acerca o aleja cada paso de la rueda del mouse.

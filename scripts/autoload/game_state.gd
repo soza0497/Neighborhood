@@ -15,6 +15,8 @@ var house: Dictionary = {}
 var character: Dictionary = {}
 ## Reloj del juego: {"minutes": minutos desde el inicio}.
 var clock: Dictionary = {}
+## Opciones del jugador (menú): {"show_fps": bool, "show_hints": bool}.
+var settings: Dictionary = {}
 
 
 ## Vuelve todo a una partida nueva.
@@ -23,6 +25,7 @@ func reset() -> void:
 	house = {}
 	character = {}
 	clock = {}
+	settings = {}
 
 
 ## Convierte el estado en un diccionario simple que se puede escribir en JSON.
@@ -32,6 +35,7 @@ func to_dict() -> Dictionary:
 		"house": house,
 		"character": character,
 		"clock": clock,
+		"settings": settings,
 	}
 
 
@@ -42,3 +46,4 @@ func from_dict(data: Dictionary) -> void:
 	house = data.get("house", {})
 	character = data.get("character", {})
 	clock = data.get("clock", {})
+	settings = data.get("settings", {})

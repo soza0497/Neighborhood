@@ -16,6 +16,7 @@ func _ready() -> void:
 	_test_removal_rules()
 	_test_objects()
 	_test_save_round_trip()
+	_test_window_merge()
 	print("\nPRUEBAS: %d pasaron, %d fallaron" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -92,7 +93,7 @@ func _test_support_rules() -> void:
 	_check(not HouseRules.is_supported(house, 1, "walls", "h:2,2", wall_value), "pared arriba sin piso ni pared abajo: NO")
 	house.apply([HouseData.write(0, "walls", "h:2,2", wall_value)])
 	_check(HouseRules.is_supported(house, 1, "walls", "h:2,2", wall_value), "pared arriba sobre pared: SÍ")
-	_check(not HouseRules.is_supported(house, 0, "foundation", "20,1", {"item": "foundation_basic"}), "cimiento fuera del lote: NO")
+	_check(not HouseRules.is_supported(house, 0, "foundation", "40,1", {"item": "foundation_basic"}), "cimiento fuera del lote: NO")
 
 	# Un "cuarto" arriba: el piso se pone primero y las paredes se apoyan en él.
 	var room: Array = []
@@ -163,3 +164,35 @@ func _test_save_round_trip() -> void:
 	_check(loaded.get_layer(0, "foundation").size() == 4, "guardar y cargar: 4 cimientos")
 	_check(loaded.object_at(0, Vector2i(1, 1)) == "o1", "guardar y cargar: la silla sigue ahí")
 	_check(loaded.next_id == 2, "guardar y cargar: el contador de ids sigue")
+	_check(loaded.migrated_offset == Vector2i.ZERO, "guardar y cargar: no se mueve nada")
+
+	# Una casa guardada con el lote viejo de 12x12 se centra en la parcela.
+	var old := house.to_dict()
+	old.erase("lot_size")
+	old["levels"][0]["walls"] = {"h:1,2": {"item": "wall_basic"}}
+	old["levels"][0]["roofs"] = {"o9": {"item": "roof_basic", "rect": [0, 0, 2, 2]}}
+	var migrated := HouseData.new()
+	migrated.from_dict(JSON.parse_string(JSON.stringify(old)))
+	var offset := (HouseGrid.LOT_SIZE - Vector2i(12, 12)) / 2
+	_check(migrated.migrated_offset == offset, "migración: se calcula cuánto mover")
+	_check(migrated.has_piece(0, "foundation", HouseGrid.cell_key(offset)), "migración: los cimientos se movieron")
+	_check(migrated.object_at(0, Vector2i(1, 1) + offset) == "o1", "migración: la silla se movió")
+	_check(migrated.has_piece(0, "walls", HouseGrid.edge_key(Vector2i(1, 2) + offset, true)), "migración: la pared se movió")
+	_check(HouseData.roof_rect(migrated.get_piece(0, "roofs", "o9")).position == offset, "migración: el techo se movió")
+
+
+func _test_window_merge() -> void:
+	var house := HouseData.new()
+	var view := HouseView.new()
+	add_child(view)
+	view.setup(house)
+	var window := {"item": "wall_basic", "opening": "window_basic"}
+	house.apply([HouseData.write(0, "walls", "h:1,1", window), HouseData.write(0, "walls", "h:2,1", window)])
+	_check(not view._merged_window(0, Vector2i(2, 1)).is_empty(), "dos ventanas iguales seguidas se unen")
+	var separate := window.duplicate()
+	separate["separate"] = true
+	house.apply([HouseData.write(0, "walls", "h:2,1", separate)])
+	_check(view._merged_window(0, Vector2i(2, 1)).is_empty(), "marcada como separada: no se une")
+	house.apply([HouseData.write(0, "walls", "h:2,1", {"item": "wall_basic", "opening": "window_tall"})])
+	_check(view._merged_window(0, Vector2i(2, 1)).is_empty(), "ventanas distintas no se unen")
+	view.queue_free()

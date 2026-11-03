@@ -22,8 +22,8 @@ const THINK_PAUSE := Vector2(2.0, 5.0)
 const WANDER_RADIUS := 4
 ## Cada cuántos segundos reales avisa a la interfaz cómo están sus necesidades.
 const NEEDS_REPORT_SECONDS := 0.5
-## Dónde aparece un personaje nuevo: al frente del lote, en el pasto.
-const SPAWN_CELL := Vector2i(6, 11)
+## Dónde aparece un personaje nuevo: al frente de la parcela, en el pasto.
+const SPAWN_CELL := Vector2i(HouseGrid.LOT_SIZE.x / 2, HouseGrid.LOT_SIZE.y - 2)
 
 var data: CharacterData
 var house: HouseData
@@ -46,6 +46,8 @@ var _act_minutes := 0.0
 ## Desde cuándo (hora real, segundos Unix) hace lo que está haciendo.
 var _since := 0
 var _report_timer := 0.0
+## Última emoción anotada en el diario.
+var _last_emotion := ""
 var _rng := RandomNumberGenerator.new()
 
 var _body: Node3D
@@ -123,6 +125,7 @@ func order(object_level: int, key: String, action_id: String) -> void:
 	_order = option
 	_idle_minutes = 0.0
 	state = State.IDLE
+	data.add_journal("Le pediste: " + action.get("name", "").to_lower())
 
 
 func _process(delta: float) -> void:
@@ -148,6 +151,7 @@ func _process(delta: float) -> void:
 	if _report_timer <= 0.0:
 		_report_timer = NEEDS_REPORT_SECONDS
 		_update_bubble()
+		_note_emotion()
 		EventBus.character_needs_changed.emit(data.needs, data.mood_text())
 
 
@@ -285,6 +289,9 @@ func _act(minutes: float) -> void:
 		if float(gains[need]) > 0.0 and data.needs[need] < 99.0:
 			all_full = false
 	if _act_minutes >= total or all_full:
+		var object: Variant = house.get_piece(_plan["level"], "objects", _plan["key"])
+		var object_name: String = Catalog.get_item(object["item"]).get("name", "") if object != null else ""
+		data.add_journal("%s (%s)" % [action.get("done", action.get("name", "")), object_name])
 		_stop_action()
 		_set_idle()
 
@@ -305,7 +312,16 @@ func _set_idle() -> void:
 	_mark_intention()
 
 
-# --- Burbuja e intención ---
+# --- Burbuja, diario e intención ---
+
+## Si cambió cómo se siente, lo anota en el diario.
+func _note_emotion() -> void:
+	var emotion := data.emotion()
+	if emotion != _last_emotion:
+		if _last_emotion != "":
+			data.add_journal("Ahora se siente " + CharacterData.EMOTIONS[emotion].to_lower())
+		_last_emotion = emotion
+
 
 func _update_bubble() -> void:
 	if state == State.ACTING:

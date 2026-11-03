@@ -29,6 +29,9 @@ const LAYERS := ["foundation", "floors", "walls", "objects", "roofs"]
 var levels: Array = []
 ## Contador para dar nombres únicos a objetos y techos ("o1", "o2"...).
 var next_id := 1
+## Si al cargar se movió la casa (parcela de otro tamaño), cuánto se movió.
+## Quien guarda posiciones aparte (el personaje) debe moverse igual.
+var migrated_offset := Vector2i.ZERO
 
 
 func _init() -> void:
@@ -137,7 +140,11 @@ func duplicate_data() -> HouseData:
 
 ## Convierte la casa en un diccionario simple para guardarlo en JSON.
 func to_dict() -> Dictionary:
-	return {"levels": levels.duplicate(true), "next_id": next_id}
+	return {
+		"levels": levels.duplicate(true),
+		"next_id": next_id,
+		"lot_size": [HouseGrid.LOT_SIZE.x, HouseGrid.LOT_SIZE.y],
+	}
 
 
 ## Llena la casa a partir de un diccionario leído del archivo.
@@ -148,4 +155,34 @@ func from_dict(data: Dictionary) -> void:
 		for layer in LAYERS:
 			levels[i][layer] = (saved_levels[i] as Dictionary).get(layer, {}).duplicate(true)
 	next_id = int(data.get("next_id", 1))
+
+	# Migración: las casas guardadas antes tenían un lote de 12x12. Si la
+	# parcela cambió de tamaño, la casa se centra en la nueva.
+	var saved_lot: Array = data.get("lot_size", [12, 12])
+	migrated_offset = (HouseGrid.LOT_SIZE - Vector2i(int(saved_lot[0]), int(saved_lot[1]))) / 2
+	if migrated_offset != Vector2i.ZERO:
+		_shift(migrated_offset)
 	reloaded.emit()
+
+
+## Mueve toda la casa `offset` celdas (para las migraciones).
+func _shift(offset: Vector2i) -> void:
+	for level in levels:
+		for layer in LAYERS:
+			var moved := {}
+			for key in level[layer]:
+				var value: Dictionary = level[layer][key]
+				match layer:
+					"foundation", "floors":
+						moved[HouseGrid.cell_key(HouseGrid.key_to_cell(key) + offset)] = value
+					"walls":
+						moved[HouseGrid.edge_key(HouseGrid.edge_vertex(key) + offset, HouseGrid.is_edge_horizontal(key))] = value
+					"objects":
+						var cell := object_anchor(value) + offset
+						value["cell"] = [cell.x, cell.y]
+						moved[key] = value
+					"roofs":
+						var rect := roof_rect(value)
+						value["rect"] = [rect.position.x + offset.x, rect.position.y + offset.y, rect.size.x, rect.size.y]
+						moved[key] = value
+			level[layer] = moved

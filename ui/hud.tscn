@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" path="res://ui/hud.gd" id="1_hud"]
 [ext_resource type="PackedScene" path="res://ui/character_editor.tscn" id="2_editor"]
+[ext_resource type="Script" path="res://ui/drag_scroll.gd" id="3_drag"]
+[ext_resource type="PackedScene" path="res://ui/diary_panel.tscn" id="4_diary"]
 
 [sub_resource type="StyleBoxFlat" id="Style_bar"]
 bg_color = Color(0.13, 0.17, 0.25, 0.85)
@@ -93,6 +95,13 @@ layout_mode = 2
 size_flags_vertical = 0
 theme_override_constants/separation = 8
 
+[node name="MenuButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 60)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Menú"
+
 [node name="SpeedButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 60)
@@ -181,6 +190,7 @@ text = "Bajar"
 
 [node name="CharacterPanel" type="PanelContainer" parent="Root/Layout/Middle"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(290, 0)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_styles/panel = SubResource("Style_bar")
@@ -209,18 +219,14 @@ theme_override_constants/separation = 4
 
 [node name="IntentionLabel" type="Label" parent="Root/Layout/Middle/CharacterPanel/Rows"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(250, 0)
+custom_minimum_size = Vector2(266, 42)
 layout_mode = 2
 theme_override_font_sizes/font_size = 15
 text = "..."
 autowrap_mode = 3
-
-[node name="EditCharacterButton" type="Button" parent="Root/Layout/Middle/CharacterPanel/Rows"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "Personaje"
+clip_text = true
+text_overrun_behavior = 3
+max_lines_visible = 2
 
 [node name="BottomBar" type="PanelContainer" parent="Root/Layout"]
 unique_name_in_owner = true
@@ -284,6 +290,7 @@ text = "Borrar"
 custom_minimum_size = Vector2(0, 84)
 layout_mode = 2
 vertical_scroll_mode = 0
+script = ExtResource("3_drag")
 
 [node name="Items" type="HBoxContainer" parent="Root/Layout/BottomBar/Rows/ItemScroll"]
 unique_name_in_owner = true
@@ -322,3 +329,66 @@ theme_override_font_sizes/font_size = 18
 text = "Cerrar"
 
 [node name="CharacterEditor" parent="." instance=ExtResource("2_editor")]
+
+[node name="SideMenu" type="PanelContainer" parent="Root"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+size_flags_horizontal = 8
+size_flags_vertical = 4
+theme_override_styles/panel = SubResource("Style_bar")
+
+[node name="Rows" type="VBoxContainer" parent="Root/SideMenu"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SideTitle" type="Label" parent="Root/SideMenu/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Menú"
+
+[node name="CharacterButton" type="Button" parent="Root/SideMenu/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Personaje"
+
+[node name="DiaryButton" type="Button" parent="Root/SideMenu/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Diario"
+
+[node name="OptionsTitle" type="Label" parent="Root/SideMenu/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.88, 0.6, 1)
+theme_override_font_sizes/font_size = 18
+text = "Opciones"
+
+[node name="FpsCheck" type="CheckButton" parent="Root/SideMenu/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+button_pressed = true
+text = "Mostrar FPS"
+
+[node name="HintsCheck" type="CheckButton" parent="Root/SideMenu/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+button_pressed = true
+text = "Mostrar ayudas"
+
+[node name="SideCloseButton" type="Button" parent="Root/SideMenu/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Cerrar"
+
+[node name="DiaryPanel" parent="." instance=ExtResource("4_diary")]

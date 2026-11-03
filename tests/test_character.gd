@@ -46,9 +46,23 @@ func _test_needs() -> void:
 	data.add_need("hunger", 500.0)
 	_check(data.needs["hunger"] == 100.0, "no sube de 100")
 
+	data.needs = {"hunger": 90.0, "energy": 90.0, "hygiene": 90.0, "fun": 90.0}
+	_check(data.emotion() == "happy", "todo bien: feliz")
+	data.needs["energy"] = 15.0
+	_check(data.emotion() == "tired", "poca energía: cansado")
+	data.needs["hunger"] = 15.0
+	_check(data.emotion() == "sad", "dos necesidades bajas: triste")
+	data.needs = {"hunger": 15.0, "energy": 90.0, "hygiene": 90.0, "fun": 90.0}
+	_check(data.emotion() == "angry", "con hambre: enojado")
+	for i in CharacterData.JOURNAL_MAX + 5:
+		data.add_journal("cosa %d" % i)
+	_check(data.journal.size() == CharacterData.JOURNAL_MAX, "el diario no crece sin límite")
+	_check(data.journal[-1]["emotion"] == "angry", "cada entrada guarda la emoción")
+
 	var saved := CharacterData.new()
 	saved.from_dict(JSON.parse_string(JSON.stringify(data.to_dict())))
-	_check(saved.needs["hunger"] == 100.0 and saved.name == data.name, "guardar y cargar el personaje")
+	_check(saved.needs["hunger"] == data.needs["hunger"] and saved.name == data.name, "guardar y cargar el personaje")
+	_check(saved.journal.size() == data.journal.size(), "guardar y cargar el diario")
 
 
 func _test_traits() -> void:

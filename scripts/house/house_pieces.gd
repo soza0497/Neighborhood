@@ -21,6 +21,7 @@ const STAIR_STEPS := 12
 # Se reutilizan la misma caja y los mismos materiales en todas las piezas:
 # así el teléfono trabaja menos.
 static var _box_mesh: BoxMesh = BoxMesh.new()
+static var _quad_mesh: QuadMesh = QuadMesh.new()
 static var _materials: Dictionary = {}
 
 
@@ -43,6 +44,16 @@ static func transparent_material(color: Color) -> StandardMaterial3D:
 		mat.albedo_color = color
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_materials[key] = mat
+	return _materials[key]
+
+
+## Material de vidrio: transparente y visible de los dos lados.
+static func glass_material(color: Color) -> StandardMaterial3D:
+	var key := "g" + color.to_html()
+	if not _materials.has(key):
+		var mat := transparent_material(color).duplicate()
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 		_materials[key] = mat
 	return _materials[key]
 
@@ -99,10 +110,14 @@ static func build_floor(cell: Vector2i, value: Dictionary) -> Node3D:
 
 ## Una pared. `visible_height` es el alto según la vista (alta o baja).
 ## `full_length` = true la dibuja de esquina a esquina (para la vista previa).
-static func build_wall(key: String, value: Dictionary, visible_height: float, full_length := false) -> Node3D:
+## `merge_start` / `merge_end`: su ventana se une con la de la pared vecina
+## en ese extremo (el vidrio sigue de largo, sin columna en medio).
+static func build_wall(key: String, value: Dictionary, visible_height: float, full_length := false,
+		merge_start := false, merge_end := false) -> Node3D:
 	var node := Node3D.new()
 	node.position = HouseGrid.edge_center(key)
-	if not HouseGrid.is_edge_horizontal(key):
+	var horizontal := HouseGrid.is_edge_horizontal(key)
+	if not horizontal:
 		node.rotation.y = PI / 2.0
 
 	var t := HouseGrid.WALL_THICKNESS
@@ -114,8 +129,18 @@ static func build_wall(key: String, value: Dictionary, visible_height: float, fu
 	var opening_item := Catalog.get_item(value.get("opening", ""))
 	if not opening_item.is_empty():
 		var hole: Array = opening_item.get("opening", [0.0, 2.1])
-		solid = [[0.0, float(hole[0])], [float(hole[1]), HouseGrid.WALL_HEIGHT]]
-		_add_opening_fill(node, opening_item, float(hole[0]), minf(float(hole[1]), visible_height), float(hole[1]), length)
+		var bottom := float(hole[0])
+		var hole_top := float(hole[1])
+		solid = [[0.0, bottom], [hole_top, HouseGrid.WALL_HEIGHT]]
+		if opening_item.get("kind", "") == "door":
+			# La puerta se ve entera aunque las paredes estén bajas.
+			_add_door(node, opening_item, bottom, hole_top, length)
+		else:
+			# Girada, la pared vertical tiene su inicio hacia +X local.
+			var join_minus := merge_start if horizontal else merge_end
+			var join_plus := merge_end if horizontal else merge_start
+			_add_window(node, opening_item, bottom, minf(hole_top, visible_height), hole_top,
+				length, join_minus, join_plus)
 
 	for part in solid:
 		var bottom: float = part[0]
@@ -125,67 +150,66 @@ static func build_wall(key: String, value: Dictionary, visible_height: float, fu
 	return node
 
 
-## Lo que va dentro del hueco: marco + hoja de la puerta, o vidrio + marco.
-## `top` puede venir recortado (vista de paredes bajas); `hole_top` es el real.
-static func _add_opening_fill(node: Node3D, item: Dictionary, bottom: float, top: float, hole_top: float, length: float) -> void:
-	if top - bottom <= 0.01:
-		return
+## Marco (lados y arriba) y hoja de la puerta: llenan todo el hueco.
+static func _add_door(node: Node3D, item: Dictionary, bottom: float, top: float, length: float) -> void:
 	var color := Color.from_string(item.get("color", "#ffffff"), Color.WHITE)
 	var height := top - bottom
 	var depth := HouseGrid.WALL_THICKNESS + 0.02
-	var show_head := top >= hole_top - 0.001
-	if item.get("kind", "") == "door":
-		# Marco a los lados y arriba; la hoja llena el resto del hueco.
-		var frame_mat := material(color.darkened(0.35))
-		for side in [-1, 1]:
-			add_box(node, Vector3(side * (length - DOOR_FRAME) / 2.0, bottom + height / 2.0, 0),
-				Vector3(DOOR_FRAME, height, depth), frame_mat)
-		var leaf_height := height
-		if show_head:
-			add_box(node, Vector3(0, top - DOOR_FRAME / 2.0, 0), Vector3(length, DOOR_FRAME, depth), frame_mat)
-			leaf_height -= DOOR_FRAME
-		add_box(node, Vector3(0, bottom + leaf_height / 2.0, 0), Vector3(length - DOOR_FRAME * 2.0, leaf_height, 0.06), material(color))
-		# Manija.
-		if bottom + 1.0 < top:
-			add_box(node, Vector3(length / 2.0 - DOOR_FRAME - 0.1, bottom + 1.0, 0), Vector3(0.08, 0.04, 0.12), material(color.darkened(0.5)))
-	else:
-		_add_window_glass(node, item, Vector3.ZERO, Vector3(length, 0, 0.03), bottom, top, show_head, Vector3(length, 0, depth + 0.02))
+	var frame_mat := material(color.darkened(0.35))
+	for side in [-1, 1]:
+		add_box(node, Vector3(side * (length - DOOR_FRAME) / 2.0, bottom + height / 2.0, 0),
+			Vector3(DOOR_FRAME, height, depth), frame_mat)
+	add_box(node, Vector3(0, top - DOOR_FRAME / 2.0, 0), Vector3(length, DOOR_FRAME, depth), frame_mat)
+	var leaf_height := height - DOOR_FRAME
+	add_box(node, Vector3(0, bottom + leaf_height / 2.0, 0), Vector3(length - DOOR_FRAME * 2.0, leaf_height, 0.06), material(color))
+	# Manija.
+	add_box(node, Vector3(length / 2.0 - DOOR_FRAME - 0.1, bottom + 1.0, 0), Vector3(0.08, 0.04, 0.12), material(color.darkened(0.5)))
 
 
 ## Vidrio de ventana con repisa abajo (y marco arriba si se ve).
-## `glass_size` y `frame_size` traen el alto en 0: se completa aquí.
-static func _add_window_glass(node: Node3D, item: Dictionary, base: Vector3, glass_size: Vector3,
-		bottom: float, top: float, show_head: bool, frame_size: Vector3) -> void:
+## `top` puede venir recortado (paredes bajas); `hole_top` es el real.
+## Si se une con la vecina, el vidrio y los marcos se estiran media columna
+## hacia ese lado, hasta encontrarse con los de la otra ventana.
+static func _add_window(node: Node3D, item: Dictionary, bottom: float, top: float, hole_top: float,
+		length: float, join_minus: bool, join_plus: bool) -> void:
+	if top - bottom <= 0.01:
+		return
+	var half_post := HouseGrid.WALL_THICKNESS / 2.0
+	var extra_minus := half_post if join_minus else 0.0
+	var extra_plus := half_post if join_plus else 0.0
+	var width := length + extra_minus + extra_plus
+	var center_x := (extra_plus - extra_minus) / 2.0
+
+	# El vidrio es un plano (no una caja): así dos vidrios seguidos no
+	# dibujan una línea donde se tocan.
 	var color := Color.from_string(item.get("color", "#ffffff"), Color.WHITE)
 	color.a = 0.45
-	glass_size.y = top - bottom
-	add_box(node, base + Vector3(0, (bottom + top) / 2.0, 0), glass_size, transparent_material(color))
+	var glass := MeshInstance3D.new()
+	glass.mesh = _quad_mesh
+	glass.position = Vector3(center_x, (bottom + top) / 2.0, 0)
+	glass.scale = Vector3(width, top - bottom, 1)
+	glass.material_override = glass_material(color)
+	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.add_child(glass)
+
 	var frame_mat := material(Color.WHITE)
-	frame_size.y = 0.06
-	add_box(node, base + Vector3(0, bottom + 0.03, 0), frame_size, frame_mat)
-	if show_head:
-		add_box(node, base + Vector3(0, top - 0.03, 0), frame_size, frame_mat)
+	var frame_size := Vector3(width, 0.06, HouseGrid.WALL_THICKNESS + 0.04)
+	add_box(node, Vector3(center_x, bottom + 0.03, 0), frame_size, frame_mat)
+	if top >= hole_top - 0.001:
+		add_box(node, Vector3(center_x, top - 0.03, 0), frame_size, frame_mat)
 
 
 ## Columna que tapa la esquina donde se juntan paredes.
-## Si está entre dos ventanas iguales en línea (`window_item`), la columna se
-## abre y el vidrio sigue de largo: las ventanas quedan unidas.
-static func build_post(vertex: Vector2i, color: Color, visible_height: float,
-		window_item: Dictionary = {}, horizontal := true) -> Node3D:
+## Si está entre dos ventanas unidas (`window_item`), la columna se corta a
+## la altura de la ventana: ahí pasan el vidrio y los marcos de las paredes.
+static func build_post(vertex: Vector2i, color: Color, visible_height: float, window_item: Dictionary = {}) -> Node3D:
 	var node := Node3D.new()
 	var t := HouseGrid.WALL_THICKNESS
 	var center := Vector3(vertex.x, 0, vertex.y)
 	var parts: Array = [[0.0, HouseGrid.WALL_HEIGHT]]
 	if not window_item.is_empty():
 		var hole: Array = window_item.get("opening", [0.9, 2.0])
-		var bottom := float(hole[0])
-		var top := float(hole[1])
-		parts = [[0.0, bottom], [top, HouseGrid.WALL_HEIGHT]]
-		var glass_top := minf(top, visible_height)
-		if glass_top - bottom > 0.01:
-			var glass := Vector3(t, 0, 0.03) if horizontal else Vector3(0.03, 0, t)
-			var frame := Vector3(t, 0, t + 0.04) if horizontal else Vector3(t + 0.04, 0, t)
-			_add_window_glass(node, window_item, center, glass, bottom, glass_top, glass_top >= top, frame)
+		parts = [[0.0, float(hole[0])], [float(hole[1]), HouseGrid.WALL_HEIGHT]]
 	for part in parts:
 		var bottom: float = part[0]
 		var top: float = minf(part[1], visible_height)

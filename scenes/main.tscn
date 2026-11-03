@@ -21,14 +21,35 @@ albedo_color = Color(0.49, 0.81, 0.42, 1)
 
 [sub_resource type="PlaneMesh" id="Mesh_terrain"]
 material = SubResource("Mat_grass")
-size = Vector2(44, 44)
+size = Vector2(120, 120)
 
 [sub_resource type="StandardMaterial3D" id="Mat_lot"]
-albedo_color = Color(0.93, 0.87, 0.7, 1)
+albedo_color = Color(0.6, 0.86, 0.5, 1)
 
 [sub_resource type="PlaneMesh" id="Mesh_lot"]
 material = SubResource("Mat_lot")
-size = Vector2(12, 12)
+size = Vector2(32, 32)
+
+[sub_resource type="StandardMaterial3D" id="Mat_sidewalk"]
+albedo_color = Color(0.82, 0.82, 0.8, 1)
+
+[sub_resource type="BoxMesh" id="Mesh_sidewalk"]
+material = SubResource("Mat_sidewalk")
+size = Vector3(120, 0.15, 2.5)
+
+[sub_resource type="StandardMaterial3D" id="Mat_road"]
+albedo_color = Color(0.36, 0.38, 0.42, 1)
+
+[sub_resource type="PlaneMesh" id="Mesh_road"]
+material = SubResource("Mat_road")
+size = Vector2(120, 7)
+
+[sub_resource type="StandardMaterial3D" id="Mat_road_line"]
+albedo_color = Color(1, 0.88, 0.45, 1)
+
+[sub_resource type="PlaneMesh" id="Mesh_road_line"]
+material = SubResource("Mat_road_line")
+size = Vector2(120, 0.2)
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
@@ -48,8 +69,23 @@ mesh = SubResource("Mesh_terrain")
 position = Vector3(0, 0.01, 0)
 mesh = SubResource("Mesh_lot")
 
+[node name="Street" type="Node3D" parent="."]
+position = Vector3(0, 0, 16)
+
+[node name="Sidewalk" type="MeshInstance3D" parent="Street"]
+position = Vector3(0, 0.075, 1.25)
+mesh = SubResource("Mesh_sidewalk")
+
+[node name="Road" type="MeshInstance3D" parent="Street"]
+position = Vector3(0, 0.02, 6)
+mesh = SubResource("Mesh_road")
+
+[node name="RoadLine" type="MeshInstance3D" parent="Street"]
+position = Vector3(0, 0.03, 6)
+mesh = SubResource("Mesh_road_line")
+
 [node name="House" type="Node3D" parent="."]
-position = Vector3(-6, 0, -6)
+position = Vector3(-16, 0, -16)
 script = ExtResource("5_view")
 
 [node name="Builder" type="Node3D" parent="House"]
@@ -64,22 +100,22 @@ script = ExtResource("8_live")
 [node name="Trees" type="Node3D" parent="."]
 
 [node name="Tree1" parent="Trees" instance=ExtResource("4_tree")]
-position = Vector3(-9, 0, -8)
+position = Vector3(-20, 0, -21)
 
 [node name="Tree2" parent="Trees" instance=ExtResource("4_tree")]
-position = Vector3(9, 0, -9)
+position = Vector3(21, 0, -20)
 
 [node name="Tree3" parent="Trees" instance=ExtResource("4_tree")]
-position = Vector3(-10, 0, 7)
+position = Vector3(-22, 0, 5)
 
 [node name="Tree4" parent="Trees" instance=ExtResource("4_tree")]
-position = Vector3(8, 0, 10)
+position = Vector3(22, 0, 9)
 
 [node name="Tree5" parent="Trees" instance=ExtResource("4_tree")]
-position = Vector3(-15, 0, -1)
+position = Vector3(-26, 0, -6)
 
 [node name="Tree6" parent="Trees" instance=ExtResource("4_tree")]
-position = Vector3(15, 0, 2)
+position = Vector3(27, 0, -2)
 
 [node name="CameraRig" parent="." instance=ExtResource("2_rig")]
 

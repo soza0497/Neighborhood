@@ -7,7 +7,8 @@ extends Node3D
 ##
 ## Cada nivel tiene su propio contenedor, colocado a la altura de ese piso.
 
-## Cómo se ven las paredes y el techo.
+## Cómo se ven las paredes y el techo DEL PISO ACTUAL (los de abajo se ven
+## completos y los de arriba no se dibujan).
 enum ViewMode {
 	FULL,      ## Paredes altas y techo.
 	NO_ROOF,   ## Paredes altas, sin techo.
@@ -16,7 +17,7 @@ enum ViewMode {
 
 var house: HouseData
 var view_mode := ViewMode.NO_ROOF
-## Los niveles por encima de este no se dibujan (para construir abajo).
+## Piso actual: los de arriba no se dibujan; a este se le aplica la vista.
 var top_visible_level := HouseGrid.MAX_LEVELS - 1
 
 ## Contenedor de cada nivel.
@@ -52,14 +53,24 @@ func set_view_mode(mode: ViewMode) -> void:
 
 
 func set_top_visible_level(level: int) -> void:
-	top_visible_level = level
 	for i in _levels.size():
-		_levels[i].visible = i <= top_visible_level
+		_levels[i].visible = i <= level
+	if level != top_visible_level:
+		top_visible_level = level
+		rebuild_all()  # Cambian las alturas de paredes y qué techos se ven.
 
 
-## Alto con el que se dibujan las paredes según la vista.
-func wall_height() -> float:
-	return HouseGrid.CUT_WALL_HEIGHT if view_mode == ViewMode.CUTAWAY else HouseGrid.WALL_HEIGHT
+## Alto con el que se dibujan las paredes de un nivel según la vista: los
+## pisos de abajo del actual siempre van completos.
+func wall_height(level: int) -> float:
+	if level < top_visible_level or view_mode != ViewMode.CUTAWAY:
+		return HouseGrid.WALL_HEIGHT
+	return HouseGrid.CUT_WALL_HEIGHT
+
+
+## ¿Se dibujan los techos de este nivel?
+func roofs_visible(level: int) -> bool:
+	return level < top_visible_level or view_mode == ViewMode.FULL
 
 
 ## Nodo 3D de una pieza (o null). El constructor lo usa para esconder un
@@ -121,11 +132,14 @@ func make_piece(level: int, layer: String, key: String, value: Dictionary, previ
 		"floors":
 			return HousePieces.build_floor(HouseGrid.key_to_cell(key), value)
 		"walls":
-			return HousePieces.build_wall(key, value, wall_height(), preview)
+			var vertices := HouseGrid.edge_vertices(key)
+			return HousePieces.build_wall(key, value, wall_height(level), preview,
+				not preview and not _merged_window(level, vertices[0]).is_empty(),
+				not preview and not _merged_window(level, vertices[1]).is_empty())
 		"objects":
 			return HousePieces.build_object(value)
 		"roofs":
-			if view_mode == ViewMode.FULL or preview:
+			if roofs_visible(level) or preview:
 				return HousePieces.build_roof(value, _gable_color(level, value))
 	return null
 
@@ -135,6 +149,10 @@ func _on_piece_changed(level: int, layer: String, key: String) -> void:
 	if layer == "walls":
 		for vertex in HouseGrid.edge_vertices(key):
 			_refresh_post(level, vertex)
+		# Las paredes vecinas en línea pueden unir (o separar) su ventana.
+		for neighbor in _neighbors_in_line(key):
+			if house.has_piece(level, "walls", neighbor):
+				_refresh_piece(level, "walls", neighbor)
 		# Los remates del techo copian el color de las paredes.
 		for roof_key in house.get_layer(level, "roofs"):
 			_refresh_piece(level, "roofs", roof_key)
@@ -168,26 +186,42 @@ func _refresh_post(level: int, vertex: Vector2i) -> void:
 	if walls.is_empty():
 		return
 	var first: Dictionary = house.get_piece(level, "walls", walls[0])
-	var window := _shared_window(level, walls)
-	var post := HousePieces.build_post(vertex, HousePieces.piece_color(first), wall_height(),
-		window, HouseGrid.is_edge_horizontal(walls[0]))
+	var post := HousePieces.build_post(vertex, HousePieces.piece_color(first), wall_height(level),
+		_merged_window(level, vertex))
 	_levels[level].add_child(post)
 	_posts[id] = post
 
 
 ## Si en una esquina se juntan justo dos paredes en línea recta con la misma
-## ventana, devuelve esa ventana (del catálogo) para unirlas. Si no, {}.
-func _shared_window(level: int, walls: Array) -> Dictionary:
+## ventana, y ninguna está marcada "separada", devuelve esa ventana (del
+## catálogo) para unirlas. Si no, {}.
+func _merged_window(level: int, vertex: Vector2i) -> Dictionary:
+	var walls: Array = []
+	for edge in HouseGrid.vertex_edges(vertex):
+		var wall: Variant = house.get_piece(level, "walls", edge)
+		if wall != null:
+			walls.append([edge, wall])
 	if walls.size() != 2:
 		return {}
-	if HouseGrid.is_edge_horizontal(walls[0]) != HouseGrid.is_edge_horizontal(walls[1]):
+	if HouseGrid.is_edge_horizontal(walls[0][0]) != HouseGrid.is_edge_horizontal(walls[1][0]):
 		return {}
-	var opening_a: String = house.get_piece(level, "walls", walls[0]).get("opening", "")
-	var opening_b: String = house.get_piece(level, "walls", walls[1]).get("opening", "")
-	if opening_a == "" or opening_a != opening_b:
+	var a: Dictionary = walls[0][1]
+	var b: Dictionary = walls[1][1]
+	if a.get("separate", false) or b.get("separate", false):
 		return {}
-	var item := Catalog.get_item(opening_a)
+	var opening: String = a.get("opening", "")
+	if opening == "" or opening != b.get("opening", ""):
+		return {}
+	var item := Catalog.get_item(opening)
 	return item if item.get("kind", "") == "window" else {}
+
+
+## Las dos paredes que siguen en línea recta a cada lado de una pared.
+static func _neighbors_in_line(key: String) -> Array[String]:
+	var v := HouseGrid.edge_vertex(key)
+	if HouseGrid.is_edge_horizontal(key):
+		return [HouseGrid.edge_key(v - Vector2i(1, 0), true), HouseGrid.edge_key(v + Vector2i(1, 0), true)]
+	return [HouseGrid.edge_key(v - Vector2i(0, 1), false), HouseGrid.edge_key(v + Vector2i(0, 1), false)]
 
 
 ## Color para los remates de un techo: el de una pared que esté debajo de

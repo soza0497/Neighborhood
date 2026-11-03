@@ -19,6 +19,15 @@ const NEED_FLOOR := 10.0
 const OFFLINE_FLOOR := 30.0
 ## Debajo de esto, la necesidad "se nota" (burbuja de aviso).
 const LOW_NEED := 25.0
+## Emociones (para el diario; no cambian cómo funciona el personaje).
+const EMOTIONS := {
+	"happy": "Feliz", "calm": "Tranquilo", "tired": "Cansado", "angry": "Enojado",
+	"bored": "Aburrido", "uncomfortable": "Incómodo", "sad": "Triste",
+}
+## Qué emoción da cada necesidad cuando está baja.
+const LOW_NEED_EMOTION := {"hunger": "angry", "energy": "tired", "fun": "bored", "hygiene": "uncomfortable"}
+## Cuántas entradas guarda el diario (las más viejas se borran).
+const JOURNAL_MAX := 60
 
 var name := "Alex"
 ## Colores: skin, hair, shirt, pants (texto "#rrggbb").
@@ -26,6 +35,9 @@ var appearance: Dictionary = {}
 ## Ids de rasgos (ver data/traits.json).
 var traits: Array = []
 var needs: Dictionary = {}
+## Diario: lo que hizo y cómo se sentía. Cada entrada es
+## {day, time, text, emotion}. La más nueva va al final.
+var journal: Array = []
 
 
 func _init() -> void:
@@ -98,6 +110,24 @@ func mood_text() -> String:
 	return "Decaído"
 
 
+## Cómo se siente: una necesidad baja da su emoción (con hambre se enoja),
+## dos o más lo ponen triste, y si todo va bien está feliz.
+func emotion() -> String:
+	var low: Array = NEEDS.filter(func(need): return needs[need] < LOW_NEED)
+	if low.size() >= 2:
+		return "sad"
+	if low.size() == 1:
+		return LOW_NEED_EMOTION[low[0]]
+	return "happy" if mood() >= 70.0 else "calm"
+
+
+## Anota algo en el diario, con la hora del juego y la emoción de ahora.
+func add_journal(text: String) -> void:
+	journal.append({"day": GameClock.day(), "time": GameClock.time_text(), "text": text, "emotion": emotion()})
+	while journal.size() > JOURNAL_MAX:
+		journal.pop_front()
+
+
 ## La necesidad más baja (para las burbujas de aviso).
 func lowest_need() -> String:
 	var lowest: String = NEEDS[0]
@@ -113,6 +143,7 @@ func to_dict() -> Dictionary:
 		"appearance": appearance.duplicate(),
 		"traits": traits.duplicate(),
 		"needs": needs.duplicate(),
+		"journal": journal.duplicate(true),
 	}
 
 
@@ -120,6 +151,7 @@ func from_dict(data: Dictionary) -> void:
 	name = data.get("name", name)
 	appearance = data.get("appearance", appearance).duplicate()
 	traits = data.get("traits", traits).duplicate()
+	journal = data.get("journal", journal).duplicate(true)
 	var saved_needs: Dictionary = data.get("needs", {})
 	for need in NEEDS:
 		needs[need] = clampf(float(saved_needs.get(need, needs[need])), NEED_FLOOR, 100.0)

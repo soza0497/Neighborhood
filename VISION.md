@@ -105,6 +105,20 @@ Clash of Clans con las guerras de clanes, pero sin guerras).
   órdenes, y eso genera dinero.
 - Bonos para quien visita o trabaja en el negocio de otro.
 
+## Parcela (lo que es de cada jugador)
+
+- Cada jugador tiene una **parcela grande** con una extensión máxima, no un
+  lote justo para una casa. Ahí cabe lo que quiera: la casa, un cobertizo, la
+  zona del perro, una cancha, o **dos casas** (una para alquilar a otro
+  jugador o a un personaje de la IA) y un negocio al lado.
+- Para eso hará falta **declarar zonas**: qué edificio es "mi casa" (donde
+  vive y descansa el personaje) y cuál es zona de trabajo o de alquiler.
+- La parcela da a una **calle con acera**. El jugador decide si pone muros,
+  rejas o nada al frente.
+- **Seguridad (más adelante):** puede haber robos; cómo enfrentarlos lo
+  decide **el barrio entero** (por ejemplo, con el alcalde y sus propuestas).
+- El barrio se podrá modificar un poco para acomodar las parcelas a la calle.
+
 ## Barrios
 
 - Barrios de 20–30 casas (por ejemplo, toda la familia). Un menú para visitar

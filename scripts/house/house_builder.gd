@@ -11,7 +11,7 @@ extends Node3D
 ##   3. Soltar: lo verde se aplica como UN paso de deshacer.
 ##   Si aparece un segundo dedo, el gesto se cancela (es para la cámara).
 
-enum Tool { NONE, FOUNDATION, FLOOR, WALL, ROOM, ROOF, OPENING, OBJECT, PAINT, MOVE }
+enum Tool { NONE, FOUNDATION, FLOOR, WALL, ROOM, ROOF, OPENING, OBJECT, PAINT, MOVE, WINDOW_JOIN }
 
 ## Qué herramienta usa cada tipo ("kind") de objeto del catálogo.
 const KIND_TO_TOOL := {
@@ -29,6 +29,8 @@ const KIND_TO_TOOL := {
 
 ## Herramienta "mano" (mover muebles): no está en el catálogo.
 const MOVE_TOOL_ID := "move"
+## Herramienta para unir o separar ventanas vecinas: tampoco está en el catálogo.
+const WINDOW_JOIN_TOOL_ID := "window_join"
 
 ## Clave provisional para algo nuevo; al soltar se cambia por un id real.
 const NEW_KEY := "__new__"
@@ -44,6 +46,7 @@ const HINTS := {
 	Tool.OBJECT: "Arrastrá hasta su lugar y soltá. «Girar» lo rota.",
 	Tool.PAINT: "Tocá o arrastrá sobre paredes y pisos para pintarlos.",
 	Tool.MOVE: "Tocá un mueble para elegirlo; arrastralo para moverlo.",
+	Tool.WINDOW_JOIN: "Tocá una ventana para unirla o separarla de sus vecinas iguales.",
 }
 
 ## Herramientas de arrastre (rectángulo o línea). Al soltar NO se aplican:
@@ -54,7 +57,7 @@ const HANDLE_TOOLS := [Tool.FOUNDATION, Tool.FLOOR, Tool.WALL, Tool.ROOM, Tool.R
 const HANDLE_PICK_DISTANCE := 70.0
 
 ## Herramientas donde todo el gesto se aplica entero o nada.
-const ALL_OR_NOTHING := [Tool.ROOF, Tool.OPENING, Tool.OBJECT, Tool.MOVE]
+const ALL_OR_NOTHING := [Tool.ROOF, Tool.OPENING, Tool.OBJECT, Tool.MOVE, Tool.WINDOW_JOIN]
 
 var house: HouseData
 var history: UndoHistory
@@ -137,8 +140,6 @@ func set_active(value: bool) -> void:
 	_cursor.visible = false
 	if not active:
 		select_item("")
-	if view != null:
-		view.set_top_visible_level(level if active else HouseGrid.MAX_LEVELS - 1)
 	_update_camera_pan()
 
 
@@ -149,6 +150,9 @@ func select_item(item_id: String) -> void:
 	if item_id == MOVE_TOOL_ID:
 		item = {}
 		tool = Tool.MOVE
+	elif item_id == WINDOW_JOIN_TOOL_ID:
+		item = {}
+		tool = Tool.WINDOW_JOIN
 	else:
 		item = Catalog.get_item(item_id)
 		tool = KIND_TO_TOOL.get(item.get("kind", ""), Tool.NONE)
@@ -170,8 +174,6 @@ func set_level(new_level: int) -> int:
 	_cancel_gesture()
 	select_object("")
 	_grid.position.y = HouseGrid.level_y(level) + 0.03
-	if active and view != null:
-		view.set_top_visible_level(level)
 	return level
 
 
@@ -324,7 +326,7 @@ func _update(screen_pos: Vector2) -> void:
 			_end_cell = _cell_at(screen_pos, true)
 			_end_vertex = _vertex_at(screen_pos)
 		_update_handles()
-	var writes := _erase_writes(screen_pos) if erase_mode else _place_writes(screen_pos)
+	var writes := _erase_writes(screen_pos) if erase_mode and tool != Tool.WINDOW_JOIN else _place_writes(screen_pos)
 	var check := _check(writes)
 	_pending_ok = check["ok"]
 	_pending_blocked = check["blocked"]
@@ -390,8 +392,8 @@ func _hover(screen_pos: Vector2) -> void:
 	if _awaiting_confirm:
 		return
 	match tool:
-		Tool.OBJECT, Tool.OPENING:
-			if not erase_mode:
+		Tool.OBJECT, Tool.OPENING, Tool.WINDOW_JOIN:
+			if not erase_mode or tool == Tool.WINDOW_JOIN:
 				_update(screen_pos)
 				return
 		Tool.MOVE:
@@ -473,6 +475,17 @@ func _place_writes(screen_pos: Vector2) -> Array:
 				if anchor != HouseData.object_anchor(value):
 					value["cell"] = [anchor.x, anchor.y]
 					writes.append_array(_object_writes(_moving_key, value))
+		Tool.WINDOW_JOIN:
+			# Marca la ventana como "separada" (o le quita la marca).
+			var edge := _pick_wall(screen_pos)
+			if edge != "":
+				var wall: Dictionary = house.get_piece(level, "walls", edge).duplicate(true)
+				if Catalog.get_item(wall.get("opening", "")).get("kind", "") == "window":
+					if wall.get("separate", false):
+						wall.erase("separate")
+					else:
+						wall["separate"] = true
+					writes.append(HouseData.write(level, "walls", edge, wall))
 		Tool.PAINT:
 			_collect_paint_target(screen_pos)
 			for target in _paint_targets:
@@ -756,7 +769,7 @@ func _pick_wall(screen_pos: Vector2, use_nearby := true) -> String:
 	var ray := _ray(screen_pos)
 	var best_key := ""
 	var best_dist := INF
-	var h := view.wall_height()
+	var h := view.wall_height(level)
 	var t := HouseGrid.WALL_THICKNESS
 	var base := HouseGrid.level_y(level)
 	for key in house.get_layer(level, "walls"):
@@ -816,6 +829,8 @@ func _blocked_hint() -> String:
 			return "En la planta baja, las paredes van junto a cimientos."
 		Tool.OPENING:
 			return "Las puertas y ventanas van sobre una pared."
+		Tool.WINDOW_JOIN:
+			return "Tocá una ventana."
 		Tool.ROOF:
 			return "El techo tiene que quedar dentro del lote."
 		Tool.OBJECT, Tool.MOVE:

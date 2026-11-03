@@ -76,3 +76,7 @@ signal character_editor_requested
 signal character_editor_opened(data: Dictionary)
 ## El editor terminó: nombre, apariencia y rasgos nuevos.
 signal character_edit_finished(data: Dictionary)
+## La interfaz pide abrir el diario.
+signal journal_requested
+## Se abre el diario: nombre, emoción actual y entradas (ver CharacterData.journal).
+signal journal_opened(character_name: String, emotion: String, entries: Array)

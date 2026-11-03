@@ -28,6 +28,15 @@ dos fases juntas.
 Base del proyecto, cámara, guardado, exportación a Android. APK probado en el
 teléfono del dueño.
 
+### Ajustes de la prueba de la Fase 2 (2026-11-03) — hechos, sin probar
+1. Panel del personaje sin saltos; Personaje y Diario en un menú oculto.
+2. Diario con lo que hizo y caritas de emociones (feliz, cansado, enojado...).
+3. Barra de piezas que se desliza con el dedo.
+4. Vistas solo del piso actual (también en Vivir); puertas enteras.
+5. Ventanas: Unir / separar, y sin línea en la unión.
+6. Parcela de 32 × 32 m con calle y acera; casas viejas se centran solas.
+- Pruebas: 53 de la casa + 34 del personaje, todas OK. Demos OK.
+
 ### Fase 1 — hecho (2026-11-03)
 Todo en un solo tramo (1A + 1B + 1C):
 - Datos de la casa (`scripts/house/house_data.gd`): capas por nivel, cambios
@@ -60,8 +69,8 @@ Todo en un solo tramo (1A + 1B + 1C):
 - Pruebas: 44 automáticas OK; demo: mouse real, fuera del lote y manijas OK.
 
 ### Falta para cerrar las Fases 1 y 2
-1. [Dueño] Instalar el APK nuevo y probar los 6 ajustes de la Fase 1 y el
-   personaje (checklist del chat).
+1. [Dueño] Instalar el APK nuevo y probar los ajustes de las Fases 1 y 2 y
+   el personaje (checklist del chat).
 2. [Claude] Corregir lo que salga; commit "Fases 1 y 2 cerradas".
 
 ### Próximo paso exacto
@@ -69,6 +78,8 @@ Instalar con `~/Android/Sdk/platform-tools/adb install -r build/neighborhood.apk
 (el APK ya está exportado) y probar. Después: Fase 3 (Sonnet alcanza).
 
 ### Pendientes anotados para más adelante
+- Visión de la parcela (VISION.md): zonas casa/trabajo, varias casas,
+  alquiler, muros, robos y seguridad del barrio.
 - Tutorial de primeros pasos (el dueño no adivinó "cuarto antes que piso").
 - Mueble que se arrastra queda tapado por el dedo (podría ir más arriba).
 - Interruptor para no unir ventanas, si hace falta.

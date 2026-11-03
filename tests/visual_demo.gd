@@ -13,6 +13,8 @@ var _builder: HouseBuilder
 var _house: Node3D
 var _camera: Camera3D
 var _shot_dir := ""
+## La casa de prueba se arma cerca del centro de la parcela.
+const O := Vector2(10, 10)
 
 
 func _ready() -> void:
@@ -71,6 +73,13 @@ func _run() -> void:
 	EventBus.game_mode_change_requested.emit("live")
 	_main.get_node("CameraRig").set_state({"x": -1.0, "z": 3.0, "yaw": 0.0, "distance": 13.0})
 	await _shot("6_frente.png")
+	# Separar las dos ventanas (herramienta Unir / separar) y volver a unirlas.
+	EventBus.game_mode_change_requested.emit("build")
+	await _drag(HouseBuilder.WINDOW_JOIN_TOOL_ID, Vector2(2.5, 9), Vector2(2.5, 9))
+	EventBus.game_mode_change_requested.emit("live")
+	await _shot("6b_separadas.png")
+	EventBus.game_mode_change_requested.emit("build")
+	await _drag(HouseBuilder.WINDOW_JOIN_TOOL_ID, Vector2(2.5, 9), Vector2(2.5, 9))
 	EventBus.game_mode_change_requested.emit("build")
 
 	# Modo vivir, desde otro ángulo.
@@ -89,9 +98,9 @@ func _run() -> void:
 	EventBus.build_item_selected.emit("foundation_basic")
 	await _frames(2)
 	var before: int = _main.house.get_layer(0, "foundation").size()
-	_push_mouse_button(_to_screen(Vector2(0.5, 0.5)), true)
-	_push_mouse_motion(_to_screen(Vector2(1.5, 1.5)))
-	_push_mouse_button(_to_screen(Vector2(1.5, 1.5)), false)
+	_push_mouse_button(_to_screen(Vector2(0.5, 0.5) + O), true)
+	_push_mouse_motion(_to_screen(Vector2(1.5, 1.5) + O))
+	_push_mouse_button(_to_screen(Vector2(1.5, 1.5) + O), false)
 	EventBus.build_confirm_requested.emit()
 	await _frames(2)
 	var added: int = _main.house.get_layer(0, "foundation").size() - before
@@ -99,18 +108,18 @@ func _run() -> void:
 
 	# Tocar fuera del lote no construye (mueve la cámara).
 	before = _main.house.get_layer(0, "foundation").size()
-	_builder._begin(_to_screen(Vector2(-3, -3)))
+	_builder._begin(_to_screen(Vector2(-3, 16)))
 	var takeover: bool = _main.get_node("CameraRig").single_finger_pan
 	_builder._release()
 	var outside_ok: bool = takeover and not _builder._awaiting_confirm
 	print("Fuera del lote: %s" % ("OK" if outside_ok else "FALLÓ"))
 
 	# Manijas: tocar una celda, arrastrar la manija y confirmar.
-	_builder._begin(_to_screen(Vector2(0.5, 10.5)))
+	_builder._begin(_to_screen(Vector2(0.5, 10.5) + O))
 	_builder._release()
 	var waiting: bool = _builder._awaiting_confirm
-	_builder._begin(_to_screen(Vector2(0.5, 10.5)))
-	_builder._update(_to_screen(Vector2(3.5, 11.5)))
+	_builder._begin(_to_screen(Vector2(0.5, 10.5) + O))
+	_builder._update(_to_screen(Vector2(3.5, 11.5) + O))
 	_builder._release()
 	await _shot("7_manijas.png")
 	EventBus.build_confirm_requested.emit()
@@ -135,8 +144,8 @@ func _run() -> void:
 ## Elige una pieza y "arrastra" de una posición de la cuadrícula a otra.
 func _drag(item_id: String, from: Vector2, to: Vector2) -> void:
 	EventBus.build_item_selected.emit(item_id)
-	var start := _to_screen(from)
-	var end := _to_screen(to)
+	var start := _to_screen(from + O)
+	var end := _to_screen(to + O)
 	_builder._begin(start)
 	for i in range(1, 5):
 		_builder._update(start.lerp(end, i / 4.0))

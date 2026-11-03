@@ -53,8 +53,8 @@ func _on_tap(screen_pos: Vector2) -> void:
 	var cam := get_viewport().get_camera_3d()
 	var origin := to_local(cam.project_ray_origin(screen_pos))
 	var direction := global_transform.basis.inverse() * cam.project_ray_normal(screen_pos)
-	# Se prueba de arriba hacia abajo: lo de arriba tapa lo de abajo.
-	for level in range(HouseGrid.MAX_LEVELS - 1, -1, -1):
+	# Se prueba desde el piso que se ve hacia abajo: lo de arriba tapa lo de abajo.
+	for level in range(view.top_visible_level, -1, -1):
 		var key := view.pick_object(origin, direction, level)
 		if key != "":
 			var item_id: String = view.house.get_piece(level, "objects", key)["item"]
