@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://ui/mood_face.gd" id="8_face"]
 [ext_resource type="Script" path="res://ui/floor_map.gd" id="9_map"]
 [ext_resource type="Script" path="res://ui/compass_button.gd" id="10_compass"]
+[ext_resource type="Script" path="res://ui/build_bar.gd" id="11_bar"]
 
 [sub_resource type="StyleBoxFlat" id="Style_bar"]
 bg_color = Color(0.13, 0.17, 0.25, 0.85)
@@ -160,6 +161,16 @@ size_flags_vertical = 0
 theme_override_font_sizes/font_size = 17
 text = "Obras"
 
+[node name="ProblemsButton" type="Button" parent="Root/Layout/TopRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_colors/font_color = Color(1, 0.85, 0.6, 1)
+theme_override_font_sizes/font_size = 18
+text = "Falta: 0"
+
 [node name="FpsLabel" type="Label" parent="Root/Layout/TopRow"]
 unique_name_in_owner = true
 visible = false
@@ -267,10 +278,18 @@ layout_mode = 2
 size_flags_horizontal = 0
 script = ExtResource("10_compass")
 
+[node name="ActionRow" type="HBoxContainer" parent="Root/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 8
+mouse_filter = 2
+theme_override_constants/separation = 8
+
 [node name="BottomBar" type="PanelContainer" parent="Root/Layout"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_styles/panel = SubResource("Style_bar")
+script = ExtResource("11_bar")
 
 [node name="Rows" type="VBoxContainer" parent="Root/Layout/BottomBar"]
 layout_mode = 2
@@ -280,16 +299,21 @@ theme_override_constants/separation = 8
 layout_mode = 2
 theme_override_constants/separation = 8
 
+[node name="ToolButtons" type="HBoxContainer" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SubModes" type="HBoxContainer" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
 [node name="Categories" type="HBoxContainer" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 8
-
-[node name="ToolRow" type="HBoxContainer" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 6
 
 [node name="ConfirmButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
 unique_name_in_owner = true
@@ -304,19 +328,6 @@ text = "Confirmar"
 [node name="CancelButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
 unique_name_in_owner = true
 layout_mode = 2
-
-[node name="RotateButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="DeleteButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="EraseButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
-unique_name_in_owner = true
-layout_mode = 2
-toggle_mode = true
 
 [node name="ItemScroll" type="ScrollContainer" parent="Root/Layout/BottomBar/Rows"]
 unique_name_in_owner = true

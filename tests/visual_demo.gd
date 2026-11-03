@@ -74,13 +74,13 @@ func _run() -> void:
 	EventBus.game_mode_change_requested.emit("live")
 	_main.get_node("CameraRig").set_state({"x": -1.0, "z": 3.0, "yaw": 0.0, "distance": 13.0})
 	await _shot("6_frente.png")
-	# Separar las dos ventanas (herramienta Unir / separar) y volver a unirlas.
+	# Separar las dos ventanas (tocar la juntura en Modificar) y volver a unirlas.
 	EventBus.game_mode_change_requested.emit("build")
-	await _drag(HouseBuilder.WINDOW_JOIN_TOOL_ID, Vector2(2.5, 9), Vector2(2.5, 9))
+	await _builder.toggle_joint(Vector2i(3, 9) + Vector2i(O))
 	EventBus.game_mode_change_requested.emit("live")
 	await _shot("6b_separadas.png")
 	EventBus.game_mode_change_requested.emit("build")
-	await _drag(HouseBuilder.WINDOW_JOIN_TOOL_ID, Vector2(2.5, 9), Vector2(2.5, 9))
+	await _builder.toggle_joint(Vector2i(3, 9) + Vector2i(O))
 	EventBus.game_mode_change_requested.emit("build")
 
 	# Modo vivir, desde otro ángulo.

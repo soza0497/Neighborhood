@@ -5,13 +5,13 @@ class_name HousePermissions
 ## servidor; el teléfono lo usa para avisar ANTES: "Pedir permiso").
 ##
 ##   Menor (al instante, con aviso y "Deshacer" para la pareja): mover, girar
-##   o pintar un mueble, pintar paredes y pisos, unir/separar ventanas, poner
-##   un mueble nuevo.
+##   (también en diagonal) o pintar un mueble, pintar paredes (cada cara) y
+##   pisos, unir/separar ventanas, poner un mueble nuevo.
 ##   Estructural (pide aprobación): cimientos, pisos, paredes, puertas,
 ##   ventanas, techos, escaleras, y quitar (vender) cualquier cosa.
 
 ## Campos que no cambian qué es la pieza.
-const COSMETIC_FIELDS := ["color", "separate", "ready_at"]
+const COSMETIC_FIELDS := ["color", "color_a", "color_b", "separate", "join_end", "ready_at"]
 
 
 static func is_minor_write(house: HouseData, w: Dictionary) -> bool:

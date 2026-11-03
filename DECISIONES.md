@@ -605,3 +605,88 @@ dueño), rama `pulido-1`.
 - Las demos contra el servidor se corrieron contra un **Nakama de prueba
   aparte** (127.0.0.1:7360, base en memoria, se borró al terminar) para no
   tocar el servidor ni las cuentas del dueño.
+
+### P1B — constructor 2.0
+- **Herramientas: Tienda (bolsa) · Obra (casco: Agregar + / Modificar mano) ·
+  Borrar (basurero)**, en ese orden. Nada del trío ni de los íconos de otro
+  juego. La barra vive en `ui/build_bar.gd`; los botones que sirven en cada
+  momento (flechas, girar, borrar, copiar contorno, modo selección, flechas
+  de pintura) van en una fila arriba a la derecha de la barra.
+- **Tocar vs. mantener presionado** (0,45 s): en Modificar, Pintura y Borrar,
+  arrastrar sin mantener mueve la cámara; mantener levanta el mueble, pinta
+  arrastrando o elige un rectángulo para borrar. Tocar una pared, techo, piso
+  o cimiento en Modificar abre su menú (también al mantener): pintar, mover
+  (con las flechas), quitar la puerta/ventana, borrar.
+- **Mover paredes y techos** con las flechas N/S/E/O (además de muebles). Una
+  pared que sostiene algo no se puede correr.
+- **Borrar**: siempre pregunta, con la reventa del 50 % de antes. Los techos
+  se eligen tocándolos (con los techos a la vista). Tocar una pared con
+  puerta o ventana quita primero la abertura. "Esta pared / Este pilar
+  sostiene el piso de arriba" sale de `HouseRules.removal_reason`.
+- **8 direcciones (45°)**: se guardan como antes (`rot` 0..3) más `diag: true`
+  (45° más). Así las casas viejas no cambian y el servidor no necesita
+  migración para esto. Solo los **muebles** van en diagonal (escaleras y
+  pilares no). Un mueble en diagonal ocupa las celdas que toca su caja
+  girada (90 % de su tamaño, 9 puntos de muestra por celda): misma cuenta
+  exacta en `house_grid.gd` y en `neighborhood_house.lua` (con el mismo
+  número para cos 45°). Una silla en diagonal ocupa 1 celda; una mesa 2×1, 4.
+- **Pintura por cara**: `color_a` (cara norte/oeste) y `color_b` (sur/este).
+  Las flechas siguen la pared "como quien camina pegado a ella": dobla en las
+  esquinas de adentro y rodea las de afuera (`scripts/house/wall_faces.gd`).
+  Pintar no cuesta y es cambio menor en la casa compartida.
+- **Ventanas unidas**: la unión se guarda en la **juntura**, como `join_end`
+  en la pared que TERMINA en ese vértice (cada juntura tiene un solo dueño:
+  lo que se ve es lo que está guardado). Al poner una ventana igual al lado
+  se une sola (como antes). En Modificar, cada juntura entre dos ventanas es
+  un puntito (naranja = unidas) que se toca para unir o separar. No se usó
+  una capa nueva de "junturas": habría que cambiar todo el formato del
+  servidor para algo que cabe en la pared.
+- **Formato de casa 3** (`HouseData.FORMAT`, campo `format` en la casa) y
+  **guardado v3** (`SaveMigrations._v2_to_v3`): la pintura vieja pasa a las
+  dos caras y las ventanas que se veían unidas quedan unidas en su juntura;
+  la marca vieja `separate` desaparece. El servidor hace la misma conversión
+  al leer una casa sin `format` (`rules.upgrade_legacy`). Solo se convierte
+  una vez (si no, se volverían a unir ventanas que el jugador separó).
+- **Techos**: no se puede poner un techo donde una pared del piso de arriba
+  (o un piso de arriba) queda adentro de su rectángulo, y al revés: no se
+  puede poner esa pared o piso sobre un techo. Interpretación de "pared del
+  mismo nivel que lo atraviesa": las paredes que se ven a la altura del
+  techo, o sea las del piso de arriba (las del mismo piso terminan justo
+  debajo del techo y no chocan). **Techo plano de concreto** nuevo
+  (`roof_style: flat`): losa con pretil bajito, mismo precio por celda.
+- **Escaleras**: de caracol (2×2) y metálica exterior (1×3, `outdoor`: en la
+  planta baja va sobre el pasto). La navegación ahora une TODOS los pisos con
+  sus escaleras (antes solo la planta baja).
+- **Pilares** (`kind: pillar`, 1×1, `outdoor`): un piso de arriba se apoya si
+  hay un pilar de abajo a 2 celdas o menos (`PILLAR_REACH`). El pilar no se
+  puede quitar si algo depende de él.
+- **"Lo que falta"** (`HouseRules.problems`): pisos sin acceso (sin escalera
+  terminada que llegue) y piezas sin apoyo (casas viejas o reglas nuevas).
+  Solo en modo construir: arriba "Falta: N" con la lista, y las piezas con
+  problema en rojo. Se recalcula como mucho cada 0,4 s.
+- **Copiar contorno de abajo**: losa completa (menos el hueco de las
+  escaleras) + paredes donde termina el piso de abajo, con el mismo tipo de
+  pared. Queda esperando Confirmar (se ve el precio).
+- **Cuartos** (`scripts/house/house_rooms.gd`, `data/rooms.json`): área de piso
+  cerrada por paredes (las puertas cuentan como pared; un área de más de 400
+  celdas o que se sale del piso sin pared no es cuarto). Cada mueble suma
+  puntos a los tipos (dormitorio, cocina, baño, sala, estudio); si el segundo
+  tiene al menos el 60 % del primero, es **multiuso**. El cuarto de la Tienda
+  es el que está en el centro de la cámara (si no, el del personaje).
+- **Catálogo**: categorías nuevas (Techos, Escaleras y pilares,
+  Electrodomésticos, Electrónica, Plantas, Adornos) y piezas nuevas
+  (escritorio, plantas, lámpara, florero, pilar, escaleras, techo plano).
+- **Casa compartida: propuesta** (amplía el "Pedir permiso"). Lo estructural
+  no se manda: se aplica en el teléfono como **propuesta** (se ve de verdad,
+  con las reglas sobre todo lo anterior). Mientras hay propuesta, todo va a
+  ella (también lo menor), Deshacer saca el último cambio, no se guarda en el
+  archivo (se guarda la casa de verdad) y no se pone al día con el servidor.
+  **Mandar** junta todo (lo último de cada lugar) en UN pedido (`build_apply`
+  de siempre). La pareja la ve con **Menú → Casa → Ver** (RPC nueva
+  `home_request`: las piezas del pedido) aplicada en su casa, con una barra
+  "Aprobar / No / Cerrar". Para salir a Vivir hay que mandarla o
+  descartarla. Se hizo así también con la pareja fuera de línea (la
+  propuesta queda esperando, como los pedidos de la Fase 5).
+- **Cámara por piso**: con 5 pisos la cámara sube a la altura del piso que se
+  mira (`CameraRig.floor_height`), si no quedaba metida entre paredes.
+- **Versión 0.7.0.**

@@ -118,6 +118,29 @@ static func edge_center(key: String) -> Vector3:
 	return Vector3(v.x, 0.0, v.y + 0.5)
 
 
+## La pared que sigue en línea recta después de esta (desde su vértice final).
+static func next_in_line(key: String) -> String:
+	var v := edge_vertex(key)
+	if is_edge_horizontal(key):
+		return edge_key(v + Vector2i(1, 0), true)
+	return edge_key(v + Vector2i(0, 1), false)
+
+
+## La pared que viene antes en línea recta (termina en el vértice inicial).
+static func previous_in_line(key: String) -> String:
+	var v := edge_vertex(key)
+	if is_edge_horizontal(key):
+		return edge_key(v - Vector2i(1, 0), true)
+	return edge_key(v - Vector2i(0, 1), false)
+
+
+## Borde que comparten dos celdas vecinas (de lado, no en diagonal).
+static func shared_edge(a: Vector2i, b: Vector2i) -> String:
+	if a.x == b.x:
+		return edge_key(Vector2i(a.x, maxi(a.y, b.y)), true)
+	return edge_key(Vector2i(maxi(a.x, b.x), a.y), false)
+
+
 ## Los 4 bordes que tocan un vértice.
 static func vertex_edges(vertex: Vector2i) -> Array[String]:
 	return [
@@ -166,6 +189,67 @@ static func rotated_size(footprint: Vector2i, rotation: int) -> Vector2i:
 static func object_cells(footprint: Vector2i, anchor: Vector2i, rotation: int) -> Array[Vector2i]:
 	var size := rotated_size(footprint, rotation)
 	return cells_in_rect(anchor, anchor + size - Vector2i.ONE)
+
+
+# --- Muebles en diagonal (Pulido 1: 8 direcciones, de a 45°) ---
+#
+# Un mueble en diagonal guarda `rot` (0..3, cuartos de vuelta) y además
+# `diag: true` (45° más). Ocupa las celdas que toca su caja girada: la caja
+# mide el 90 % de su tamaño (los muebles no llenan la celda entera) y una
+# celda cuenta si alguno de sus 9 puntos de muestra (a 0.2, 0.5 y 0.8) cae
+# adentro. El servidor hace EXACTAMENTE la misma cuenta
+# (neighborhood_house.lua, diag_cells): por eso se usan los mismos números.
+
+## Coseno de 45° (el mismo número en el servidor).
+const DIAG_COS := 0.7071067811865476
+## La caja de un mueble en diagonal mide esto de su tamaño.
+const DIAG_SCALE := 0.9
+const DIAG_SAMPLES := [0.2, 0.5, 0.8]
+
+
+## Ángulo de un objeto en grados (0, 45, 90... 315).
+static func object_angle(rotation: int, diag: bool) -> int:
+	return (rotation % 4) * 90 + (45 if diag else 0)
+
+
+## Celdas que ocupa un objeto girado o en diagonal.
+static func object_cells_full(footprint: Vector2i, anchor: Vector2i, rotation: int, diag: bool) -> Array[Vector2i]:
+	if not diag:
+		return object_cells(footprint, anchor, rotation)
+	var size := rotated_size(footprint, rotation)
+	var center := Vector2(anchor.x + size.x / 2.0, anchor.y + size.y / 2.0)
+	var hw := footprint.x * DIAG_SCALE / 2.0
+	var hd := footprint.y * DIAG_SCALE / 2.0
+	# cos y sen del ángulo (45°, 135°, 225°, 315°) sin trigonometría.
+	var signs: Array = [[1, 1], [-1, 1], [-1, -1], [1, -1]][rotation % 4]
+	var c: float = signs[0] * DIAG_COS
+	var s: float = signs[1] * DIAG_COS
+	var reach := ceili(sqrt(hw * hw + hd * hd))
+	var result: Array[Vector2i] = []
+	for x in range(floori(center.x) - reach, floori(center.x) + reach + 1):
+		for z in range(floori(center.y) - reach, floori(center.y) + reach + 1):
+			var inside := false
+			for ox in DIAG_SAMPLES:
+				for oz in DIAG_SAMPLES:
+					var dx: float = x + ox - center.x
+					var dz: float = z + oz - center.y
+					if absf(dx * c + dz * s) <= hw and absf(-dx * s + dz * c) <= hd:
+						inside = true
+			if inside:
+				result.append(Vector2i(x, z))
+	return result
+
+
+## Bordes entre dos celdas de una misma lista (lo que queda "dentro" de un
+## mueble en diagonal: no puede tener una pared atravesada).
+static func inner_edges_of_cells(cells: Array[Vector2i]) -> Array[String]:
+	var result: Array[String] = []
+	for cell in cells:
+		if cell + Vector2i(1, 0) in cells:
+			result.append(edge_key(cell + Vector2i(1, 0), false))
+		if cell + Vector2i(0, 1) in cells:
+			result.append(edge_key(cell + Vector2i(0, 1), true))
+	return result
 
 
 ## Bordes que quedan DENTRO de un objeto (entre sus propias celdas).

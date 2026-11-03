@@ -136,8 +136,10 @@ func rebuild() -> void:
 				for step in [Vector2i(1, 1), Vector2i(1, -1)]:
 					_connect_diagonal(level, Vector2i(x, z), step)
 
-	for key in _house.get_layer(0, "objects"):
-		_add_stairs(0, key)
+	# Escaleras de todos los pisos (cada una une su piso con el de arriba).
+	for level in HouseGrid.MAX_LEVELS - 1:
+		for key in _house.get_layer(level, "objects"):
+			_add_stairs(level, key)
 
 
 func _connect_if_open(level: int, a: Vector2i, b: Vector2i) -> void:

@@ -69,6 +69,34 @@ signal view_changed(show_roofs: bool, low_walls: bool)
 ## Para habilitar los botones de deshacer y rehacer.
 signal history_changed(can_undo: bool, can_redo: bool)
 
+# --- Constructor 2.0 (Pulido 1) ---
+## La interfaz pide: correr lo elegido (N, S, E, O), seguir pintando la pared
+## de al lado (-1 izquierda, +1 derecha), elegir una opción del menú de una
+## pieza, borrar varias cosas a la vez, y copiar el contorno de abajo.
+signal build_nudge_requested(direction: String)
+signal build_paint_step_requested(direction: int)
+signal build_context_action_requested(action: String)
+signal build_erase_multi_toggled(enabled: bool)
+signal build_copy_outline_requested
+## El constructor avisa: mostrar u ocultar las flechas de la pintura.
+signal build_paint_arrows(visible: bool)
+## Texto del botón Confirmar (por ejemplo "Borrar · te devuelven $45").
+signal build_confirm_label(text: String)
+## Menú de una pieza (Modificar): título y opciones [{id, text}].
+signal build_context_menu(title: String, options: Array)
+## Lo que falta o está mal en la casa (HouseRules.problems).
+signal house_problems_changed(problems: Array)
+## Propuesta en la casa compartida: mode = "own" (la armo yo), "review" (veo
+## la de mi pareja) o "" (ninguna); summary = {steps, pieces, cost}.
+signal proposal_changed(mode: String, summary: Dictionary)
+## La interfaz pide mandar o descartar mi propuesta, ver la de mi pareja (id
+## del pedido) y responderla (aprobar o no) o cerrarla.
+signal proposal_send_requested
+signal proposal_discard_requested
+signal proposal_review_requested(request_id: int)
+signal proposal_answer_requested(approve: bool)
+signal proposal_close_requested
+
 # --- Personaje ---
 ## Cada medio segundo: necesidades (nombre → 0..100) y ánimo en palabras.
 signal character_needs_changed(needs: Dictionary, mood_text: String)

@@ -49,7 +49,7 @@ func _rebuild() -> void:
 		_status_label.text = "La casa compartida necesita una cuenta en el servidor."
 	elif Couple.shared():
 		_title.text = "Casa compartida"
-		_status_label.text = "Viven juntos en %s. Mover, girar y pintar es al instante (a %s le llega un aviso y lo puede deshacer). Paredes, pisos, puertas, techos, escaleras y vender piden su aprobación." % [
+		_status_label.text = "Viven juntos en %s. Mover, girar y pintar es al instante (a %s le llega un aviso y lo puede deshacer). Para remodelar (paredes, pisos, puertas, techos, escaleras, vender) se arma una propuesta con todos los cambios y se manda entera: la pareja la ve y la aprueba o no." % [
 			"tu casa" if home["owner_is_me"] else "la casa de " + partner, partner]
 	else:
 		_title.text = "Tu casa"
@@ -92,7 +92,8 @@ func _build_requests(home: Dictionary, usable: bool) -> void:
 			]))
 		else:
 			_content.add_child(PanelRows.row([
-				PanelRows.label("%s pide permiso para: %s%s" % [request["by_name"], request["text"], cost_text]),
+				PanelRows.label("%s propone: %s%s" % [request["by_name"], request["text"], cost_text]),
+				PanelRows.button("Ver", _on_view_request.bind(request["id"]), not usable, 90),
 				PanelRows.button("Aprobar", _on_answer_request.bind(request["id"], true), not usable, 130),
 				PanelRows.button("No", _on_answer_request.bind(request["id"], false), not usable, 90),
 			]))
@@ -126,6 +127,12 @@ func _on_pool_toggled(on: bool) -> void:
 
 func _on_answer_request(id: int, approve: bool) -> void:
 	await Couple.answer_request(id, approve)
+
+
+## Pulido 1: ver la propuesta en la casa antes de responder.
+func _on_view_request(id: int) -> void:
+	hide()
+	EventBus.proposal_review_requested.emit(id)
 
 
 func _on_cancel_request(id: int) -> void:

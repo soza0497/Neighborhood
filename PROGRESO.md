@@ -1,13 +1,91 @@
 # Progreso
 
-## Fase actual: 5 — Pareja y casa compartida (verificada en la PC; falta probarla en dos teléfonos)
+## Fase actual: Pulido 1 — interfaz limpia y constructor 2.0 (hecho y verificado en la PC; falta probarlo en el teléfono)
 
-**Próximo paso (decidido por el dueño, 2026-11-03):** antes de la Fase 6 va el
-**Pulido 1** de `docs/pulido-1.md`: **P1A** interfaz limpia (barra de arriba
-con ánimo, Info en el menú, maqueta 3D de pisos, íconos, x1/x2/x5, 5 pisos) y
-**P1B** constructor 2.0 (Tienda / Obra / Borrar, pintura por cara, 8
-direcciones, soporte y escaleras, cuartos que recomiendan). Ideas de más
-adelante en `VISION.md` ("Ideas del dueño para más adelante").
+**Próximo paso:** el dueño prueba el Pulido 1 en el teléfono (checklist de
+abajo). Después: cerrar la Fase 5 en dos teléfonos y seguir con la **Fase 6**
+(restaurante). Lo que sigue pendiente de la Fase 5 está más abajo.
+
+### Pulido 1 — hecho (2026-11-03, sesión local en la PC del dueño, rama `pulido-1`)
+- **P1A — interfaz** (commit "Pulido 1A"): pantalla casi vacía con 42 íconos
+  SVG propios (`assets/icons/`). Arriba dinero y **ánimo** (carita + palabra;
+  tocarlo abre las necesidades con barra y qué afecta el ánimo). Pareja chica
+  (● nombre). **Menú → Info** con FPS (y "Mostrar FPS en pantalla"), versión,
+  conexión, día y hora, caja y pareja. A la izquierda: íconos de **techo** y
+  **paredes**, la **maqueta 3D de pisos** (tocar = ir a ese piso; punto que
+  parpadea = el personaje) y la **brújula**. Velocidades **x1, x2, x5** (en el
+  juego y en el servidor, sin ventaja) y **5 pisos** (juego y servidor).
+- **P1B — constructor 2.0**: **Tienda / Obra (Agregar · Modificar) / Borrar**.
+  Borrar con resaltado y pregunta ("te devuelven $X"), **modo selección** y
+  arrastrar para muchas. Modificar: flechas **N/S/E/O**, girar de a **45°**
+  (8 direcciones, sin encimarse), mantener para llevar con el dedo, menú en
+  paredes / techos / pisos / cimientos. **Pintura por cara** (tocar = una
+  cara + flechas izquierda/derecha; mantener = pintar arrastrando solo paredes
+  o solo pisos). **Unión de ventanas en la juntura** (puntito para unir o
+  separar). **Techo plano de concreto**; techo bloqueado si lo atraviesa algo
+  de arriba. Escaleras **de caracol** y **metálica exterior**; **pilares**;
+  "Esta pared sostiene el piso de arriba"; **"Falta: N"** (sin acceso / sin
+  apoyo, en rojo); **Copiar contorno de abajo**; **cuartos** con tipo según
+  los muebles (`data/rooms.json`) y la Tienda que recomienda (★). **Casa
+  compartida: propuesta** entera que la pareja ve en su casa y aprueba o no.
+- Guardado **v3** (migración: pintura a las dos caras, ventanas unidas en la
+  juntura) y la misma conversión en el servidor. Versión **0.7.0**.
+- Pruebas (en la PC, Godot 4.7.2, contra un **Nakama 3.41.0 de prueba aparte**
+  en 127.0.0.1:7360 con PostgreSQL 18 en memoria, para no tocar el servidor ni
+  las cuentas del dueño; se borró al terminar): sin red **323 (99 casa + 34 personaje + 66 economía + 78 servidor + 46 pareja)**,
+  Lua **214**, `server_demo` 24/24, `economy_server_demo`
+  39/39, `login_demo` 17/17, `couple_demo` 78/78 (con la propuesta entera),
+  `couple_live_demo` 12/12, y la demo nueva **`ui_demo` 40/40** (con
+  capturas `ui_1` a `ui_11`, copiadas en `docs/capturas/`). No se exportó el APK (lo pidió así la sesión).
+
+### Pulido 1 — cómo probarlo en el teléfono (para el dueño)
+1. [Claude, cuando lo pidas] Unir la rama `pulido-1` a `main` y exportar el
+   APK 0.7.0 (`build/neighborhood.apk`). **Ojo**: el Nakama de la PC lee los
+   módulos de esta carpeta: hay que reiniciarlo (`docker compose restart
+   nakama` en `server/`) para que tome x5, 5 pisos y las reglas nuevas.
+2. [Dueño] Instalar el APK (como siempre: pasarlo al teléfono y tocarlo).
+3. Al entrar: arriba solo se ve **dinero** y **ánimo** (carita + palabra), a la
+   izquierda la **maqueta** de pisos con dos íconos encima y la **brújula**, y
+   arriba a la derecha velocidad, casco y menú.
+4. Tocá el **ánimo**: aparecen las 4 necesidades con su ícono y barra, y "Qué
+   afecta el ánimo". Tocá afuera: se cierra.
+5. **Menú → Info**: se ven los FPS. Prendé "Mostrar FPS en pantalla" y medí
+   con una casa de dos pisos amueblada (meta: 30 o más).
+6. Tocá el **casco** (construir). En la maqueta, tocá el piso de arriba: sube.
+   Probá los íconos de techo (tachado) y paredes (alta / bajita).
+7. **Obra → Modificar (mano)** → elegí un color → tocá una pared **por
+   dentro**: se pinta solo esa cara (mirá por afuera: sigue igual). Usá las
+   flechas para pintar la de al lado.
+8. **Borrar** → tocá un techo (con los techos a la vista): se pone rojo y
+   pregunta "¿Borrar el techo? Te devuelven $X". Confirmá.
+9. **Tienda** → Silla → tocá el botón de girar una vez (45°) → ponela: queda
+   en diagonal. Probá que no se puede encimar otra cosa.
+10. **Borrar** → tocá una pared que tiene piso arriba apoyado solo en ella
+    (un balcón): dice "Esta pared sostiene el piso de arriba".
+11. En el piso 1 (sin nada), **Obra → Agregar** → **Copiar contorno de
+    abajo** → Confirmar: se arma la losa y las paredes. Arriba aparece
+    "Falta: 1" (sin acceso) hasta que pongas una escalera abajo.
+12. Con la cámara sobre un cuarto con cama, **Tienda**: la primera pestaña es
+    "★ Dormitorio" con camas primero.
+13. [Con tu pareja, viviendo juntos] Poné una pared: queda como propuesta
+    (arriba "Mandar a …"). Agregá otra y mandala. En el otro teléfono:
+    **Menú → Casa → Ver** → se ve en la casa → **Aprobar**.
+14. [Claude] Corregir lo que salga; commit "Pulido 1 cerrado".
+
+### Pulido 1 — pendientes y errores conocidos
+- Las piezas nuevas (escaleras, pilar, techo plano, plantas...) tienen formas
+  provisionales (cajas), como todo hasta la Fase 7.
+- Una escalera de caracol se camina como una recta (sube "en zigzag" por sus
+  4 celdas); se ve bien, el recorrido es aproximado.
+- "Mover" una pared con las flechas la corre de a una celda; si sostiene
+  algo, no se puede (avisa).
+- La onda de "pintar arrastrando" es un anillo blanco en el piso (simple).
+- Si la pareja cambia algo mientras ves una propuesta, te pones al día al
+  cerrarla (no antes).
+- `export_presets.cfg` sigue con versión "0.0.1" para Android (lo que se ve
+  en la ficha del APK); el juego muestra 0.7.0 (de `project.godot`).
+
+## Fase 5 — Pareja y casa compartida (verificada en la PC; falta probarla en dos teléfonos)
 
 ### Fase 5 — hecho (2026-11-03, sesión en la nube, rama `fase-5`)
 - **5A — servidor** (`server/nakama/modules/`): reglas de apoyo de la casa en

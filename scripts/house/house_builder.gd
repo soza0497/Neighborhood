@@ -1,17 +1,34 @@
 class_name HouseBuilder
 extends Node3D
-## Modo construir: herramientas, gestos y vista previa ("fantasma").
+## Modo construir (Pulido 1: constructor 2.0): herramientas, gestos y vista
+## previa ("fantasma").
 ##
 ## Va como hijo de la HouseView, así usa las mismas coordenadas que la casa.
 ##
-## Cómo funciona un gesto:
-##   1. Apretar (dedo o clic izquierdo): empieza.
-##   2. Arrastrar: se calcula qué se haría y se muestra en verde (se puede)
-##      o rojo (no se puede).
-##   3. Soltar: lo verde se aplica como UN paso de deshacer.
-##   Si aparece un segundo dedo, el gesto se cancela (es para la cámara).
+## Herramientas (la barra de abajo las elige):
+##   - Tienda y Obra › Agregar: la pieza elegida del catálogo. Las de arrastre
+##     (cimientos, piso, pared, cuarto, techo) dejan una selección con dos
+##     manijas que se aplica con Confirmar; puertas, ventanas y muebles se
+##     ponen al soltar.
+##   - Obra › Modificar (MODIFY): tocar un mueble lo elige (flechas N/S/E/O,
+##     girar, borrar); MANTENER presionado lo levanta y sigue al dedo. Tocar o
+##     mantener una pared, techo, piso o cimiento abre un menú (mover, pintar,
+##     borrar). Las junturas entre ventanas se ven como puntitos: tocarlos une
+##     o separa esas dos ventanas.
+##   - Pintura (PAINT, desde Modificar): tocar pinta UNA cara de pared (o un
+##     piso) y aparecen flechas para seguir con la pared de al lado; mantener
+##     presionado pinta arrastrando, solo sobre lo que se empezó (paredes o pisos).
+##   - Borrar (ERASE): tocar resalta y pregunta "¿Borrar techo? Te devuelven
+##     $X". En modo selección se van tocando varias cosas. Mantener y
+##     arrastrar elige un rectángulo (pisos, cimientos) o una línea (paredes).
+##
+## En Modificar, Pintura y Borrar, arrastrar sin mantener mueve la cámara.
+##
+## Casa compartida (Fase 5 → Pulido 1): un cambio estructural no se manda solo:
+## se arma una PROPUESTA con todos los cambios (se ven en la casa), y se manda
+## entera a la pareja, que la previsualiza y la aprueba o la rechaza.
 
-enum Tool { NONE, FOUNDATION, FLOOR, WALL, ROOM, ROOF, OPENING, OBJECT, PAINT, MOVE, WINDOW_JOIN }
+enum Tool { NONE, FOUNDATION, FLOOR, WALL, ROOM, ROOF, OPENING, OBJECT, PAINT, MODIFY, ERASE }
 
 ## Qué herramienta usa cada tipo ("kind") de objeto del catálogo.
 const KIND_TO_TOOL := {
@@ -23,41 +40,51 @@ const KIND_TO_TOOL := {
 	"door": Tool.OPENING,
 	"window": Tool.OPENING,
 	"stairs": Tool.OBJECT,
+	"pillar": Tool.OBJECT,
 	"furniture": Tool.OBJECT,
 	"paint": Tool.PAINT,
 }
 
-## Herramienta "mano" (mover muebles): no está en el catálogo.
-const MOVE_TOOL_ID := "move"
-## Herramienta para unir o separar ventanas vecinas: tampoco está en el catálogo.
-const WINDOW_JOIN_TOOL_ID := "window_join"
+## Herramientas que no están en el catálogo.
+const MODIFY_TOOL_ID := "modify"
+const ERASE_TOOL_ID := "erase"
 
 ## Clave provisional para algo nuevo; al soltar se cambia por un id real.
 const NEW_KEY := "__new__"
+## Mantener presionado: cuánto tiempo, y cuánto se puede mover el dedo antes
+## de que cuente como "arrastrar la cámara".
+const LONG_PRESS_SECONDS := 0.45
+const TAP_MOVE_PIXELS := 14.0
+## A cuántos píxeles de un puntito de juntura cuenta como tocarlo.
+const JOINT_PICK_PIXELS := 40.0
+## Cardinales para las flechas: N = -Z, S = +Z, E = +X, O = -X.
+const DIRECTIONS := {"N": Vector2i(0, -1), "S": Vector2i(0, 1), "E": Vector2i(1, 0), "O": Vector2i(-1, 0)}
 
 const HINTS := {
-	Tool.NONE: "Elegí una pieza en la barra de abajo.",
+	Tool.NONE: "Elegí Tienda, Obra o Borrar.",
 	Tool.FOUNDATION: "Arrastrá para marcar el terreno de la casa (cimientos).",
 	Tool.FLOOR: "Arrastrá sobre los cimientos para poner piso.",
 	Tool.WALL: "Arrastrá de esquina a esquina para levantar una pared.",
 	Tool.ROOM: "Arrastrá un rectángulo: pone piso y paredes de una vez.",
 	Tool.ROOF: "Arrastrá un rectángulo sobre la casa para techarla.",
 	Tool.OPENING: "Tocá una pared para ponerla.",
-	Tool.OBJECT: "Arrastrá hasta su lugar y soltá. «Girar» lo rota.",
-	Tool.PAINT: "Tocá o arrastrá sobre paredes y pisos para pintarlos.",
-	Tool.MOVE: "Tocá un mueble para elegirlo; arrastralo para moverlo.",
-	Tool.WINDOW_JOIN: "Tocá una ventana para unirla o separarla de sus vecinas iguales.",
+	Tool.OBJECT: "Arrastrá hasta su lugar y soltá. El botón de girar la rota.",
+	Tool.PAINT: "Tocá una pared o un piso para pintarlo. Mantené presionado para pintar arrastrando.",
+	Tool.MODIFY: "Tocá algo para elegirlo. Mantené presionado un mueble para moverlo con el dedo.",
+	Tool.ERASE: "Tocá lo que querés borrar.",
 }
 
 ## Herramientas de arrastre (rectángulo o línea). Al soltar NO se aplican:
 ## queda una selección con dos manijas (círculos) que se pueden mover, y se
 ## aplica con el botón Confirmar. Así el dedo no tapa lo que se construye.
 const HANDLE_TOOLS := [Tool.FOUNDATION, Tool.FLOOR, Tool.WALL, Tool.ROOM, Tool.ROOF]
+## Herramientas de "tocar o mantener" (arrastrar sin mantener = cámara).
+const PRESS_TOOLS := [Tool.PAINT, Tool.MODIFY, Tool.ERASE]
 ## A cuántos píxeles de una manija cuenta como tocarla.
 const HANDLE_PICK_DISTANCE := 70.0
 
 ## Herramientas donde todo el gesto se aplica entero o nada.
-const ALL_OR_NOTHING := [Tool.ROOF, Tool.OPENING, Tool.OBJECT, Tool.MOVE, Tool.WINDOW_JOIN]
+const ALL_OR_NOTHING := [Tool.ROOF, Tool.OPENING, Tool.OBJECT, Tool.MODIFY]
 
 var house: HouseData
 var history: UndoHistory
@@ -69,14 +96,18 @@ var active := false
 ## Nivel (piso) donde se construye. 0 = planta baja.
 var level := 0
 var tool := Tool.NONE
-## Objeto del catálogo elegido (vacío si la herramienta es NONE o MOVE).
+## Objeto del catálogo elegido (vacío si la herramienta no es del catálogo).
 var item: Dictionary = {}
-## Modo borrar: las herramientas quitan en vez de poner.
-var erase_mode := false
-## Giro (0..3) para el próximo mueble que se coloque.
+## Giro para el próximo mueble que se coloque: cuartos de vuelta + diagonal.
 var place_rotation := 0
-## Mueble elegido con la mano ("" = ninguno).
+var place_diag := false
+## Lo elegido en Modificar: capa ("objects", "roofs", "walls") y clave.
+var selected_layer := ""
 var selected_key := ""
+## Borrar: varias cosas a la vez (modo selección).
+var erase_multi := false
+## Color de pintura elegido (id del catálogo).
+var paint_item_id := ""
 
 # --- Estado del gesto ---
 var _pressing := false
@@ -95,14 +126,40 @@ var _drag_handle := -1
 ## El dedo empezó fuera del lote: ese dedo mueve la cámara.
 var _camera_takeover := false
 var _last_screen_pos := Vector2.ZERO
-## Mueble que se está arrastrando con la mano, y dónde se agarró.
+## Tocar o mantener: dónde y cuándo se apretó, si ya se movió (cámara) y si
+## ya cuenta como "mantener presionado".
+var _press_pos := Vector2.ZERO
+var _press_msec := 0
+var _moved := false
+var _long_pressed := false
+## Mueble que se está arrastrando, y dónde se agarró.
 var _moving_key := ""
 var _grab_offset := Vector2i.ZERO
-## Lo que se va pintando en un mismo gesto: "capa|clave" → true.
+## Pintura arrastrando: sobre qué se empezó ("walls" o "floors") y lo que se
+## va pintando: "walls|clave|lado" o "floors|clave" → true.
+var _paint_surface := ""
 var _paint_targets: Dictionary = {}
+## La última cara pintada con un toque (para las flechas): {edge, side}.
+var _paint_face: Dictionary = {}
+## Borrar: lo elegido. Cada entrada: {id, label, writes}.
+var _erase_items: Array = []
+## Borrar arrastrando (mantener): capa del rectángulo o la línea.
+var _erase_rect_layer := ""
+## Lo que se tocó para abrir el menú de una pieza.
+var _context_target: Dictionary = {}
 ## Escrituras que se aplicarían al soltar, y las que no se pueden.
 var _pending_ok: Array = []
 var _pending_blocked: Array = []
+## La selección que espera Confirmar no tiene manijas (borrar, copiar contorno).
+var _pending_plain := false
+
+# --- Propuesta en la casa compartida ---
+## Pasos de la propuesta aplicados en la casa (para verlos): {writes, inverse}.
+var _draft_steps: Array = []
+## "own" = la estoy armando yo; "review" = estoy viendo la de mi pareja.
+var _draft_mode := ""
+## El pedido que se está previsualizando (modo "review").
+var _review_request: Dictionary = {}
 
 # --- Nodos 3D de ayuda ---
 var _grid: MeshInstance3D
@@ -110,6 +167,10 @@ var _cursor: MeshInstance3D
 var _ghost: Node3D
 var _selection_marker: MeshInstance3D
 var _handles: Array[MeshInstance3D] = []
+var _joints: Node3D
+## Vértice de cada puntito de juntura (en el mismo orden que sus nodos).
+var _joint_vertices: Array[Vector2i] = []
+var _joints_dirty := true
 ## Piezas reales escondidas mientras se ve el fantasma que las reemplaza.
 var _hidden_nodes: Array[Node3D] = []
 
@@ -126,7 +187,20 @@ func setup(new_house: HouseData, new_history: UndoHistory, new_view: HouseView, 
 	view = new_view
 	camera = new_camera
 	house.piece_changed.connect(_on_piece_changed)
-	house.reloaded.connect(func(): select_object(""))
+	house.reloaded.connect(func():
+		select_object("")
+		_joints_dirty = true)
+	paint_item_id = _first_paint_id()
+
+
+func _process(_delta: float) -> void:
+	# Mantener presionado: pasa el tiempo sin que el dedo se mueva.
+	if _pressing and tool in PRESS_TOOLS and not _moved and not _long_pressed \
+			and Time.get_ticks_msec() - _press_msec >= LONG_PRESS_SECONDS * 1000:
+		_on_long_press(_press_pos)
+	if _joints_dirty and active:
+		_joints_dirty = false
+		_update_joints()
 
 
 # --- Lo que pide la interfaz ---
@@ -140,19 +214,24 @@ func set_active(value: bool) -> void:
 	_cursor.visible = false
 	if not active:
 		select_item("")
+	_joints_dirty = true
 	_update_camera_pan()
 
 
-## Elige una pieza del catálogo por id ("" = ninguna, "move" = la mano).
+## Elige una herramienta: una pieza del catálogo por id, "modify", "erase"
+## o "" (ninguna).
 func select_item(item_id: String) -> void:
+	_erase_items.clear()
 	_cancel_gesture()
 	select_object("")
-	if item_id == MOVE_TOOL_ID:
+	_paint_face = {}
+	EventBus.build_paint_arrows.emit(false)
+	if item_id == MODIFY_TOOL_ID:
 		item = {}
-		tool = Tool.MOVE
-	elif item_id == WINDOW_JOIN_TOOL_ID:
+		tool = Tool.MODIFY
+	elif item_id == ERASE_TOOL_ID:
 		item = {}
-		tool = Tool.WINDOW_JOIN
+		tool = Tool.ERASE
 	else:
 		item = Catalog.get_item(item_id)
 		tool = KIND_TO_TOOL.get(item.get("kind", ""), Tool.NONE)
@@ -163,50 +242,119 @@ func select_item(item_id: String) -> void:
 			tool = Tool.NONE
 			_update_camera_pan()
 			return
+		if tool == Tool.PAINT:
+			paint_item_id = item_id
 	place_rotation = 0
+	place_diag = false
 	_cursor.visible = false
+	_joints_dirty = true
 	_update_camera_pan()
 	_show_tool_hint()
 
 
-func set_erase_mode(value: bool) -> void:
-	erase_mode = value
-	_cancel_gesture()
+## Borrar: una cosa por vez, o varias (modo selección).
+func set_erase_multi(value: bool) -> void:
+	erase_multi = value
+	if not value and _erase_items.size() > 1:
+		_clear_erase()
 	_show_tool_hint()
+
+
+## Compatibilidad con la interfaz vieja (botón "Borrar"): pasa a la
+## herramienta Borrar.
+func set_erase_mode(value: bool) -> void:
+	select_item(ERASE_TOOL_ID if value else "")
 
 
 ## Cambia de nivel (piso). Devuelve el nivel que quedó.
 func set_level(new_level: int) -> int:
 	level = clampi(new_level, 0, HouseGrid.MAX_LEVELS - 1)
+	_erase_items.clear()
 	_cancel_gesture()
 	select_object("")
+	_paint_face = {}
+	EventBus.build_paint_arrows.emit(false)
 	_grid.position.y = HouseGrid.level_y(level) + 0.03
+	_joints_dirty = true
 	return level
 
 
-## Botón "Girar": gira el mueble elegido, o el que se va a colocar.
+## Botón de girar: gira lo elegido, o el mueble que se va a colocar. Los
+## muebles van de a 45° (8 direcciones); escaleras y pilares de a 90°.
 func rotate_object() -> void:
-	if selected_key != "":
+	if selected_layer == "objects" and selected_key != "":
 		var value: Dictionary = house.get_piece(level, "objects", selected_key).duplicate(true)
-		value["rot"] = (int(value.get("rot", 0)) + 1) % 4
+		var next := next_orientation(value["item"], int(value.get("rot", 0)), value.get("diag", false))
+		value["rot"] = next[0]
+		if next[1]:
+			value["diag"] = true
+		else:
+			value.erase("diag")
 		var check := _check(_object_writes(selected_key, value))
 		if check["blocked"].is_empty():
-			_apply(check["ok"])
+			await _apply(check["ok"])
 		else:
 			EventBus.build_hint.emit("No hay lugar para girarlo aquí.")
 	elif tool == Tool.OBJECT:
-		place_rotation = (place_rotation + 1) % 4
-		EventBus.build_hint.emit("Girado. Arrastrá para colocarlo.")
+		var next := next_orientation(item.get("id", ""), place_rotation, place_diag)
+		place_rotation = next[0]
+		place_diag = next[1]
+		EventBus.build_hint.emit("Girado (%d°). Arrastrá para colocarlo." % HouseGrid.object_angle(place_rotation, place_diag))
 
 
-## Botón "Quitar": borra el mueble elegido.
+## El giro siguiente: [rot, diag]. Los muebles pasan por la diagonal.
+static func next_orientation(item_id: String, rot: int, diag: bool) -> Array:
+	if Catalog.get_item(item_id).get("kind", "") == "furniture":
+		if not diag:
+			return [rot, true]
+		return [(rot + 1) % 4, false]
+	return [(rot + 1) % 4, false]
+
+
+## Botón de borrar lo elegido (en Modificar): pregunta antes.
 func delete_selected() -> void:
 	if selected_key == "":
 		return
-	var key := selected_key
+	var entry := _erase_entry({"level": level, "layer": selected_layer, "key": selected_key})
 	select_object("")
-	if await _apply([HouseData.write(level, "objects", key, null)]):
-		EventBus.build_hint.emit("Quitaste el mueble.")
+	if entry.is_empty():
+		return
+	_erase_items = [entry]
+	_ask_erase()
+
+
+## Flechas N/S/E/O (Modificar): corre lo elegido una celda.
+func nudge_selected(direction: String) -> void:
+	if selected_key == "" or not DIRECTIONS.has(direction):
+		return
+	var step: Vector2i = DIRECTIONS[direction]
+	var value: Dictionary = house.get_piece(level, selected_layer, selected_key).duplicate(true)
+	var writes: Array = []
+	match selected_layer:
+		"objects":
+			var anchor := HouseData.object_anchor(value) + step
+			value["cell"] = [anchor.x, anchor.y]
+			writes = _object_writes(selected_key, value)
+		"roofs":
+			var rect := HouseData.roof_rect(value)
+			value["rect"] = [rect.position.x + step.x, rect.position.y + step.y, rect.size.x, rect.size.y]
+			writes = [HouseData.write(level, "roofs", selected_key, value)]
+		"walls":
+			var new_key := HouseGrid.edge_key(HouseGrid.edge_vertex(selected_key) + step,
+				HouseGrid.is_edge_horizontal(selected_key))
+			if house.has_piece(level, "walls", new_key):
+				EventBus.build_hint.emit("Ahí ya hay una pared.")
+				return
+			value.erase("join_end")
+			writes = [HouseData.write(level, "walls", selected_key, null), HouseData.write(level, "walls", new_key, value)]
+	var check := _check_move(writes)
+	if not check["blocked"].is_empty():
+		EventBus.build_hint.emit(_move_blocked_hint())
+		return
+	var layer := selected_layer
+	var moved_key := selected_key if layer != "walls" else str(writes[1]["key"])
+	if await _apply(check["ok"]):
+		select_object(moved_key, layer)
 
 
 ## Botón "Confirmar": aplica la selección que estaba esperando.
@@ -217,7 +365,7 @@ func confirm_pending() -> void:
 	var blocked := _pending_blocked
 	# Si no alcanza el dinero, la selección se conserva para ajustarla.
 	var money_change: int = Economy.quote(house, ok)["money"]
-	if not Economy.can_change(money_change):
+	if not has_draft() and not Economy.can_change(money_change):
 		EventBus.build_hint.emit("Te faltan $%d. Achicá la selección o cancelá." % (-money_change - Economy.money))
 		return
 	if not Economy.can_request():
@@ -228,22 +376,276 @@ func confirm_pending() -> void:
 
 ## Botón "Cancelar": descarta la selección que estaba esperando.
 func cancel_pending() -> void:
+	_erase_items.clear()
 	if _awaiting_confirm:
 		_cancel_gesture()
 		_show_tool_hint()
 
 
-## Marca un mueble como elegido ("" = ninguno).
-func select_object(key: String) -> void:
+## Marca algo como elegido en Modificar ("" = nada).
+func select_object(key: String, layer := "objects") -> void:
 	selected_key = key
+	selected_layer = layer if key != "" else ""
 	_update_selection_marker()
 	EventBus.build_selection_changed.emit(selected_key != "")
+
+
+## Menú de una pieza: la interfaz avisa qué opción se tocó.
+func context_action(action: String) -> void:
+	var target := _context_target
+	_context_target = {}
+	if target.is_empty():
+		return
+	match action:
+		"move":
+			select_object(target["key"], target["layer"])
+			EventBus.build_hint.emit("Usá las flechas para correrlo.")
+		"paint":
+			select_item(paint_item_id)
+			if target["layer"] == "walls":
+				_paint_tap_face({"edge": target["key"], "side": target.get("side", "b")})
+			else:
+				_paint_now([{"layer": target["layer"], "key": target["key"]}])
+		"erase", "erase_opening":
+			var entry := _erase_entry(target, action == "erase_opening")
+			if not entry.is_empty():
+				_erase_items = [entry]
+				_ask_erase()
+
+
+## Flechas de la pintura: pinta la pared de al lado (-1 = izquierda en la
+## pantalla, +1 = derecha).
+func paint_step(screen_dir: int) -> void:
+	if _paint_face.is_empty():
+		return
+	var cam := get_viewport().get_camera_3d()
+	var here := cam.unproject_position(to_global(WallFaces.face_center(_paint_face["edge"], _paint_face["side"])))
+	var best: Dictionary = {}
+	var best_x := INF
+	for dir in [-1, 1]:
+		var face := WallFaces.next_face(house, level, _paint_face["edge"], _paint_face["side"], dir)
+		if face.is_empty():
+			continue
+		var x := cam.unproject_position(to_global(WallFaces.face_center(face["edge"], face["side"]))).x - here.x
+		var score := x * screen_dir
+		if best.is_empty() or -score < best_x:
+			best = face
+			best_x = -score
+	if best.is_empty():
+		EventBus.build_hint.emit("No hay más pared pegada para ese lado.")
+		return
+	_paint_tap_face(best)
+
+
+## Un toque en una juntura (o la demo): une o separa esas dos ventanas.
+func toggle_joint(vertex: Vector2i) -> void:
+	var pair := HouseView.joint_walls(house, level, vertex)
+	if pair.is_empty():
+		return
+	var first: Dictionary = house.get_piece(level, "walls", pair[0]).duplicate(true)
+	var second: Dictionary = house.get_piece(level, "walls", pair[1])
+	if first.get("join_end", false):
+		first.erase("join_end")
+		EventBus.build_hint.emit("Ventanas separadas.")
+	elif first.get("opening", "") != second.get("opening", ""):
+		EventBus.build_hint.emit("Solo se unen dos ventanas iguales.")
+		return
+	else:
+		first["join_end"] = true
+		EventBus.build_hint.emit("Ventanas unidas.")
+	await _apply([HouseData.write(level, "walls", pair[0], first)])
+
+
+## "Copiar contorno de abajo": pone las paredes de afuera del piso de abajo
+## en este piso, con su losa completa (menos el hueco de las escaleras).
+## Queda esperando Confirmar (se ve cuánto cuesta).
+func copy_outline() -> void:
+	if level == 0:
+		EventBus.build_hint.emit("Subí a un piso de arriba para copiar el contorno de abajo.")
+		return
+	var writes := outline_writes(house, level)
+	if writes.is_empty():
+		EventBus.build_hint.emit("Abajo no hay piso para copiar (o ya está copiado).")
+		return
+	select_item("")
+	_start_plain_pending(writes)
+	EventBus.build_hint.emit("Así quedaría el contorno. Tocá «Confirmar» y después armá los cuartos.")
+
+
+## Las escrituras de "copiar contorno": losa y paredes de afuera de abajo.
+static func outline_writes(target: HouseData, to_level: int) -> Array:
+	var below := to_level - 1
+	var writes: Array = []
+	var cells := {}
+	for key in target.get_layer(below, "floors"):
+		cells[key] = true
+	for key in cells:
+		var cell := HouseGrid.key_to_cell(key)
+		if HouseRules.is_stairs_cell(target, below, cell) or target.has_piece(to_level, "floors", key):
+			continue
+		var floor_item: String = target.get_piece(below, "floors", key).get("item", "floor_basic")
+		writes.append(HouseData.write(to_level, "floors", key, {"item": floor_item}))
+	for key in cells:
+		var cell := HouseGrid.key_to_cell(key)
+		for edge in HouseGrid.cell_edges(cell):
+			var both := HouseGrid.edge_cells(edge)
+			var other: Vector2i = both[0] if both[1] == cell else both[1]
+			if cells.has(HouseGrid.cell_key(other)) or target.has_piece(to_level, "walls", edge):
+				continue
+			var wall_item := "wall_basic"
+			var below_wall: Variant = target.get_piece(below, "walls", edge)
+			if below_wall != null:
+				wall_item = below_wall["item"]
+			var write := HouseData.write(to_level, "walls", edge, {"item": wall_item})
+			if not write in writes:
+				writes.append(write)
+	return writes
+
+
+## El cuarto que se está mirando (centro de la cámara) o, si no hay, el del
+## personaje. {} si ninguno está en un cuarto cerrado.
+func room_here(character_level := -1, character_cell := Vector2i(-1, -1)) -> Dictionary:
+	if camera != null and view != null:
+		var local := view.to_local(camera.global_position)
+		var room := HouseRooms.room_at(house, level, Vector2i(floori(local.x), floori(local.z)))
+		if not room.is_empty():
+			return room
+	if character_level == level:
+		return HouseRooms.room_at(house, level, character_cell)
+	return {}
+
+
+# --- Propuesta (casa compartida) ---
+
+## ¿Hay una propuesta aplicada en la casa (mía o de la pareja)?
+func has_draft() -> bool:
+	return _draft_mode != ""
+
+
+func draft_mode() -> String:
+	return _draft_mode
+
+
+## Cuántos cambios tiene la propuesta y cuánto cuesta (lo que se va a pedir).
+func draft_summary() -> Dictionary:
+	var writes := draft_writes()
+	return {"steps": _draft_steps.size(), "pieces": writes.size(),
+		"cost": -int(Economy.quote(house_without_draft(), writes)["money"])}
+
+
+## La casa como era antes de la propuesta (lo que se guarda en el teléfono).
+func house_without_draft() -> HouseData:
+	var copy := house.duplicate_data()
+	for i in range(_draft_steps.size() - 1, -1, -1):
+		copy.apply(_draft_steps[i]["inverse"])
+	return copy
+
+
+## Todas las piezas que cambia la propuesta, juntas (lo último de cada lugar).
+func draft_writes() -> Array:
+	var original := house_without_draft()
+	var seen := {}
+	var writes: Array = []
+	for step in _draft_steps:
+		for w in step["writes"]:
+			var id := "%d|%s|%s" % [w["level"], w["layer"], w["key"]]
+			if seen.has(id):
+				continue
+			seen[id] = true
+			var now: Variant = house.get_piece(w["level"], w["layer"], w["key"])
+			var before: Variant = original.get_piece(w["level"], w["layer"], w["key"])
+			if JSON.stringify(now) != JSON.stringify(before):
+				writes.append(HouseData.write(w["level"], w["layer"], w["key"], now))
+	return writes
+
+
+## Deshacer dentro de la propuesta: saca el último cambio.
+func draft_undo() -> void:
+	if _draft_mode != "own" or _draft_steps.is_empty():
+		return
+	var step: Dictionary = _draft_steps.pop_back()
+	house.apply(step["inverse"])
+	if _draft_steps.is_empty():
+		_end_draft()
+	else:
+		_announce_draft()
+
+
+## Saca la propuesta de la casa (sin mandarla).
+func discard_draft() -> void:
+	_cancel_gesture()
+	select_object("")
+	for i in range(_draft_steps.size() - 1, -1, -1):
+		house.apply(_draft_steps[i]["inverse"])
+	_end_draft()
+
+
+## Manda la propuesta entera a la pareja (un solo pedido).
+func send_draft() -> bool:
+	if _draft_mode != "own" or not Economy.can_request():
+		return false
+	var writes := draft_writes()
+	discard_draft()
+	if writes.is_empty():
+		return true
+	EventBus.build_hint.emit(Economy.BUSY_TEXT)
+	var result: Dictionary = await Economy.request("build_apply", {"writes": writes})
+	if not result["ok"]:
+		EventBus.build_hint.emit(result["error"])
+		_add_to_draft(writes)  # Se vuelve a ver para corregirla.
+		return false
+	if result["data"].get("requested", false):
+		EventBus.build_hint.emit("Le mandaste la propuesta a %s (%s)." % [Couple.partner_name(), str(result["data"].get("text", ""))])
+		EventBus.toast.emit("Propuesta enviada a %s." % Couple.partner_name())
+	else:
+		history.apply_remote(CloudSync.writes_from_server(result["data"].get("writes", [])))
+		_show_money_hint(int(result["data"].get("money_change", 0)))
+	return true
+
+
+## Ver la propuesta de la pareja en la casa (sin aprobarla todavía).
+func show_review(request: Dictionary, writes: Array) -> void:
+	if has_draft():
+		discard_draft()
+	_review_request = request
+	_draft_mode = "review"
+	_draft_steps = [{"writes": writes, "inverse": house.apply(writes)}]
+	_joints_dirty = true
+	_announce_draft()
+
+
+## Deja de ver la propuesta de la pareja.
+func close_review() -> void:
+	if _draft_mode == "review":
+		discard_draft()
+
+
+func review_request() -> Dictionary:
+	return _review_request
+
+
+func _add_to_draft(writes: Array) -> void:
+	_draft_mode = "own"
+	var inverse := house.apply(writes)
+	_draft_steps.append({"writes": writes, "inverse": inverse})
+	_announce_draft()
+
+
+func _end_draft() -> void:
+	_draft_steps.clear()
+	_draft_mode = ""
+	_review_request = {}
+	EventBus.proposal_changed.emit("", {})
+
+
+func _announce_draft() -> void:
+	EventBus.proposal_changed.emit(_draft_mode, draft_summary())
 
 
 # --- Entrada (toques y mouse) ---
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not active or tool == Tool.NONE:
+	if not active or tool == Tool.NONE and not _awaiting_confirm:
 		return
 
 	if event is InputEventScreenTouch:
@@ -294,14 +696,28 @@ func _begin(screen_pos: Vector2) -> void:
 	_paint_targets.clear()
 
 	# ¿Agarró una manija de la selección que espera confirmación?
-	if _awaiting_confirm:
+	if _awaiting_confirm and tool in HANDLE_TOOLS and not _pending_plain:
 		var handle := _handle_at(screen_pos)
 		if handle >= 0:
 			_drag_handle = handle
 			_pressing = true
 			return
 
-	if tool != Tool.MOVE and not _is_on_lot(screen_pos):
+	if tool == Tool.NONE:
+		return  # Sin herramienta, el dedo mueve la cámara.
+
+	if tool in PRESS_TOOLS:
+		# Tocar o mantener: se decide al soltar (o al pasar el tiempo).
+		_pressing = true
+		_press_pos = screen_pos
+		_press_msec = Time.get_ticks_msec()
+		_moved = false
+		_long_pressed = false
+		_last_screen_pos = screen_pos
+		_update_camera_pan()
+		return
+
+	if not _is_on_lot(screen_pos):
 		# Fuera del lote, el dedo mueve la cámara (la selección se conserva).
 		_camera_takeover = true
 		_update_camera_pan()
@@ -309,18 +725,6 @@ func _begin(screen_pos: Vector2) -> void:
 
 	if _awaiting_confirm:
 		_cancel_gesture()  # Tocó otra parte del lote: selección nueva.
-
-	if tool == Tool.MOVE:
-		var key := _pick_object(screen_pos)
-		select_object(key)
-		if key == "" or erase_mode:
-			if key != "" and erase_mode:
-				delete_selected()
-			return  # Tocó en el vacío: la cámara se mueve como siempre.
-		_moving_key = key
-		var anchor := HouseData.object_anchor(house.get_piece(level, "objects", key))
-		_grab_offset = _cell_at(screen_pos, false) - anchor
-		_update_camera_pan()
 
 	_pressing = true
 	_start_cell = _cell_at(screen_pos, true)
@@ -334,6 +738,13 @@ func _begin(screen_pos: Vector2) -> void:
 ## El dedo o el mouse se movió durante el gesto.
 func _update(screen_pos: Vector2) -> void:
 	_last_screen_pos = screen_pos
+	if tool in PRESS_TOOLS and _drag_handle < 0:
+		if not _long_pressed:
+			if screen_pos.distance_to(_press_pos) > TAP_MOVE_PIXELS:
+				_moved = true  # Es la cámara la que se mueve.
+			return
+		_update_long_drag(screen_pos)
+		return
 	if tool in HANDLE_TOOLS and _pressing:
 		if _drag_handle == 0:
 			_start_cell = _cell_at(screen_pos, true)
@@ -342,13 +753,11 @@ func _update(screen_pos: Vector2) -> void:
 			_end_cell = _cell_at(screen_pos, true)
 			_end_vertex = _vertex_at(screen_pos)
 		_update_handles()
-	var writes := _erase_writes(screen_pos) if erase_mode and tool != Tool.WINDOW_JOIN else _place_writes(screen_pos)
-	var check := _check(writes)
+	var check := _check(_place_writes(screen_pos))
 	_pending_ok = check["ok"]
 	_pending_blocked = check["blocked"]
 	if tool in HANDLE_TOOLS and _pressing:
-		EventBus.build_approval_changed.emit(needs_approval(_pending_ok))
-		EventBus.build_cost_changed.emit(-Economy.quote(house, _pending_ok)["money"])
+		_announce_cost()
 	_show_preview()
 
 
@@ -357,8 +766,18 @@ func _release() -> void:
 	if _camera_takeover:
 		_camera_takeover = false
 		_update_camera_pan()
-	if _pressing:
-		_finish()
+	if not _pressing:
+		return
+	if tool in PRESS_TOOLS and _drag_handle < 0:
+		_pressing = false
+		if _long_pressed:
+			_finish_long_drag()
+		elif not _moved:
+			_on_tap(_press_pos)
+		_long_pressed = false
+		_update_camera_pan()
+		return
+	_finish()
 
 
 ## Termina el gesto: aplica lo que se podía, o deja la selección esperando.
@@ -370,6 +789,7 @@ func _finish() -> void:
 			_awaiting_confirm = true
 			EventBus.build_pending_changed.emit(true)
 		_update_handles()
+		_announce_cost()
 		if _pending_blocked.is_empty():
 			EventBus.build_hint.emit("Mové los círculos para ajustar y tocá «Confirmar».")
 		else:
@@ -388,12 +808,370 @@ func _on_second_finger() -> void:
 	if _awaiting_confirm:
 		_pressing = false
 		_drag_handle = -1
+		_long_pressed = false
+		_update_camera_pan()
 	else:
 		_cancel_gesture()
 
 
+# --- Tocar y mantener (Modificar, Pintura, Borrar) ---
+
+func _on_tap(screen_pos: Vector2) -> void:
+	match tool:
+		Tool.MODIFY:
+			var joint := _joint_at(screen_pos)
+			if joint != Vector2i(-1, -1):
+				toggle_joint(joint)
+				return
+			var target := _pick_any(screen_pos)
+			if target.is_empty():
+				select_object("")
+				_show_tool_hint()
+			elif target["layer"] == "objects":
+				select_object(target["key"])
+				EventBus.build_hint.emit("Flechas para correrlo, girar o borrar. Mantené presionado para llevarlo con el dedo.")
+			else:
+				_open_context_menu(target)
+		Tool.PAINT:
+			var face := _pick_wall_face(screen_pos)
+			if not face.is_empty():
+				_paint_tap_face(face)
+				return
+			var floor_key := _pick_floor(screen_pos)
+			if floor_key != "":
+				_paint_face = {}
+				EventBus.build_paint_arrows.emit(false)
+				_paint_now([{"layer": "floors", "key": floor_key}])
+		Tool.ERASE:
+			var target := _pick_any(screen_pos)
+			if target.is_empty():
+				if not erase_multi:
+					_clear_erase()
+				return
+			var entry := _erase_entry(target)
+			if entry.is_empty():
+				return
+			var existing := _erase_items.filter(func(e): return e["id"] == entry["id"])
+			if erase_multi:
+				if not existing.is_empty():
+					_erase_items.erase(existing[0])
+				else:
+					_erase_items.append(entry)
+			else:
+				_erase_items = [entry]
+			if _erase_items.is_empty():
+				_clear_erase()
+			else:
+				_ask_erase()
+
+
+func _on_long_press(screen_pos: Vector2) -> void:
+	_long_pressed = true
+	match tool:
+		Tool.MODIFY:
+			var target := _pick_any(screen_pos)
+			if target.is_empty():
+				_long_pressed = false
+				_moved = true  # Nada que hacer: que siga la cámara.
+				return
+			if target["layer"] == "objects":
+				# Se levanta y sigue al dedo (la marca va separada del dedo).
+				select_object(target["key"])
+				_moving_key = target["key"]
+				var anchor := HouseData.object_anchor(house.get_piece(level, "objects", _moving_key))
+				_grab_offset = _cell_at(screen_pos, false) - anchor
+				EventBus.build_hint.emit("Llevalo con el dedo y soltá donde va.")
+			else:
+				_long_pressed = false
+				_moved = true
+				_open_context_menu(target)
+				return
+		Tool.PAINT:
+			var face := _pick_wall_face(screen_pos)
+			_paint_surface = "walls" if not face.is_empty() else ("floors" if _pick_floor(screen_pos) != "" else "")
+			if _paint_surface == "":
+				_long_pressed = false
+				_moved = true
+				return
+			_paint_face = {}
+			EventBus.build_paint_arrows.emit(false)
+			_ripple(screen_pos)
+			EventBus.build_hint.emit("Pintando %s: arrastrá el dedo." % ("paredes" if _paint_surface == "walls" else "pisos"))
+		Tool.ERASE:
+			var target := _pick_any(screen_pos)
+			if target.is_empty() or not target["layer"] in ["floors", "foundation", "walls"]:
+				_long_pressed = false
+				_moved = true
+				return
+			_erase_rect_layer = target["layer"]
+			_start_cell = _cell_at(screen_pos, true)
+			_start_vertex = _vertex_at(screen_pos)
+			_ripple(screen_pos)
+			EventBus.build_hint.emit("Arrastrá para elegir varias de una vez.")
+	_update_camera_pan()
+	_update_long_drag(screen_pos)
+
+
+func _update_long_drag(screen_pos: Vector2) -> void:
+	match tool:
+		Tool.MODIFY:
+			if _moving_key == "":
+				return
+			var value: Dictionary = house.get_piece(level, "objects", _moving_key).duplicate(true)
+			var anchor := _cell_at(screen_pos, false) - _grab_offset
+			var writes: Array = []
+			if anchor != HouseData.object_anchor(value):
+				value["cell"] = [anchor.x, anchor.y]
+				writes = _object_writes(_moving_key, value)
+			var check := _check(writes)
+			_pending_ok = check["ok"]
+			_pending_blocked = check["blocked"]
+			_show_preview()
+		Tool.PAINT:
+			if _paint_surface == "walls":
+				var face := _pick_wall_face(screen_pos)
+				if not face.is_empty():
+					_paint_targets["walls|%s|%s" % [face["edge"], face["side"]]] = true
+			else:
+				var floor_key := _pick_floor(screen_pos)
+				if floor_key != "":
+					_paint_targets["floors|" + floor_key] = true
+			var check := _check(_paint_writes())
+			_pending_ok = check["ok"]
+			_pending_blocked = check["blocked"]
+			_show_preview()
+		Tool.ERASE:
+			_end_cell = _cell_at(screen_pos, true)
+			_end_vertex = _vertex_at(screen_pos)
+			var writes: Array = []
+			if _erase_rect_layer == "walls":
+				for edge in HouseGrid.edges_in_line(_start_vertex, _end_vertex):
+					_add_removal(writes, level, "walls", edge)
+			else:
+				for c in HouseGrid.cells_in_rect(_start_cell, _end_cell):
+					_add_removal(writes, level if _erase_rect_layer == "floors" else 0, _erase_rect_layer, HouseGrid.cell_key(c))
+			var check := HouseRules.check_removal(house, writes)
+			_pending_ok = check["ok"]
+			_pending_blocked = check["blocked"]
+			_show_preview()
+
+
+func _finish_long_drag() -> void:
+	match tool:
+		Tool.MODIFY:
+			var ok := _pending_ok
+			var blocked := _pending_blocked
+			var key := _moving_key
+			_moving_key = ""
+			_clear_preview()
+			_pending_ok = []
+			_pending_blocked = []
+			if not blocked.is_empty():
+				EventBus.build_hint.emit(_blocked_hint())
+			elif not ok.is_empty():
+				await _apply(ok)
+			select_object(key)
+		Tool.PAINT:
+			var ok := _pending_ok
+			_paint_targets.clear()
+			_paint_surface = ""
+			_clear_preview()
+			_pending_ok = []
+			await _apply(ok)
+			_show_tool_hint()
+		Tool.ERASE:
+			for w in _pending_ok:
+				var entry := {"id": "%d|%s|%s" % [w["level"], w["layer"], w["key"]], "label": _piece_name(w["layer"]),
+					"writes": [w]}
+				if _erase_items.filter(func(e): return e["id"] == entry["id"]).is_empty():
+					_erase_items.append(entry)
+			if not _pending_blocked.is_empty():
+				EventBus.toast.emit("Algunas no se pueden borrar: tienen algo encima.")
+			_pending_ok = []
+			_pending_blocked = []
+			_clear_preview()
+			if _erase_items.is_empty():
+				_clear_erase()
+			else:
+				_ask_erase()
+
+
+## Pinta una cara de pared con un toque y deja las flechas para seguir.
+func _paint_tap_face(face: Dictionary) -> void:
+	_paint_face = face
+	_paint_now([{"layer": "walls", "key": face["edge"], "side": face["side"]}])
+	EventBus.build_paint_arrows.emit(true)
+	_update_selection_marker()
+
+
+## Pinta ya (sin esperar Confirmar): pintar no cuesta.
+func _paint_now(targets: Array) -> void:
+	var color: String = Catalog.get_item(paint_item_id).get("color", "#ffffff")
+	var writes: Array = []
+	for t in targets:
+		var value: Variant = house.get_piece(level, t["layer"], t["key"])
+		if value == null:
+			continue
+		value = (value as Dictionary).duplicate(true)
+		if t["layer"] == "walls":
+			value["color_" + t.get("side", "b")] = color
+		else:
+			value["color"] = color
+		writes.append(HouseData.write(level, t["layer"], t["key"], value))
+	await _apply(writes)
+
+
+## Escrituras de lo que se fue pintando arrastrando.
+func _paint_writes() -> Array:
+	var color: String = Catalog.get_item(paint_item_id).get("color", "#ffffff")
+	var by_key := {}
+	var writes: Array = []
+	for target in _paint_targets:
+		var parts: PackedStringArray = target.split("|")
+		var id := parts[0] + "|" + parts[1]
+		var value: Variant = by_key.get(id, house.get_piece(level, parts[0], parts[1]))
+		if value == null:
+			continue
+		value = (value as Dictionary).duplicate(true)
+		if parts[0] == "walls":
+			value["color_" + parts[2]] = color
+		else:
+			value["color"] = color
+		by_key[id] = value
+	for id in by_key:
+		var parts: PackedStringArray = id.split("|")
+		writes.append(HouseData.write(level, parts[0], parts[1], by_key[id]))
+	return writes
+
+
+# --- Borrar ---
+
+## Lo que se borra al tocar algo: {id, label, writes}. Una pared con puerta o
+## ventana pierde primero la abertura. {} si no se puede (y avisa por qué).
+func _erase_entry(target: Dictionary, opening_only := false) -> Dictionary:
+	var lvl: int = target.get("level", level)
+	var layer: String = target["layer"]
+	var key: String = target["key"]
+	var value: Variant = house.get_piece(lvl, layer, key)
+	if value == null:
+		return {}
+	if layer == "walls" and (opening_only or value.has("opening")) and value.has("opening"):
+		var wall: Dictionary = value.duplicate(true)
+		var opening_name: String = Catalog.get_item(wall["opening"]).get("name", "abertura")
+		wall.erase("opening")
+		wall.erase("join_end")
+		var writes: Array = [HouseData.write(lvl, layer, key, wall)]
+		writes.append_array(_unjoin_previous(lvl, key))
+		return {"id": "%d|%s|%s|opening" % [lvl, layer, key], "label": opening_name.to_lower(), "writes": writes}
+	var w := HouseData.write(lvl, layer, key, null)
+	var reason := HouseRules.removal_reason(house, w)
+	if reason != "":
+		EventBus.build_hint.emit(reason)
+		EventBus.toast.emit(reason)
+		return {}
+	var writes: Array = [w]
+	if layer == "walls":
+		writes.append_array(_unjoin_previous(lvl, key))
+	return {"id": "%d|%s|%s" % [lvl, layer, key], "label": _piece_name(layer, value), "writes": writes}
+
+
+## Si la pared de antes estaba unida a esta, se separa (la juntura se va).
+func _unjoin_previous(lvl: int, key: String) -> Array:
+	var previous := HouseGrid.previous_in_line(key)
+	var prev: Variant = house.get_piece(lvl, "walls", previous)
+	if prev == null or not prev.get("join_end", false):
+		return []
+	var copy: Dictionary = prev.duplicate(true)
+	copy.erase("join_end")
+	return [HouseData.write(lvl, "walls", previous, copy)]
+
+
+## Muestra lo elegido para borrar (en rojo) y pregunta.
+func _ask_erase() -> void:
+	var writes: Array = []
+	for entry in _erase_items:
+		writes.append_array(entry["writes"])
+	_start_plain_pending(writes)
+	var refund: int = Economy.quote(house, writes)["money"]
+	var label := ""
+	if _erase_items.size() == 1:
+		label = "¿Borrar %s?" % _erase_items[0]["label"]
+		EventBus.build_confirm_label.emit("Borrar · te devuelven $%d" % refund)
+	else:
+		label = "¿Borrar %d cosas?" % _erase_items.size()
+		EventBus.build_confirm_label.emit("Borrar %d cosas · te devuelven $%d" % [_erase_items.size(), refund])
+	EventBus.build_hint.emit("%s Te devuelven $%d." % [label, refund])
+
+
+func _clear_erase() -> void:
+	_erase_items.clear()
+	if _awaiting_confirm:
+		_cancel_gesture()
+	_show_tool_hint()
+
+
+## Deja unas escrituras esperando Confirmar, sin manijas.
+func _start_plain_pending(writes: Array) -> void:
+	_cancel_gesture()
+	var adds: Array = writes.filter(func(w): return w["value"] != null)
+	var check := _check(writes) if not adds.is_empty() else {"ok": writes, "blocked": []}
+	_pending_ok = check["ok"]
+	_pending_blocked = check["blocked"]
+	_pending_plain = true
+	_awaiting_confirm = true
+	EventBus.build_pending_changed.emit(true)
+	_announce_cost()
+	_show_preview()
+
+
+func _piece_name(layer: String, value: Variant = null) -> String:
+	match layer:
+		"roofs":
+			return "el techo"
+		"walls":
+			return "la pared"
+		"floors":
+			return "el piso"
+		"foundation":
+			return "los cimientos"
+		"objects":
+			if value != null:
+				return Catalog.get_item(value["item"]).get("name", "el mueble").to_lower()
+			return "el mueble"
+	return "eso"
+
+
+# --- Menú de una pieza (Modificar) ---
+
+func _open_context_menu(target: Dictionary) -> void:
+	_context_target = target
+	var value: Dictionary = house.get_piece(level, target["layer"], target["key"])
+	var title: String = Catalog.get_item(value.get("item", "")).get("name", "Pieza")
+	var options: Array = []
+	match target["layer"]:
+		"walls":
+			options.append({"id": "paint", "text": "Pintar esta cara"})
+			options.append({"id": "move", "text": "Mover"})
+			if value.has("opening"):
+				var opening_name: String = Catalog.get_item(value["opening"]).get("name", "abertura")
+				options.append({"id": "erase_opening", "text": "Quitar %s" % opening_name.to_lower()})
+			options.append({"id": "erase", "text": "Borrar pared"})
+		"roofs":
+			options.append({"id": "move", "text": "Mover"})
+			options.append({"id": "erase", "text": "Borrar techo"})
+		"floors":
+			options.append({"id": "paint", "text": "Pintar"})
+			options.append({"id": "erase", "text": "Borrar piso"})
+		"foundation":
+			options.append({"id": "erase", "text": "Borrar cimientos"})
+	EventBus.build_context_menu.emit(title, options)
+
+
+# --- Aplicar ---
+
 ## Aplica las escrituras como un paso de deshacer y avisa qué pasó.
 func _commit(ok: Array, blocked: Array) -> void:
+	_erase_items.clear()
 	var applied: bool = await _apply(ok)
 	if not applied:
 		return  # _apply ya explicó por qué (no alcanza el dinero, sin conexión...).
@@ -407,15 +1185,23 @@ func _commit(ok: Array, blocked: Array) -> void:
 ## deshacer y anota lo construido. Devuelve false si no se pudo.
 ## Con servidor (Fase 4B) se le pide a él y se espera su respuesta: él cobra,
 ## pone la hora de las obras y guarda el paso de deshacer.
+## En la casa compartida, lo estructural va a la propuesta.
 func _apply(writes: Array) -> bool:
 	if writes.is_empty():
 		return true
+	if _draft_mode == "review":
+		EventBus.build_hint.emit("Estás viendo la propuesta de tu pareja: cerrala para construir.")
+		return false
 	if not Economy.can_request():
 		return false
 	# Lo nuevo recibe su id definitivo ahora.
 	for w in writes:
 		if w["key"] == NEW_KEY:
 			w["key"] = house.new_id()
+	if needs_approval(writes):
+		_add_to_draft(writes)
+		EventBus.build_hint.emit("Agregado a la propuesta. Cuando termines, mandala a %s." % Couple.partner_name())
+		return true
 	var quote := Economy.quote(house, writes)
 	var money_change: int = quote["money"]
 	if not Economy.can_change(money_change):
@@ -429,15 +1215,16 @@ func _apply(writes: Array) -> bool:
 	return true
 
 
-## Fase 5: en la casa compartida, ¿este cambio necesita la aprobación de
-## la pareja? (lo decide el servidor; esto es para avisar antes)
+## Casa compartida: ¿este cambio va a la propuesta? Lo estructural sí (lo
+## decide el servidor; esto es para avisar antes), y si ya hay una
+## propuesta armándose, todo va ahí.
 func needs_approval(writes: Array) -> bool:
-	return Economy.shared and not writes.is_empty() and not HousePermissions.is_minor(house, writes)
+	if not Economy.shared or writes.is_empty():
+		return false
+	return _draft_mode == "own" or not HousePermissions.is_minor(house, writes)
 
 
 ## Manda el cambio al servidor y aplica lo que él aceptó.
-## En la casa compartida, un cambio estructural no se aplica: queda como
-## pedido de permiso hasta que la pareja lo apruebe.
 func _apply_on_server(writes: Array) -> bool:
 	EventBus.build_hint.emit(Economy.BUSY_TEXT)
 	var result: Dictionary = await Economy.request("build_apply", {"writes": writes})
@@ -464,16 +1251,19 @@ func _show_money_hint(money_change: int) -> void:
 		_show_tool_hint()
 
 
+## Avisa cuánto cuesta lo que espera Confirmar (y si va a la propuesta).
+func _announce_cost() -> void:
+	EventBus.build_approval_changed.emit(needs_approval(_pending_ok))
+	EventBus.build_cost_changed.emit(-Economy.quote(house, _pending_ok)["money"])
+
+
 ## Mouse moviéndose sin apretar (solo en la PC): muestra dónde caería.
 func _hover(screen_pos: Vector2) -> void:
-	if _awaiting_confirm:
+	if _awaiting_confirm or tool in PRESS_TOOLS:
 		return
 	match tool:
-		Tool.OBJECT, Tool.OPENING, Tool.WINDOW_JOIN:
-			if not erase_mode or tool == Tool.WINDOW_JOIN:
-				_update(screen_pos)
-				return
-		Tool.MOVE:
+		Tool.OBJECT, Tool.OPENING:
+			_update(screen_pos)
 			return
 	_clear_preview()
 	var point: Variant = _point_on_level(screen_pos)
@@ -494,10 +1284,13 @@ func _hover(screen_pos: Vector2) -> void:
 func _cancel_gesture() -> void:
 	_pressing = false
 	_drag_handle = -1
+	_long_pressed = false
 	if _awaiting_confirm:
 		_awaiting_confirm = false
 		EventBus.build_pending_changed.emit(false)
+	_pending_plain = false
 	_paint_targets.clear()
+	_paint_surface = ""
 	_pending_ok = []
 	_pending_blocked = []
 	_moving_key = ""
@@ -540,84 +1333,52 @@ func _place_writes(screen_pos: Vector2) -> Array:
 				var wall: Dictionary = house.get_piece(level, "walls", edge).duplicate(true)
 				if wall.get("opening", "") != item["id"]:
 					wall["opening"] = item["id"]
+					wall.erase("join_end")
 					writes.append(HouseData.write(level, "walls", edge, wall))
+					writes.append_array(_auto_join(edge, wall))
 		Tool.OBJECT:
 			var anchor := _centered_anchor(_cell_at(screen_pos, false), place_rotation)
-			writes.append_array(_object_writes(NEW_KEY,
-				{"item": item["id"], "cell": [anchor.x, anchor.y], "rot": place_rotation}))
-		Tool.MOVE:
-			if _moving_key != "":
-				var value: Dictionary = house.get_piece(level, "objects", _moving_key).duplicate(true)
-				var anchor := _cell_at(screen_pos, false) - _grab_offset
-				if anchor != HouseData.object_anchor(value):
-					value["cell"] = [anchor.x, anchor.y]
-					writes.append_array(_object_writes(_moving_key, value))
-		Tool.WINDOW_JOIN:
-			# Marca la ventana como "separada" (o le quita la marca).
-			var edge := _pick_wall(screen_pos)
-			if edge != "":
-				var wall: Dictionary = house.get_piece(level, "walls", edge).duplicate(true)
-				if Catalog.get_item(wall.get("opening", "")).get("kind", "") == "window":
-					if wall.get("separate", false):
-						wall.erase("separate")
-					else:
-						wall["separate"] = true
-					writes.append(HouseData.write(level, "walls", edge, wall))
-		Tool.PAINT:
-			_collect_paint_target(screen_pos)
-			for target in _paint_targets:
-				var parts: PackedStringArray = target.split("|")
-				var value: Dictionary = house.get_piece(level, parts[0], parts[1]).duplicate(true)
-				value["color"] = item["color"]
-				writes.append(HouseData.write(level, parts[0], parts[1], value))
+			var value := {"item": item["id"], "cell": [anchor.x, anchor.y], "rot": place_rotation}
+			if place_diag:
+				value["diag"] = true
+			writes.append_array(_object_writes(NEW_KEY, value))
 	return writes
 
 
-## Escrituras para QUITAR según la herramienta y dónde está el dedo.
-func _erase_writes(screen_pos: Vector2) -> Array:
-	var writes: Array = []
-	var cell := _end_cell
-	match tool:
-		Tool.FOUNDATION:
-			for c in HouseGrid.cells_in_rect(_start_cell, cell):
-				_add_removal(writes, 0, "foundation", HouseGrid.cell_key(c))
-		Tool.FLOOR:
-			for c in HouseGrid.cells_in_rect(_start_cell, cell):
-				_add_removal(writes, level, "floors", HouseGrid.cell_key(c))
-		Tool.WALL:
-			for edge in HouseGrid.edges_in_line(_start_vertex, _end_vertex):
-				_add_removal(writes, level, "walls", edge)
-		Tool.ROOM:
-			for edge in HouseGrid.edges_around_rect(_start_cell, cell):
-				_add_removal(writes, level, "walls", edge)
-			for c in HouseGrid.cells_in_rect(_start_cell, cell):
-				_add_removal(writes, level, "floors", HouseGrid.cell_key(c))
-		Tool.ROOF:
-			var area := Rect2i(_start_cell, Vector2i.ONE).merge(Rect2i(cell, Vector2i.ONE))
-			for key in house.get_layer(level, "roofs"):
-				if HouseData.roof_rect(house.get_piece(level, "roofs", key)).intersects(area):
-					writes.append(HouseData.write(level, "roofs", key, null))
-		Tool.OPENING:
-			var edge := _pick_wall(screen_pos)
-			if edge != "":
-				var wall: Dictionary = house.get_piece(level, "walls", edge).duplicate(true)
-				if wall.has("opening"):
-					wall.erase("opening")
-					writes.append(HouseData.write(level, "walls", edge, wall))
-		Tool.OBJECT:
-			var key := _pick_object(screen_pos)
-			if key != "":
-				writes.append(HouseData.write(level, "objects", key, null))
-		Tool.PAINT:
-			# Borrar pintura = volver al color original de la pieza.
-			_collect_paint_target(screen_pos)
-			for target in _paint_targets:
-				var parts: PackedStringArray = target.split("|")
-				var value: Dictionary = house.get_piece(level, parts[0], parts[1]).duplicate(true)
-				if value.has("color"):
-					value.erase("color")
-					writes.append(HouseData.write(level, parts[0], parts[1], value))
-	return writes
+## Ventanas iguales seguidas se unen solas al ponerlas (como antes): la unión
+## se guarda en la juntura (join_end de la pared que termina ahí). La
+## primera escritura (`wall`) ya está en la lista; esto agrega el resto.
+func _auto_join(edge: String, wall: Dictionary) -> Array:
+	var extra: Array = []
+	if Catalog.get_item(wall["opening"]).get("kind", "") != "window":
+		_unjoin_previous_into(extra, edge)
+		return extra
+	var previous := HouseGrid.previous_in_line(edge)
+	var prev: Variant = house.get_piece(level, "walls", previous)
+	var start := HouseGrid.edge_vertex(edge)
+	if prev != null and prev.get("opening", "") == wall["opening"] and _only_two_at(start, previous, edge):
+		var copy: Dictionary = prev.duplicate(true)
+		copy["join_end"] = true
+		extra.append(HouseData.write(level, "walls", previous, copy))
+	else:
+		_unjoin_previous_into(extra, edge)
+	var next := HouseGrid.next_in_line(edge)
+	var nxt: Variant = house.get_piece(level, "walls", next)
+	if nxt != null and nxt.get("opening", "") == wall["opening"] and _only_two_at(HouseGrid.edge_vertices(edge)[1], edge, next):
+		wall["join_end"] = true
+	return extra
+
+
+func _unjoin_previous_into(writes: Array, edge: String) -> void:
+	writes.append_array(_unjoin_previous(level, edge))
+
+
+## ¿En ese vértice se juntan solo esas dos paredes?
+func _only_two_at(vertex: Vector2i, a: String, b: String) -> bool:
+	for edge in HouseGrid.vertex_edges(vertex):
+		if edge != a and edge != b and house.has_piece(level, "walls", edge):
+			return false
+	return true
 
 
 ## Pone una pieza solo si no está ya igual (no repite trabajo).
@@ -627,14 +1388,17 @@ func _add_if_new(writes: Array, lvl: int, layer: String, key: String, value: Dic
 		writes.append(HouseData.write(lvl, layer, key, value))
 
 
-## Pone una pared. Si ya había otra de distinto tipo, conserva su puerta o ventana.
+## Pone una pared. Si ya había otra de distinto tipo, conserva su puerta,
+## ventana, unión y pintura.
 func _add_wall(writes: Array, edge: String, wall_item: String) -> void:
 	var current: Variant = house.get_piece(level, "walls", edge)
 	if current != null and current["item"] == wall_item:
 		return
 	var value := {"item": wall_item}
-	if current != null and current.has("opening"):
-		value["opening"] = current["opening"]
+	if current != null:
+		for field in ["opening", "join_end", "color_a", "color_b"]:
+			if current.has(field):
+				value[field] = current[field]
 	writes.append(HouseData.write(level, "walls", edge, value))
 
 
@@ -647,11 +1411,8 @@ func _add_removal(writes: Array, lvl: int, layer: String, key: String) -> void:
 ## hueco en el piso de arriba (quita esas baldosas).
 func _object_writes(key: String, value: Dictionary) -> Array:
 	var writes: Array = [HouseData.write(level, "objects", key, value)]
-	var object_item := Catalog.get_item(value["item"])
-	if object_item.get("kind", "") == "stairs":
-		var cells := HouseGrid.object_cells(HouseData.item_footprint(object_item),
-			HouseData.object_anchor(value), int(value.get("rot", 0)))
-		for c in cells:
+	if Catalog.get_item(value["item"]).get("kind", "") == "stairs":
+		for c in HouseData.value_cells(value):
 			_add_removal(writes, level + 1, "floors", HouseGrid.cell_key(c))
 	return writes
 
@@ -660,19 +1421,6 @@ func _object_writes(key: String, value: Dictionary) -> Array:
 func _centered_anchor(cell: Vector2i, rot: int) -> Vector2i:
 	var size := HouseGrid.rotated_size(HouseData.item_footprint(item), rot)
 	return cell - (size - Vector2i.ONE) / 2
-
-
-## Agrega a la lista de pintura lo que está bajo el dedo (pared o piso).
-func _collect_paint_target(screen_pos: Vector2) -> void:
-	var edge := _pick_wall(screen_pos, false)
-	if edge != "":
-		_paint_targets["walls|" + edge] = true
-		return
-	var point: Variant = _point_on_level(screen_pos)
-	if point != null:
-		var key := HouseGrid.cell_key(Vector2i(floori(point.x), floori(point.z)))
-		if house.has_piece(level, "floors", key):
-			_paint_targets["floors|" + key] = true
 
 
 ## Revisa las reglas. Devuelve {"ok": [...], "blocked": [...]}.
@@ -689,9 +1437,23 @@ func _check(writes: Array) -> Dictionary:
 	var ok: Array = place_check["ok"] + removal_check["ok"]
 	var blocked: Array = place_check["blocked"] + removal_check["blocked"]
 
-	if tool in ALL_OR_NOTHING and not erase_mode and not blocked.is_empty():
+	if tool in ALL_OR_NOTHING and not blocked.is_empty():
 		return {"ok": [], "blocked": writes}
 	return {"ok": ok, "blocked": blocked}
+
+
+## Mover (flechas): todo o nada, quitando lo viejo antes de poner lo nuevo.
+func _check_move(writes: Array) -> Dictionary:
+	var sim := house.duplicate_data()
+	for w in writes:
+		if w["value"] == null:
+			var removal := HouseRules.check_removal(sim, [w])
+			if not removal["blocked"].is_empty():
+				return {"ok": [], "blocked": writes}
+		elif not HouseRules.is_supported(sim, w["level"], w["layer"], w["key"], w["value"]):
+			return {"ok": [], "blocked": writes}
+		sim.apply([w])
+	return {"ok": writes, "blocked": []}
 
 
 # --- Vista previa ---
@@ -709,9 +1471,9 @@ func _add_ghost(w: Dictionary, valid: bool) -> void:
 	var lvl: int = w["level"]
 	var existing: Variant = house.get_piece(lvl, w["layer"], w["key"])
 	var value: Variant = w["value"]
-	# Al quitar algo, se muestra en rojo lo que se va.
-	var removing: bool = value == null
-	if removing:
+	# Al quitar algo (o en Borrar), se muestra en rojo lo que se va.
+	var removing: bool = value == null or tool == Tool.ERASE or _erase_items.size() > 0
+	if value == null:
 		value = existing
 	if value == null:
 		return
@@ -741,27 +1503,124 @@ func _clear_preview() -> void:
 	_hidden_nodes.clear()
 
 
+## Marca amarilla debajo de lo elegido (mueble, techo o pared), o de la cara
+## pintada con las flechas.
 func _update_selection_marker() -> void:
-	var value: Variant = null
-	if selected_key != "" and house != null:
-		value = house.get_piece(level, "objects", selected_key)
-	_selection_marker.visible = value != null
-	if value == null:
+	_selection_marker.visible = false
+	if house == null:
 		return
-	var object_item := Catalog.get_item(value["item"])
-	var size := HouseGrid.rotated_size(HouseData.item_footprint(object_item), int(value.get("rot", 0)))
-	var anchor := HouseData.object_anchor(value)
-	_selection_marker.position = Vector3(anchor.x + size.x / 2.0, HouseGrid.level_y(level) + 0.06, anchor.y + size.y / 2.0)
-	_selection_marker.scale = Vector3(size.x + 0.15, 1, size.y + 0.15)
+	var y := HouseGrid.level_y(level) + 0.06
+	if selected_key != "":
+		var value: Variant = house.get_piece(level, selected_layer, selected_key)
+		if value == null:
+			return
+		match selected_layer:
+			"objects":
+				var cells := HouseData.value_cells(value)
+				var lo := cells[0]
+				var hi := cells[0]
+				for c in cells:
+					lo = Vector2i(mini(lo.x, c.x), mini(lo.y, c.y))
+					hi = Vector2i(maxi(hi.x, c.x), maxi(hi.y, c.y))
+				var size := hi - lo + Vector2i.ONE
+				_selection_marker.position = Vector3(lo.x + size.x / 2.0, y, lo.y + size.y / 2.0)
+				_selection_marker.scale = Vector3(size.x + 0.15, 1, size.y + 0.15)
+			"roofs":
+				var rect := HouseData.roof_rect(value)
+				_selection_marker.position = Vector3(rect.position.x + rect.size.x / 2.0, y, rect.position.y + rect.size.y / 2.0)
+				_selection_marker.scale = Vector3(rect.size.x + 0.3, 1, rect.size.y + 0.3)
+			"walls":
+				var center := HouseGrid.edge_center(selected_key)
+				_selection_marker.position = center + Vector3(0, y, 0)
+				_selection_marker.scale = Vector3(1.1, 1, 0.4) if HouseGrid.is_edge_horizontal(selected_key) else Vector3(0.4, 1, 1.1)
+		_selection_marker.visible = true
+	elif not _paint_face.is_empty() and tool == Tool.PAINT:
+		var center := WallFaces.face_center(_paint_face["edge"], _paint_face["side"])
+		_selection_marker.position = center + Vector3(0, y, 0)
+		_selection_marker.scale = Vector3(0.9, 1, 0.25) if HouseGrid.is_edge_horizontal(_paint_face["edge"]) else Vector3(0.25, 1, 0.9)
+		_selection_marker.visible = true
 
 
 func _on_piece_changed(changed_level: int, layer: String, key: String) -> void:
-	# Si el mueble elegido se movió o desapareció (por ejemplo, al deshacer).
-	if layer == "objects" and changed_level == level and key == selected_key:
+	if layer == "walls":
+		_joints_dirty = true
+	# Si lo elegido se movió o desapareció (por ejemplo, al deshacer).
+	if layer == selected_layer and changed_level == level and key == selected_key:
 		if house.has_piece(level, layer, key):
 			_update_selection_marker()
 		else:
 			select_object("")
+
+
+## Una onda que avisa que ahora se pinta (o se elige) arrastrando.
+func _ripple(screen_pos: Vector2) -> void:
+	var point: Variant = _point_on_level(screen_pos)
+	if point == null:
+		return
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.42
+	torus.outer_radius = 0.5
+	ring.mesh = torus
+	ring.material_override = HousePieces.transparent_material(Color(1, 1, 1, 0.8))
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ring.position = point + Vector3(0, 0.1, 0)
+	add_child(ring)
+	var tween := ring.create_tween()
+	tween.tween_property(ring, "scale", Vector3.ONE * 3.0, 0.45)
+	tween.tween_callback(ring.queue_free)
+
+
+# --- Junturas de ventanas (Modificar) ---
+
+## Pone un puntito en cada juntura entre dos ventanas en línea del piso
+## actual (naranja = unidas, blanco = separadas). Solo en Modificar.
+func _update_joints() -> void:
+	for child in _joints.get_children():
+		_joints.remove_child(child)
+		child.queue_free()
+	_joint_vertices.clear()
+	if not active or tool != Tool.MODIFY or house == null:
+		return
+	var seen := {}
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.13
+	sphere.height = 0.26
+	for key in house.get_layer(level, "walls"):
+		var vertex := HouseGrid.edge_vertices(key)[1]
+		if seen.has(vertex):
+			continue
+		seen[vertex] = true
+		var pair := HouseView.joint_walls(house, level, vertex)
+		if pair.is_empty():
+			continue
+		var joined := not HouseView.joint_window(house, level, vertex).is_empty()
+		var dot := MeshInstance3D.new()
+		dot.mesh = sphere
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(1, 0.6, 0.15) if joined else Color(1, 1, 1)
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.no_depth_test = true
+		mat.render_priority = 10
+		dot.material_override = mat
+		var height := minf(1.45, view.wall_height(level) - 0.1)
+		dot.position = Vector3(vertex.x, HouseGrid.level_y(level) + height, vertex.y)
+		_joints.add_child(dot)
+		_joint_vertices.append(vertex)
+
+
+## Juntura bajo la pantalla (o (-1, -1)).
+func _joint_at(screen_pos: Vector2) -> Vector2i:
+	var cam := get_viewport().get_camera_3d()
+	var children := _joints.get_children()
+	var best := Vector2i(-1, -1)
+	var best_dist := JOINT_PICK_PIXELS
+	for i in mini(children.size(), _joint_vertices.size()):
+		var dist := cam.unproject_position(children[i].global_position).distance_to(screen_pos)
+		if dist < best_dist:
+			best_dist = dist
+			best = _joint_vertices[i]
+	return best
 
 
 # --- Ayudantes: de la pantalla a la cuadrícula ---
@@ -818,7 +1677,7 @@ func _handle_at(screen_pos: Vector2) -> int:
 
 ## Pone las manijas en las esquinas (o puntas) de la selección.
 func _update_handles() -> void:
-	var shown := tool in HANDLE_TOOLS and (_pressing or _awaiting_confirm)
+	var shown := tool in HANDLE_TOOLS and (_pressing or _awaiting_confirm) and not _pending_plain
 	var y := HouseGrid.level_y(level) + 0.12
 	for i in _handles.size():
 		_handles[i].visible = shown
@@ -843,8 +1702,28 @@ func _vertex_at(screen_pos: Vector2) -> Vector2i:
 ## Pared bajo la pantalla ("" si no hay). Primero prueba si el rayo choca con
 ## una pared; si no, busca la pared más cercana al punto del piso.
 func _pick_wall(screen_pos: Vector2, use_nearby := true) -> String:
-	var ray := _ray(screen_pos)
+	var hit := _wall_hit(screen_pos)
+	if not hit.is_empty() or not use_nearby:
+		return hit.get("edge", "")
+	var point: Variant = _point_on_level(screen_pos)
+	if point == null:
+		return ""
+	var cell := Vector2i(floori(point.x), floori(point.z))
 	var best_key := ""
+	var best_dist := 0.4  # Distancia máxima para "agarrar" una pared.
+	for edge in HouseGrid.cell_edges(cell):
+		var c := HouseGrid.edge_center(edge)
+		var dist := absf(point.z - c.z) if HouseGrid.is_edge_horizontal(edge) else absf(point.x - c.x)
+		if house.has_piece(level, "walls", edge) and dist < best_dist:
+			best_dist = dist
+			best_key = edge
+	return best_key
+
+
+## La pared que choca con el rayo y dónde: {edge, point} o {}.
+func _wall_hit(screen_pos: Vector2) -> Dictionary:
+	var ray := _ray(screen_pos)
+	var result := {}
 	var best_dist := INF
 	var h := view.wall_height(level)
 	var t := HouseGrid.WALL_THICKNESS
@@ -856,22 +1735,34 @@ func _pick_wall(screen_pos: Vector2, use_nearby := true) -> String:
 		var hit: Variant = box.intersects_ray(ray[0], ray[1])
 		if hit != null and ray[0].distance_to(hit) < best_dist:
 			best_dist = ray[0].distance_to(hit)
-			best_key = key
-	if best_key != "" or not use_nearby:
-		return best_key
+			result = {"edge": key, "point": hit}
+	return result
 
+
+## La cara de pared bajo la pantalla: {edge, side} o {}. Es la cara del lado
+## desde donde se la mira (la que choca primero con el rayo).
+func _pick_wall_face(screen_pos: Vector2) -> Dictionary:
+	var hit := _wall_hit(screen_pos)
+	if hit.is_empty():
+		return {}
+	var edge: String = hit["edge"]
+	var center := HouseGrid.edge_center(edge)
+	var point: Vector3 = hit["point"]
+	var side: String
+	if HouseGrid.is_edge_horizontal(edge):
+		side = "a" if point.z < center.z else "b"
+	else:
+		side = "a" if point.x < center.x else "b"
+	return {"edge": edge, "side": side}
+
+
+## Piso del nivel actual bajo la pantalla ("" si no hay).
+func _pick_floor(screen_pos: Vector2) -> String:
 	var point: Variant = _point_on_level(screen_pos)
 	if point == null:
 		return ""
-	var cell := Vector2i(floori(point.x), floori(point.z))
-	best_dist = 0.4  # Distancia máxima para "agarrar" una pared.
-	for edge in HouseGrid.cell_edges(cell):
-		var c := HouseGrid.edge_center(edge)
-		var dist := absf(point.z - c.z) if HouseGrid.is_edge_horizontal(edge) else absf(point.x - c.x)
-		if house.has_piece(level, "walls", edge) and dist < best_dist:
-			best_dist = dist
-			best_key = edge
-	return best_key
+	var key := HouseGrid.cell_key(Vector2i(floori(point.x), floori(point.z)))
+	return key if house.has_piece(level, "floors", key) else ""
 
 
 ## Mueble bajo la pantalla ("" si no hay).
@@ -880,50 +1771,91 @@ func _pick_object(screen_pos: Vector2) -> String:
 	return view.pick_object(ray[0], ray[1], level)
 
 
+## Lo que hay bajo el dedo, de arriba hacia abajo: techo (si se ven),
+## mueble, pared, piso y cimientos. {level, layer, key, side?} o {}.
+func _pick_any(screen_pos: Vector2) -> Dictionary:
+	var ray := _ray(screen_pos)
+	var roof := view.pick_roof(ray[0], ray[1], level)
+	if roof != "":
+		return {"level": level, "layer": "roofs", "key": roof}
+	var object_key := _pick_object(screen_pos)
+	if object_key != "":
+		return {"level": level, "layer": "objects", "key": object_key}
+	var face := _pick_wall_face(screen_pos)
+	if not face.is_empty():
+		return {"level": level, "layer": "walls", "key": face["edge"], "side": face["side"]}
+	var floor_key := _pick_floor(screen_pos)
+	if floor_key != "":
+		return {"level": level, "layer": "floors", "key": floor_key}
+	if level == 0:
+		var point: Variant = _point_on_level(screen_pos)
+		if point != null:
+			var key := HouseGrid.cell_key(Vector2i(floori(point.x), floori(point.z)))
+			if house.has_piece(0, "foundation", key):
+				return {"level": 0, "layer": "foundation", "key": key}
+	return {}
+
+
 ## Con un dedo: ¿la cámara se mueve o el dedo construye?
 func _update_camera_pan() -> void:
 	if camera == null:
 		return
 	camera.single_finger_pan = _camera_takeover or not active or tool == Tool.NONE \
-		or (tool == Tool.MOVE and _moving_key == "")
+		or (tool in PRESS_TOOLS and not _long_pressed and _drag_handle < 0)
 
 
 ## Explica por qué algo salió en rojo, según la herramienta y el piso.
 func _blocked_hint() -> String:
-	if erase_mode:
-		return "Hay piezas que no se pueden borrar: tienen algo encima."
 	var upstairs := level > 0
 	match tool:
 		Tool.FOUNDATION:
 			return "Los cimientos van solo en la planta baja."
 		Tool.FLOOR:
 			if upstairs:
-				return "Arriba, el piso necesita piso o una pared justo debajo."
+				return "Arriba, el piso necesita piso, una pared o un pilar cerca debajo (y no encima de un techo)."
 			return "En la planta baja, el piso va sobre cimientos."
 		Tool.WALL, Tool.ROOM:
 			if upstairs:
-				return "Arriba, las paredes van sobre piso o sobre otra pared."
+				return "Arriba, las paredes van sobre piso o sobre otra pared (y no atravesando un techo)."
 			return "En la planta baja, las paredes van junto a cimientos."
 		Tool.OPENING:
 			return "Las puertas y ventanas van sobre una pared."
-		Tool.WINDOW_JOIN:
-			return "Tocá una ventana."
 		Tool.ROOF:
-			return "El techo tiene que quedar dentro del lote."
-		Tool.OBJECT, Tool.MOVE:
+			var rect := Rect2i(Vector2i(mini(_start_cell.x, _end_cell.x), mini(_start_cell.y, _end_cell.y)),
+				(_end_cell - _start_cell).abs() + Vector2i.ONE)
+			var reason := HouseRules.roof_blocker(house, level, rect)
+			return reason if reason != "" else "El techo tiene que quedar dentro del lote."
+		Tool.OBJECT, Tool.MODIFY:
 			if item.get("kind", "") == "stairs":
-				return "La escalera va en la planta baja, sobre piso y sin paredes en el medio."
+				return "La escalera va sobre piso, sin paredes en el medio y no en el último piso."
 			return "No entra: necesita piso libre y sin paredes en el medio."
+		Tool.ERASE:
+			return "Hay piezas que no se pueden borrar: tienen algo encima."
 	return "No se puede ahí."
 
 
+func _move_blocked_hint() -> String:
+	match selected_layer:
+		"walls":
+			return "La pared no se puede correr ahí (o sostiene algo de arriba)."
+		"roofs":
+			return "El techo no se puede correr ahí."
+	return "No entra ahí."
+
+
 func _show_tool_hint() -> void:
-	if erase_mode and tool != Tool.NONE:
-		EventBus.build_hint.emit("Modo borrar: arrastrá o tocá lo que querés quitar.")
-	elif tool == Tool.OBJECT or tool == Tool.OPENING:
+	if tool == Tool.OBJECT or tool == Tool.OPENING:
 		EventBus.build_hint.emit("%s: %s" % [item.get("name", ""), HINTS[tool]])
+	elif tool == Tool.ERASE and erase_multi:
+		EventBus.build_hint.emit("Modo selección: tocá todo lo que querés borrar y después «Borrar».")
 	else:
 		EventBus.build_hint.emit(HINTS[tool])
+
+
+func _first_paint_id() -> String:
+	for paint in Catalog.get_items_in_category("paint"):
+		return paint["id"]
+	return ""
 
 
 # --- Creación de los nodos de ayuda ---
@@ -948,7 +1880,7 @@ func _create_helpers() -> void:
 	square.size = Vector2(0.92, 0.92)
 	_cursor = _make_flat_marker("Cursor", square, Color(1, 1, 1, 0.45))
 
-	# Marca debajo del mueble elegido.
+	# Marca debajo de lo elegido.
 	var marker := PlaneMesh.new()
 	marker.size = Vector2.ONE
 	_selection_marker = _make_flat_marker("SelectionMarker", marker, Color(1, 0.85, 0.2, 0.6))
@@ -956,6 +1888,10 @@ func _create_helpers() -> void:
 	_ghost = Node3D.new()
 	_ghost.name = "Ghost"
 	add_child(_ghost)
+
+	_joints = Node3D.new()
+	_joints.name = "Joints"
+	add_child(_joints)
 
 	# Manijas de la selección: se ven siempre, aunque haya paredes delante.
 	var disc := CylinderMesh.new()

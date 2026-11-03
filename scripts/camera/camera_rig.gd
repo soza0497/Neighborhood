@@ -50,15 +50,25 @@ func _ready() -> void:
 
 ## Vuelve la cámara a su posición inicial.
 func reset_view() -> void:
-	position = Vector3.ZERO
+	position = Vector3(0.0, floor_height, 0.0)
 	rotation_degrees.y = default_yaw_degrees
 	_set_distance(default_distance)
+
+
+## Altura del piso que se está mirando (Pulido 1: con 5 pisos, la cámara
+## sube con el piso para no quedar metida entre las paredes de arriba).
+var floor_height := 0.0
+
+
+func set_floor_height(height: float) -> void:
+	floor_height = height
+	_clamp_position()
 
 
 ## Centra la cámara en un punto del mundo (por ejemplo, el personaje).
 ## Conserva el giro y el zoom.
 func focus_on(world_point: Vector3) -> void:
-	position = Vector3(world_point.x, 0.0, world_point.z)
+	position = Vector3(world_point.x, floor_height, world_point.z)
 	_clamp_position()
 
 
@@ -184,7 +194,7 @@ func _pan(from: Vector2, to: Vector2) -> void:
 func _screen_to_ground(screen_position: Vector2) -> Variant:
 	var origin := _camera.project_ray_origin(screen_position)
 	var direction := _camera.project_ray_normal(screen_position)
-	return Plane(Vector3.UP, 0.0).intersects_ray(origin, direction)
+	return Plane(Vector3.UP, floor_height).intersects_ray(origin, direction)
 
 
 func _set_distance(value: float) -> void:
@@ -195,4 +205,4 @@ func _set_distance(value: float) -> void:
 func _clamp_position() -> void:
 	position.x = clampf(position.x, -bounds_half_size, bounds_half_size)
 	position.z = clampf(position.z, -bounds_half_size, bounds_half_size)
-	position.y = 0.0
+	position.y = floor_height

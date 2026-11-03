@@ -635,5 +635,100 @@ local summ = couple.summary(rs[A], rs[B], A)
 check(summ.status == "single" and summ.family_mode == true and summ.drama_enabled == false, "resumen de la relación")
 
 
+-- === Pulido 1: constructor 2.0 (los mismos casos que tests/test_house.gd) ===
+
+local function box_house()
+  local b = rules.empty_house()
+  foundation(b, 0, 0, 5, 5)
+  floors(b, 0, 0, 0, 5, 5)
+  for x = 0, 5 do
+    put(b, 0, "walls", "h:" .. x .. ",0", { item = "wall_basic" })
+    put(b, 0, "walls", "h:" .. x .. ",6", { item = "wall_basic" })
+  end
+  for z = 0, 5 do
+    put(b, 0, "walls", "v:0," .. z, { item = "wall_basic" })
+    put(b, 0, "walls", "v:6," .. z, { item = "wall_basic" })
+  end
+  return b
+end
+
+local function has_cell(cells, x, z)
+  for _, c in ipairs(cells) do
+    if c[1] == x and c[2] == z then return true end
+  end
+  return false
+end
+
+-- Muebles en diagonal: las mismas celdas que el teléfono.
+local chair_cells = hr.object_cells(data.items.chair_basic, { cell = { 3, 3 }, rot = 0, diag = true })
+check(#chair_cells == 1 and has_cell(chair_cells, 3, 3), "diagonal: silla en 1 celda")
+local table_cells = hr.object_cells(data.items.table_basic, { cell = { 2, 2 }, rot = 0, diag = true })
+check(#table_cells == 4 and has_cell(table_cells, 2, 2) and has_cell(table_cells, 3, 3), "diagonal: mesa 2x1 en 4 celdas")
+local bh = box_house()
+put(bh, 0, "objects", "o1", { item = "table_basic", cell = { 2, 2 }, rot = 0, diag = true })
+check(not supported(bh, 0, "objects", "o2", { item = "chair_basic", cell = { 3, 3 }, rot = 0 }), "diagonal: no se encima")
+check(not supported(bh, 0, "objects", "o3", { item = "stairs_basic", cell = { 0, 0 }, rot = 0, diag = true }),
+  "diagonal: la escalera no")
+local clean = rules.clean_writes(data, { w(0, "objects", "o9", { item = "chair_basic", cell = { 1, 1 }, rot = 2, diag = true }) })
+check(clean[1].value.diag == true, "diagonal: el servidor guarda diag")
+check(refusal_of(rules.clean_writes, data, { w(0, "objects", "o9", { item = "pillar_basic", cell = { 1, 1 }, rot = 0, diag = true }) }) ~= nil,
+  "diagonal: un pilar en diagonal se rechaza")
+
+-- Pilares y lo de afuera.
+local open = rules.empty_house()
+check(supported(open, 0, "objects", "p1", { item = "pillar_basic", cell = { 10, 10 }, rot = 0 }), "pilar sobre el pasto")
+check(not supported(open, 0, "objects", "c1", { item = "chair_basic", cell = { 10, 10 }, rot = 0 }), "silla sobre el pasto NO")
+put(open, 0, "objects", "p1", { item = "pillar_basic", cell = { 10, 10 }, rot = 0 })
+check(supported(open, 1, "floors", "12,12", FLOOR), "el pilar sostiene un piso a 2 celdas")
+check(not supported(open, 1, "floors", "13,10", FLOOR), "a 3 celdas no")
+put(open, 1, "floors", "11,11", FLOOR)
+check(not batch_ok(open, { w(0, "objects", "p1", nil) }), "no se puede quitar el pilar que sostiene el piso")
+check(supported(open, 0, "objects", "m1", { item = "stairs_metal", cell = { 14, 14 }, rot = 0 }), "escalera metálica afuera")
+
+-- Techos: bloqueados si los atraviesa una pared o un piso de arriba.
+local ROOF = { item = "roof_flat", rect = { 0, 0, 6, 6 } }
+local roofed = box_house()
+check(supported(roofed, 0, "roofs", "r1", ROOF), "techo plano sobre la casa")
+put(roofed, 1, "walls", "v:3,2", WALL)
+check(not supported(roofed, 0, "roofs", "r1", ROOF), "techo atravesado por una pared de arriba NO")
+local under = box_house()
+put(under, 0, "roofs", "r1", ROOF)
+check(not supported(under, 1, "walls", "v:3,2", WALL), "pared arriba atravesando un techo NO")
+check(not supported(under, 1, "floors", "2,2", FLOOR), "piso adentro de un techo NO")
+
+-- Pintura por cara y unión en la juntura: el servidor los guarda.
+clean = rules.clean_writes(data, { w(0, "walls", "h:1,1", { item = "wall_basic", opening = "window_basic",
+  color_a = "#ff0000", color_b = "#00ff00", join_end = true, separate = true }) })
+check(clean[1].value.color_a == "#ff0000" and clean[1].value.color_b == "#00ff00" and clean[1].value.join_end == true
+  and clean[1].value.separate == nil, "pared: color por cara y juntura (la marca vieja no)")
+check(refusal_of(rules.clean_writes, data, { w(0, "floors", "1,1", { item = "floor_basic", color_a = "#ff0000" }) }) ~= nil,
+  "color por cara solo en paredes")
+check(hr.change_kind(data, box_house(), { w(0, "walls", "h:2,0", { item = "wall_basic", color_a = "#00ff00" }) }) == "minor",
+  "pintar una cara es cambio menor")
+
+-- Casas de antes: se convierten al cargarlas (igual que HouseData.upgrade_legacy).
+local legacy = rules.normalize_house({ levels = { { walls = {
+  ["h:1,1"] = { item = "wall_basic", opening = "window_basic", color = "#ffd966" },
+  ["h:2,1"] = { item = "wall_basic", opening = "window_basic" },
+  ["h:5,1"] = { item = "wall_basic", opening = "window_basic" },
+  ["h:6,1"] = { item = "wall_basic", opening = "window_basic", separate = true },
+} } }, next_id = 3 })
+local lw = legacy.levels[1].walls
+check(lw["h:1,1"].color_a == "#ffd966" and lw["h:1,1"].color_b == "#ffd966" and lw["h:1,1"].color == nil,
+  "migración: la pintura pasa a las dos caras")
+check(lw["h:1,1"].join_end == true and lw["h:5,1"].join_end == nil and lw["h:6,1"].separate == nil,
+  "migración: unidas en la juntura, separadas siguen separadas")
+check(legacy.format == 3, "migración: formato 3")
+lw["h:1,1"].join_end = nil
+check(rules.normalize_house(legacy).levels[1].walls["h:1,1"].join_end == nil, "una casa nueva no se vuelve a migrar")
+
+-- Hasta 5 pisos: una escalera en el piso 3 sí, en el 4 (el último) no.
+local tall = rules.empty_house()
+floors(tall, 3, 0, 0, 2, 4)
+floors(tall, 4, 0, 0, 2, 4)
+check(supported(tall, 3, "objects", "s1", { item = "stairs_basic", cell = { 1, 1 }, rot = 0 }), "escalera en el piso 3")
+check(not supported(tall, 4, "objects", "s2", { item = "stairs_basic", cell = { 1, 1 }, rot = 0 }), "escalera en el último piso NO")
+
+
 print(string.format("\nPRUEBAS LUA: %d pasaron, %d fallaron", passed, failed))
 os.exit(failed > 0 and 1 or 0)

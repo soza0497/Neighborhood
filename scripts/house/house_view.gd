@@ -37,6 +37,8 @@ var _nodes: Dictionary = {}
 var _posts: Dictionary = {}
 ## Piezas en obra: "nivel|capa|clave" → [nivel, capa, clave].
 var _pending: Dictionary = {}
+## Piezas con problemas (sin apoyo), pintadas de rojo: "nivel|capa|clave" → true.
+var _problem_ids: Dictionary = {}
 var _last_pending_count := -1
 
 
@@ -131,7 +133,8 @@ func check_construction() -> void:
 
 
 ## Mueble que toca un rayo (en coordenadas de la casa) en un nivel.
-## Devuelve su clave, o "" si no toca ninguno.
+## Devuelve su clave, o "" si no toca ninguno. Se prueba celda por celda
+## (así sirve también para los muebles en diagonal).
 func pick_object(origin: Vector3, direction: Vector3, level: int) -> String:
 	var best_key := ""
 	var best_dist := INF
@@ -139,15 +142,54 @@ func pick_object(origin: Vector3, direction: Vector3, level: int) -> String:
 	for key in house.get_layer(level, "objects"):
 		var value: Dictionary = house.get_piece(level, "objects", key)
 		var item := Catalog.get_item(value["item"])
-		var size := HouseGrid.rotated_size(HouseData.item_footprint(item), int(value.get("rot", 0)))
-		var anchor := HouseData.object_anchor(value)
-		var height := HouseGrid.WALL_HEIGHT if item.get("kind", "") == "stairs" else float(item.get("height", 1.0))
-		var box := AABB(Vector3(anchor.x, base, anchor.y), Vector3(size.x, height, size.y))
+		var kind: String = item.get("kind", "")
+		var height := HouseGrid.WALL_HEIGHT if kind == "stairs" or kind == "pillar" else float(item.get("height", 1.0))
+		for cell in HouseData.value_cells(value):
+			var box := AABB(Vector3(cell.x, base, cell.y), Vector3(1, height, 1))
+			var hit: Variant = box.intersects_ray(origin, direction)
+			if hit != null and origin.distance_to(hit) < best_dist:
+				best_dist = origin.distance_to(hit)
+				best_key = key
+	return best_key
+
+
+## Techo que toca un rayo en un nivel (solo si los techos se ven). "" si no.
+func pick_roof(origin: Vector3, direction: Vector3, level: int) -> String:
+	if not roofs_visible(level):
+		return ""
+	var best_key := ""
+	var best_dist := INF
+	var base := HouseGrid.level_y(level) + HouseGrid.WALL_HEIGHT
+	for key in house.get_layer(level, "roofs"):
+		var rect := HouseData.roof_rect(house.get_piece(level, "roofs", key))
+		var top := float(mini(rect.size.x, rect.size.y)) / 2.0 * HousePieces.ROOF_SLOPE + 0.4
+		var box := AABB(Vector3(rect.position.x, base, rect.position.y), Vector3(rect.size.x, top, rect.size.y))
 		var hit: Variant = box.intersects_ray(origin, direction)
 		if hit != null and origin.distance_to(hit) < best_dist:
 			best_dist = origin.distance_to(hit)
 			best_key = key
 	return best_key
+
+
+## Marca qué piezas tienen problemas (se pintan de rojo). `problems` es la
+## lista de HouseRules.problems.
+func set_problems(problems: Array) -> void:
+	var old := _problem_ids
+	_problem_ids = {}
+	for p in problems:
+		if p["layer"] != "":
+			_problem_ids[_node_id(p["level"], p["layer"], p["key"])] = true
+	for id in old:
+		if not _problem_ids.has(id):
+			_refresh_by_id(id)
+	for id in _problem_ids:
+		if not old.has(id):
+			_refresh_by_id(id)
+
+
+func _refresh_by_id(id: String) -> void:
+	var parts := id.split("|")
+	_refresh_piece(int(parts[0]), parts[1], parts[2])
 
 
 ## Contenedor de un nivel (para poner cosas a la altura de ese piso).
@@ -189,7 +231,7 @@ func make_piece(level: int, layer: String, key: String, value: Dictionary, previ
 				not preview and not _merged_window(level, vertices[0]).is_empty(),
 				not preview and not _merged_window(level, vertices[1]).is_empty())
 		"objects":
-			return HousePieces.build_object(value)
+			return HousePieces.build_object(value, _ground_drop(level, value))
 		"roofs":
 			if roofs_visible(level) or preview:
 				return HousePieces.build_roof(value, _gable_color(level, value))
@@ -222,7 +264,9 @@ func _refresh_piece(level: int, layer: String, key: String) -> void:
 	var node := make_piece(level, layer, key, value)
 	_pending.erase(id)
 	if node != null:
-		if HouseData.is_under_construction(value):
+		if _problem_ids.has(id):
+			HousePieces.make_problem(node)
+		elif HouseData.is_under_construction(value):
 			HousePieces.make_construction(node)
 			_pending[id] = [level, layer, key]
 		_levels[level].add_child(node)
@@ -242,34 +286,51 @@ func _refresh_post(level: int, vertex: Vector2i) -> void:
 	if walls.is_empty():
 		return
 	var first: Dictionary = house.get_piece(level, "walls", walls[0])
-	var post := HousePieces.build_post(vertex, HousePieces.piece_color(first), wall_height(level),
+	var post := HousePieces.build_post(vertex, HousePieces.wall_face_color(first, "b"), wall_height(level),
 		_merged_window(level, vertex))
 	_levels[level].add_child(post)
 	_posts[id] = post
 
 
-## Si en una esquina se juntan justo dos paredes en línea recta con la misma
-## ventana, y ninguna está marcada "separada", devuelve esa ventana (del
-## catálogo) para unirlas. Si no, {}.
+## Si en una esquina (juntura) dos ventanas iguales en línea están UNIDAS
+## (join_end en la pared que termina ahí), devuelve esa ventana (del
+## catálogo). Si no, {}. Lo que se ve es exactamente lo que está guardado.
 func _merged_window(level: int, vertex: Vector2i) -> Dictionary:
-	var walls: Array = []
-	for edge in HouseGrid.vertex_edges(vertex):
-		var wall: Variant = house.get_piece(level, "walls", edge)
-		if wall != null:
-			walls.append([edge, wall])
-	if walls.size() != 2:
+	return HouseView.joint_window(house, level, vertex)
+
+
+## Lo mismo, sin vista (lo usa también el constructor para las junturas).
+static func joint_window(target: HouseData, level: int, vertex: Vector2i) -> Dictionary:
+	var pair := joint_walls(target, level, vertex)
+	if pair.is_empty():
 		return {}
-	if HouseGrid.is_edge_horizontal(walls[0][0]) != HouseGrid.is_edge_horizontal(walls[1][0]):
-		return {}
-	var a: Dictionary = walls[0][1]
-	var b: Dictionary = walls[1][1]
-	if a.get("separate", false) or b.get("separate", false):
+	var a: Dictionary = target.get_piece(level, "walls", pair[0])
+	var b: Dictionary = target.get_piece(level, "walls", pair[1])
+	if not a.get("join_end", false):
 		return {}
 	var opening: String = a.get("opening", "")
 	if opening == "" or opening != b.get("opening", ""):
 		return {}
 	var item := Catalog.get_item(opening)
 	return item if item.get("kind", "") == "window" else {}
+
+
+## Las dos paredes en línea que se juntan en una esquina, si son solo esas
+## dos y las dos tienen ventana: [la que termina ahí, la que empieza]. Si no, [].
+static func joint_walls(target: HouseData, level: int, vertex: Vector2i) -> Array:
+	var walls: Array = []
+	for edge in HouseGrid.vertex_edges(vertex):
+		if target.has_piece(level, "walls", edge):
+			walls.append(edge)
+	if walls.size() != 2 or HouseGrid.is_edge_horizontal(walls[0]) != HouseGrid.is_edge_horizontal(walls[1]):
+		return []
+	for edge in walls:
+		if Catalog.get_item(target.get_piece(level, "walls", edge).get("opening", "")).get("kind", "") != "window":
+			return []
+	# La que termina en el vértice es la de coordenada menor.
+	if HouseGrid.edge_vertex(walls[0]) == vertex:
+		walls.reverse()
+	return walls
 
 
 ## Las dos paredes que siguen en línea recta a cada lado de una pared.
@@ -303,3 +364,13 @@ func _gable_color(level: int, roof: Dictionary) -> Color:
 
 func _node_id(level: int, layer: String, key: String) -> String:
 	return "%d|%s|%s" % [level, layer, key]
+
+
+## Cuánto más abajo está el suelo para algo de afuera (pilar, escalera
+## metálica) puesto en la planta baja sobre el pasto, sin cimientos.
+func _ground_drop(level: int, value: Dictionary) -> float:
+	if level != 0 or not Catalog.get_item(value.get("item", "")).get("outdoor", false):
+		return 0.0
+	if house.has_piece(0, "foundation", HouseGrid.cell_key(HouseData.object_anchor(value))):
+		return 0.0
+	return HouseGrid.FOUNDATION_HEIGHT

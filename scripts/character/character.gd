@@ -343,7 +343,7 @@ func _start_action() -> void:
 	if action.get("use_at", "spot") == "center":
 		# Encima del objeto (cama, silla), mirando hacia donde mira el objeto.
 		position = center + Vector3(0, float(action.get("seat_height", 0.4)), 0)
-		rotation.y = -int(object.get("rot", 0)) * PI / 2.0
+		rotation.y = -deg_to_rad(HouseGrid.object_angle(int(object.get("rot", 0)), object.get("diag", false)))
 	else:
 		# De pie junto al objeto, mirándolo.
 		var look := center - position

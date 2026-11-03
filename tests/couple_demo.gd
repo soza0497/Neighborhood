@@ -244,17 +244,43 @@ func _test_structural_changes() -> void:
 	result = await _b.call_rpc("build_apply", {"writes": [HouseData.write(0, "walls", "h:20,1", {"item": "wall_basic"})]})
 	_check(not result["data"].get("ok", true) and str(result["data"].get("error", "")).contains("apoyarse"),
 		"una pared en el aire: el servidor la rechaza (reglas de apoyo)")
-	var asked: bool = await _main.get_node("House/Builder")._apply([HouseData.write(0, "walls", "v:0,0", {"item": "wall_basic"})])
+	# Pulido 1: A arma una PROPUESTA con varios cambios y la manda entera.
+	var builder: HouseBuilder = _main.get_node("House/Builder")
+	_main.set_mode("build")
+	var asked: bool = await builder._apply([HouseData.write(0, "walls", "v:0,0", {"item": "wall_basic"})])
+	await builder._apply([HouseData.write(0, "walls", "v:0,1", {"item": "wall_basic"})])
+	_check(asked and builder.draft_mode() == "own" and builder.draft_writes().size() == 2
+		and _main.house.get_piece(0, "walls", "v:0,0") != null, "A arma una propuesta de 2 cambios (se ven en su casa)")
+	_check(Couple.home["requests"].is_empty(), "todavía no se mandó nada")
+	_main._on_game_saving()
+	_check(not GameState.house["levels"][0]["walls"].has("v:0,0"), "la propuesta no se guarda como si estuviera construida")
+	_check(await builder.send_draft(), "A manda la propuesta")
 	await _wait_until(func() -> bool: return not Economy.busy)
 	await Couple.refresh()
-	_check(asked and Couple.home["requests"].size() == 1 and Couple.home["requests"][0]["by_me"]
-		and _main.house.get_piece(0, "walls", "v:0,0") == null, "A también tiene que pedir permiso (todavía no se construye)")
+	_check(Couple.home["requests"].size() == 1 and Couple.home["requests"][0]["by_me"]
+		and str(Couple.home["requests"][0]["text"]).contains("x2") and _main.house.get_piece(0, "walls", "v:0,0") == null,
+		"un solo pedido con todo (\"%s\"); en la casa todavía no está" % (Couple.home["requests"][0]["text"] if not Couple.home["requests"].is_empty() else ""))
 	result = await _b.call_rpc("couple_load", {})
 	var pending: Array = CoupleState.normalize_home(result["data"]["home"])["requests"]
-	_check(pending.size() == 1 and not pending[0]["by_me"], "B ve el pedido de A")
+	_check(pending.size() == 1 and not pending[0]["by_me"], "B ve la propuesta de A")
+	result = await _b.call_rpc("home_request", {"id": pending[0]["id"]})
+	var preview: Variant = JSON.parse_string(str(result["data"].get("request", {}).get("writes_json", "")))
+	_check(result["data"].get("ok", false) and preview is Array and preview.size() == 2,
+		"B la puede previsualizar entera (2 piezas)")
 	result = await _b.call_rpc("home_answer", {"id": pending[0]["id"], "approve": true})
-	_check(result["data"].get("ok", false) and await _wait_until(func() -> bool: return _main.house.get_piece(0, "walls", "v:0,0") != null),
-		"B lo aprueba: aparece en la pantalla de A")
+	var both_built := func() -> bool: return _main.house.get_piece(0, "walls", "v:0,0") != null and _main.house.get_piece(0, "walls", "v:0,1") != null
+	_check(result["data"].get("ok", false) and await _wait_until(both_built), "B la aprueba entera: aparece en la pantalla de A")
+
+	# Y al revés: B propone, A la ve en su casa y la aprueba desde la barra.
+	result = await _b.call_rpc("build_apply", {"writes": [HouseData.write(0, "walls", "h:3,0", {"item": "wall_basic"})]})
+	_check(await _wait_until(func() -> bool: return Couple.home["requests"].size() == 1), "B propone otra pared")
+	EventBus.proposal_review_requested.emit(Couple.home["requests"][0]["id"])
+	_check(await _wait_until(func() -> bool: return builder.draft_mode() == "review"), "A la previsualiza en su casa")
+	_check(_main.house.get_piece(0, "walls", "h:3,0") != null, "se ve la pared propuesta")
+	EventBus.proposal_answer_requested.emit(true)
+	var approved := func() -> bool: return not builder.has_draft() and Couple.home["requests"].is_empty() and _main.house.get_piece(0, "walls", "h:3,0") != null
+	_check(await _wait_until(approved, 10.0), "A la aprueba: queda construida")
+	_main.set_mode("live")
 
 
 # --- 6) La caja de la casa ---

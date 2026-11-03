@@ -157,6 +157,17 @@ func answer_request(id: int, approve: bool) -> Dictionary:
 	return result
 
 
+## Pulido 1: un pedido con sus piezas, para previsualizarlo antes de
+## responder. Devuelve {ok, request, writes} (writes listas para HouseData).
+func get_request(id: int) -> Dictionary:
+	var result := await _home_request("home_request", {"id": id})
+	if not result["ok"]:
+		return result
+	var request: Dictionary = result["data"].get("request", {})
+	var parsed: Variant = JSON.parse_string(str(request.get("writes_json", "[]")))
+	return {"ok": true, "request": request, "writes": CloudSync.writes_from_server(parsed)}
+
+
 func cancel_request(id: int) -> Dictionary:
 	return await _home_request("home_cancel", {"id": id})
 

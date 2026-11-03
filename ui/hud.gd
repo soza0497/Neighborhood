@@ -66,14 +66,9 @@ const NEED_COLORS := {
 @onready var _floor_map: FloorMap = %FloorMap
 @onready var _level_label: Label = %LevelLabel
 @onready var _compass_button: CompassButton = %CompassButton
-@onready var _bottom_bar: Control = %BottomBar
-@onready var _categories_box: HBoxContainer = %Categories
-@onready var _items_box: HBoxContainer = %Items
-@onready var _confirm_button: Button = %ConfirmButton
-@onready var _cancel_button: Button = %CancelButton
-@onready var _rotate_button: Button = %RotateButton
-@onready var _delete_button: Button = %DeleteButton
-@onready var _erase_button: Button = %EraseButton
+@onready var _bottom_bar: BuildBar = %BottomBar
+@onready var _action_row: HBoxContainer = %ActionRow
+@onready var _problems_button: Button = %ProblemsButton
 # Fase 5: pareja y casa compartida.
 @onready var _partner_chip: Control = %PartnerChip
 @onready var _partner_label: Label = %PartnerLabel
@@ -88,18 +83,16 @@ const NEED_COLORS := {
 
 var _mode := "build"
 var _last_save_text := "sin guardar todavía"
-var _category_group := ButtonGroup.new()
-var _item_group := ButtonGroup.new()
-## Tipo ("kind") de la pieza elegida, para saber si mostrar "Girar".
-var _selected_kind := ""
-var _has_selection := false
+## Lo que falta en la casa (HouseRules.problems) y los paneles que se
+## arman por código: menú de una pieza, lista de "lo que falta" y la barra
+## de la propuesta (casa compartida).
+var _problems: Array = []
+var _popup: PanelContainer
+var _proposal_bar: PanelContainer
 ## Lo último que se sabe del personaje (para la tarjeta del ánimo).
 var _needs: Dictionary = {}
 var _intention_text := ""
 var _character_name := ""
-## Categoría que se está mostrando y nivel del jugador (para refrescar bloqueos).
-var _current_category := ""
-var _last_level := 0
 var _toast_tween: Tween
 ## Lo último que dijo el historial (para volver a prender los botones después
 ## de esperar al servidor).
@@ -109,13 +102,10 @@ var _server_busy := false
 ## Aviso de la pareja que se está mostrando (entrada del historial que se
 ## puede deshacer; 0 = ninguna).
 var _notice_entry := 0
-## La selección que espera Confirmar necesita aprobación (casa compartida).
-var _needs_approval := false
 var _notice_tween: Tween
 
 
 func _ready() -> void:
-	_item_group.allow_unpress = true
 	_setup_icons()
 
 	_undo_button.pressed.connect(EventBus.undo_requested.emit)
@@ -124,18 +114,15 @@ func _ready() -> void:
 	_walls_button.pressed.connect(EventBus.view_walls_toggle_requested.emit)
 	_floor_map.level_picked.connect(EventBus.build_level_set_requested.emit)
 	_mode_button.pressed.connect(_on_mode_button_pressed)
-	_confirm_button.pressed.connect(EventBus.build_confirm_requested.emit)
-	_cancel_button.pressed.connect(EventBus.build_cancel_requested.emit)
-	_rotate_button.pressed.connect(EventBus.build_rotate_requested.emit)
-	_delete_button.pressed.connect(EventBus.build_delete_requested.emit)
-	_erase_button.toggled.connect(EventBus.build_erase_toggled.emit)
+	_problems_button.pressed.connect(_show_problems)
+	EventBus.house_problems_changed.connect(_on_problems_changed)
+	EventBus.build_context_menu.connect(_show_context_menu)
+	EventBus.proposal_changed.connect(_on_proposal_changed)
 
 	EventBus.game_saved.connect(_on_game_saved)
 	EventBus.game_mode_changed.connect(_on_game_mode_changed)
 	EventBus.build_hint.connect(_hint_label.set_text)
 	EventBus.build_level_changed.connect(_on_level_changed)
-	EventBus.build_selection_changed.connect(_on_selection_changed)
-	EventBus.build_pending_changed.connect(_on_pending_changed)
 	EventBus.view_changed.connect(_on_view_changed)
 	EventBus.history_changed.connect(_on_history_changed)
 
@@ -155,8 +142,6 @@ func _ready() -> void:
 	_card_overlay.gui_input.connect(_on_overlay_input)
 	EventBus.economy_changed.connect(_on_economy_changed)
 	EventBus.toast.connect(_on_toast)
-	EventBus.build_cost_changed.connect(_on_build_cost_changed)
-	EventBus.build_approval_changed.connect(func(needed: bool) -> void: _needs_approval = needed)
 	EventBus.construction_changed.connect(_on_construction_changed)
 	_setup_xp_bar()
 	var progress := Economy.xp_progress()
@@ -189,17 +174,15 @@ func _ready() -> void:
 	if SaveSystem.has_save():
 		_last_save_text = "partida cargada"
 	_update_info()
-	_create_category_buttons()
-	_update_object_buttons()
-	_on_pending_changed(false)
 	_apply_settings()
 
 
 ## La escena principal pasa la casa, el personaje y el constructor (la
 ## maqueta de pisos y la brújula solo los leen).
-func setup_house(house: HouseData, character: Node3D, _builder: Node) -> void:
+func setup_house(house: HouseData, character: Node3D, builder: Node) -> void:
 	_floor_map.setup(house, character)
 	_compass_button.target = character
+	_bottom_bar.setup(_action_row, builder, character)
 
 
 ## Íconos propios en lugar de botones con texto (el texto queda de ayuda).
@@ -210,10 +193,8 @@ func _setup_icons() -> void:
 	Icons.setup(_menu_button, "menu", "Menú")
 	Icons.setup(_roof_button, "roof_off", "Techos")
 	Icons.setup(_walls_button, "walls_high", "Paredes altas o bajas")
-	Icons.setup(_cancel_button, "close", "Cancelar", 56)
-	Icons.setup(_rotate_button, "rotate", "Girar", 56)
-	Icons.setup(_delete_button, "trash", "Quitar", 56)
-	Icons.setup(_erase_button, "trash", "Modo borrar", 56)
+	_problems_button.icon = Icons.texture("warning")
+	_problems_button.add_theme_constant_override("icon_max_width", 30)
 	Icons.setup(_notice_close_button, "close", "Cerrar", 48)
 	Icons.setup(_speed_button, "speed", "Velocidad del tiempo")
 	_speed_button.custom_minimum_size = Vector2(104, 64)
@@ -235,90 +216,6 @@ func _process(_delta: float) -> void:
 	if _info_panel.visible:
 		_info_fps_label.text = fps_text
 		_clock_label.text = "Día %d · %s" % [GameClock.day(), GameClock.time_text()]
-
-
-# --- Categorías y piezas ---
-
-func _create_category_buttons() -> void:
-	var first := true
-	for category in Catalog.categories.values():
-		var button := Button.new()
-		button.text = category["name"]
-		button.toggle_mode = true
-		button.button_group = _category_group
-		button.custom_minimum_size = CATEGORY_BUTTON_SIZE
-		button.add_theme_font_size_override("font_size", 18)
-		button.pressed.connect(_show_category.bind(category["id"]))
-		_categories_box.add_child(button)
-		if first:
-			button.button_pressed = true
-			_show_category(category["id"])
-			first = false
-
-
-## Llena la fila de piezas con las de una categoría.
-func _show_category(category_id: String) -> void:
-	_current_category = category_id
-	for child in _items_box.get_children():
-		child.queue_free()
-	_select_item("", "")
-
-	# En Muebles, la primera opción es la mano para mover lo ya colocado.
-	if category_id == "furniture":
-		_add_item_button(HouseBuilder.MOVE_TOOL_ID, "Mover\n(mano)", Color(1, 0.85, 0.2), "move")
-	# En Puertas y ventanas, la primera opción une o separa ventanas vecinas.
-	if category_id == "openings":
-		_add_item_button(HouseBuilder.WINDOW_JOIN_TOOL_ID, "Unir /\nseparar", Color(0.75, 0.9, 1), "window_join")
-	for item in Catalog.get_items_in_category(category_id):
-		var text := "%s\n$ %d" % [item["name"], int(item["price"])]
-		if item["kind"] == "paint":
-			text = item["name"]
-		var color := Color.from_string(item.get("color", "#ffffff"), Color.WHITE)
-		var unlocked := Economy.is_unlocked(item["id"])
-		if not unlocked:
-			text = "%s\nNivel %d" % [item["name"], Catalog.unlock_level(item["id"])]
-		_add_item_button(item["id"], text, color, item["kind"]).disabled = not unlocked
-
-
-func _add_item_button(item_id: String, text: String, color: Color, kind: String) -> Button:
-	var button := Button.new()
-	button.text = text
-	button.toggle_mode = true
-	button.button_group = _item_group
-	button.custom_minimum_size = ITEM_BUTTON_SIZE
-	button.icon = _make_swatch(color)
-	button.add_theme_font_size_override("font_size", 16)
-	button.toggled.connect(_on_item_toggled.bind(item_id, kind))
-	_items_box.add_child(button)
-	return button
-
-
-func _on_item_toggled(on: bool, item_id: String, kind: String) -> void:
-	if on:
-		_select_item(item_id, kind)
-	elif _item_group.get_pressed_button() == null:
-		_select_item("", "")
-
-
-func _select_item(item_id: String, kind: String) -> void:
-	_selected_kind = kind
-	EventBus.build_item_selected.emit(item_id)
-	_update_object_buttons()
-
-
-## Cuadradito de color para el ícono de cada pieza.
-func _make_swatch(color: Color) -> ImageTexture:
-	var image := Image.create(28, 28, false, Image.FORMAT_RGBA8)
-	image.fill(Color(0.1, 0.1, 0.1))
-	image.fill_rect(Rect2i(2, 2, 24, 24), color)
-	return ImageTexture.create_from_image(image)
-
-
-## "Girar" y "Quitar" solo aparecen cuando sirven.
-func _update_object_buttons() -> void:
-	var placing_object := _selected_kind == "furniture" or _selected_kind == "stairs"
-	_rotate_button.visible = placing_object or _has_selection
-	_delete_button.visible = _has_selection
 
 
 # --- Personaje: ánimo y tarjeta de necesidades ---
@@ -459,23 +356,6 @@ func _on_economy_changed(money: int, level: int, xp_in_level: int, xp_needed: in
 	_money_label.text = "$ %d · Nivel %d" % [money, level]
 	_xp_bar.max_value = maxi(xp_needed, 1)
 	_xp_bar.value = xp_in_level
-	# Si subió de nivel, se actualizan las piezas bloqueadas.
-	if level != _last_level:
-		_last_level = level
-		if _current_category != "":
-			_show_category(_current_category)
-
-
-## Lo que cuesta (o devuelve) la selección que espera Confirmar.
-func _on_build_cost_changed(cost: int) -> void:
-	var verb := "Pedir permiso" if _needs_approval else "Confirmar"
-	if cost > 0:
-		_confirm_button.text = "%s ($%d)" % [verb, cost]
-	elif cost < 0:
-		_confirm_button.text = "%s (+$%d)" % [verb, -cost]
-	else:
-		_confirm_button.text = verb
-	_confirm_button.disabled = not Economy.can_change(-cost) or _server_busy
 
 
 func _on_toast(text: String) -> void:
@@ -556,12 +436,11 @@ func _on_game_mode_changed(mode: String) -> void:
 	_side_menu.hide()
 	_apply_settings()
 	_on_server_status_changed(GameServer.online, GameServer.username())
-	if not building:
-		# Al volver a construir se empieza sin pieza elegida.
-		var pressed := _item_group.get_pressed_button()
-		if pressed != null:
-			pressed.button_pressed = false
-		_erase_button.button_pressed = false
+	_action_row.visible = building
+	_problems_button.visible = building and not _problems.is_empty()
+	# Al entrar o salir de construir se empieza sin herramienta elegida.
+	_bottom_bar.reset()
+	_close_popup()
 
 
 func _on_level_changed(level: int) -> void:
@@ -576,18 +455,6 @@ func _on_view_changed(show_roofs: bool, low_walls: bool) -> void:
 	Icons.setup(_walls_button, "walls_low" if low_walls else "walls_high", "Paredes bajas" if low_walls else "Paredes altas")
 
 
-func _on_pending_changed(has_pending: bool) -> void:
-	_confirm_button.visible = has_pending
-	_confirm_button.text = "Confirmar"
-	_confirm_button.disabled = false
-	_cancel_button.visible = has_pending
-
-
-func _on_selection_changed(has_selection: bool) -> void:
-	_has_selection = has_selection
-	_update_object_buttons()
-
-
 func _on_history_changed(can_undo: bool, can_redo: bool) -> void:
 	_can_undo = can_undo
 	_can_redo = can_redo
@@ -600,8 +467,6 @@ func _on_history_changed(can_undo: bool, can_redo: bool) -> void:
 func _on_server_busy_changed(busy: bool) -> void:
 	_server_busy = busy
 	_on_history_changed(_can_undo, _can_redo)
-	if _confirm_button.visible:
-		_confirm_button.disabled = busy
 	_builds_button.disabled = busy or (Economy.server_mode and not GameServer.online)
 
 
@@ -674,3 +539,116 @@ func _update_info() -> void:
 		ProjectSettings.get_setting("application/config/version"),
 		_last_save_text,
 	]
+
+
+# --- Constructor 2.0: menú de una pieza, "lo que falta" y propuesta ---
+
+## Un panel chico en el medio, armado por código (menú de una pieza o lista
+## de "lo que falta"). Tocar "Cerrar" lo saca.
+func _open_popup(title: String) -> VBoxContainer:
+	_close_popup()
+	_popup = PanelContainer.new()
+	_popup.add_theme_stylebox_override("panel", _mood_card.get_child(0).get_theme_stylebox("panel"))
+	_popup.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_popup.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var rows := VBoxContainer.new()
+	rows.add_theme_constant_override("separation", 8)
+	_popup.add_child(rows)
+	var label := Label.new()
+	label.text = title
+	label.add_theme_font_size_override("font_size", 22)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rows.add_child(label)
+	$Root.add_child(_popup)
+	return rows
+
+
+func _close_popup() -> void:
+	if _popup != null and is_instance_valid(_popup):
+		_popup.queue_free()
+	_popup = null
+
+
+func _popup_button(rows: VBoxContainer, text: String, on_pressed: Callable) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.custom_minimum_size = Vector2(280, 56)
+	button.add_theme_font_size_override("font_size", 19)
+	button.pressed.connect(on_pressed)
+	rows.add_child(button)
+	return button
+
+
+## Menú de una pared, techo, piso o cimiento (Modificar).
+func _show_context_menu(title: String, options: Array) -> void:
+	var rows := _open_popup(title)
+	for option in options:
+		_popup_button(rows, option["text"], func() -> void:
+			_close_popup()
+			EventBus.build_context_action_requested.emit(option["id"]))
+	_popup_button(rows, "Cerrar", _close_popup)
+
+
+func _on_problems_changed(problems: Array) -> void:
+	_problems = problems
+	_problems_button.visible = _mode == "build" and not problems.is_empty()
+	_problems_button.text = "Falta: %d" % problems.size()
+	_problems_button.tooltip_text = "Lo que falta o está mal en la casa"
+
+
+## Lista de "lo que falta": lo que está sin apoyo o sin acceso (en rojo).
+func _show_problems() -> void:
+	var rows := _open_popup("Lo que falta")
+	for p in _problems:
+		var label := _small_label("• " + str(p["text"]), Color(1, 0.8, 0.7))
+		rows.add_child(label)
+	rows.add_child(_small_label("Lo que tiene problemas se ve en rojo.", Color(0.85, 0.9, 1)))
+	_popup_button(rows, "Cerrar", _close_popup)
+
+
+## Barra de la propuesta (casa compartida): la que armo yo (mandar o
+## descartar) o la de mi pareja (aprobar, no aprobar o cerrar).
+func _on_proposal_changed(mode: String, summary: Dictionary) -> void:
+	if _proposal_bar != null and is_instance_valid(_proposal_bar):
+		_proposal_bar.queue_free()
+	_proposal_bar = null
+	if mode == "":
+		return
+	_proposal_bar = PanelContainer.new()
+	_proposal_bar.add_theme_stylebox_override("panel", _mood_card.get_child(0).get_theme_stylebox("panel"))
+	_proposal_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_proposal_bar.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	_proposal_bar.add_child(row)
+	var partner := Couple.partner_name()
+	var cost := int(summary.get("cost", 0))
+	var cost_text := (" · $%d" % cost) if cost > 0 else ((" · +$%d" % -cost) if cost < 0 else "")
+	if mode == "own":
+		row.add_child(_small_label("Propuesta: %d cambios%s" % [int(summary.get("steps", 0)), cost_text], Color(1, 0.9, 0.7)))
+		row.add_child(_bar_button("Mandar a %s" % partner, EventBus.proposal_send_requested.emit))
+		row.add_child(_bar_button("Descartar", EventBus.proposal_discard_requested.emit))
+	else:
+		var request: Dictionary = get_tree().current_scene.get_node("House/Builder").review_request() \
+			if get_tree().current_scene.has_node("House/Builder") else {}
+		row.add_child(_small_label("Propuesta de %s: %s" % [str(request.get("by_name", partner)), str(request.get("text", ""))], Color(1, 0.85, 0.92)))
+		row.add_child(_bar_button("Aprobar", EventBus.proposal_answer_requested.emit.bind(true)))
+		row.add_child(_bar_button("No", EventBus.proposal_answer_requested.emit.bind(false)))
+		row.add_child(_bar_button("Cerrar", EventBus.proposal_close_requested.emit))
+	var box := MarginContainer.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	box.add_theme_constant_override("margin_top", 128)
+	box.add_child(_proposal_bar)
+	$Root.add_child(box)
+	_proposal_bar.tree_exited.connect(box.queue_free)
+
+
+func _bar_button(text: String, on_pressed: Callable) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.custom_minimum_size = Vector2(0, 52)
+	button.add_theme_font_size_override("font_size", 18)
+	button.pressed.connect(on_pressed)
+	return button

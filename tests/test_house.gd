@@ -17,6 +17,9 @@ func _ready() -> void:
 	_test_objects()
 	_test_save_round_trip()
 	_test_window_merge()
+	_test_pulido_rules()
+	_test_pulido_faces_and_rooms()
+	_test_pulido_migration()
 	print("\nPRUEBAS: %d pasaron, %d fallaron" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -186,13 +189,165 @@ func _test_window_merge() -> void:
 	var view := HouseView.new()
 	add_child(view)
 	view.setup(house)
+	# Pulido 1: la unión es de la JUNTURA (join_end en la pared que termina ahí).
 	var window := {"item": "wall_basic", "opening": "window_basic"}
 	house.apply([HouseData.write(0, "walls", "h:1,1", window), HouseData.write(0, "walls", "h:2,1", window)])
-	_check(not view._merged_window(0, Vector2i(2, 1)).is_empty(), "dos ventanas iguales seguidas se unen")
-	var separate := window.duplicate()
-	separate["separate"] = true
-	house.apply([HouseData.write(0, "walls", "h:2,1", separate)])
-	_check(view._merged_window(0, Vector2i(2, 1)).is_empty(), "marcada como separada: no se une")
+	_check(view._merged_window(0, Vector2i(2, 1)).is_empty(), "sin marca en la juntura: se ven separadas")
+	var joined := window.duplicate()
+	joined["join_end"] = true
+	house.apply([HouseData.write(0, "walls", "h:1,1", joined)])
+	_check(not view._merged_window(0, Vector2i(2, 1)).is_empty(), "con la juntura marcada: unidas")
+	_check(HouseView.joint_walls(house, 0, Vector2i(2, 1)) == ["h:1,1", "h:2,1"], "la juntura es de la pared que termina ahí")
 	house.apply([HouseData.write(0, "walls", "h:2,1", {"item": "wall_basic", "opening": "window_tall"})])
 	_check(view._merged_window(0, Vector2i(2, 1)).is_empty(), "ventanas distintas no se unen")
 	view.queue_free()
+
+
+# --- Pulido 1: constructor 2.0 ---
+
+## Casa de prueba: cimientos y piso de (0,0) a (5,5) con paredes alrededor.
+func _box_house() -> HouseData:
+	var house := HouseData.new()
+	_foundation(house, Vector2i(0, 0), Vector2i(5, 5))
+	_floor(house, 0, Vector2i(0, 0), Vector2i(5, 5))
+	var writes: Array = []
+	for edge in HouseGrid.edges_around_rect(Vector2i(0, 0), Vector2i(5, 5)):
+		writes.append(HouseData.write(0, "walls", edge, {"item": "wall_basic"}))
+	house.apply(writes)
+	return house
+
+
+func _test_pulido_rules() -> void:
+	# Muebles en diagonal: una silla ocupa 1 celda; una mesa 2x1 más.
+	var chair := HouseGrid.object_cells_full(Vector2i(1, 1), Vector2i(3, 3), 0, true)
+	_check(chair == [Vector2i(3, 3)], "silla en diagonal: 1 celda")
+	var table := HouseGrid.object_cells_full(Vector2i(2, 1), Vector2i(2, 2), 0, true)
+	_check(table.size() == 4 and Vector2i(2, 2) in table and Vector2i(3, 3) in table, "mesa 2x1 en diagonal: 4 celdas (%s)" % [table])
+	_check(HouseGrid.object_angle(1, true) == 135, "giro de a 45°: 90 + 45 = 135")
+	_check(HouseBuilder.next_orientation("chair_basic", 0, false) == [0, true]
+		and HouseBuilder.next_orientation("chair_basic", 0, true) == [1, false], "la silla gira de a 45° (8 direcciones)")
+	_check(HouseBuilder.next_orientation("stairs_basic", 0, false) == [1, false], "la escalera gira de a 90°")
+
+	var house := _box_house()
+	house.apply([HouseData.write(0, "objects", "o1", {"item": "table_basic", "cell": [2, 2], "rot": 0, "diag": true})])
+	_check(house.object_at(0, Vector2i(3, 3)) == "o1", "la mesa en diagonal ocupa sus celdas")
+	_check(not HouseRules.is_supported(house, 0, "objects", "o2", {"item": "chair_basic", "cell": [3, 3], "rot": 0}),
+		"no se puede encimar una silla sobre la mesa en diagonal")
+	_check(not HouseRules.is_supported(house, 0, "objects", "o3", {"item": "stairs_basic", "cell": [0, 0], "rot": 0, "diag": true}),
+		"la escalera no va en diagonal")
+
+	# Pilares: sostienen el piso de arriba a 2 celdas; lo de afuera va sobre el pasto.
+	var open := HouseData.new()
+	_check(HouseRules.is_supported(open, 0, "objects", "p1", {"item": "pillar_basic", "cell": [10, 10], "rot": 0}),
+		"un pilar va sobre el pasto")
+	_check(not HouseRules.is_supported(open, 0, "objects", "c1", {"item": "chair_basic", "cell": [10, 10], "rot": 0}),
+		"una silla no va sobre el pasto")
+	open.apply([HouseData.write(0, "objects", "p1", {"item": "pillar_basic", "cell": [10, 10], "rot": 0})])
+	_check(HouseRules.is_supported(open, 1, "floors", "12,12", {"item": "floor_basic"}), "el pilar sostiene un piso a 2 celdas")
+	_check(not HouseRules.is_supported(open, 1, "floors", "13,10", {"item": "floor_basic"}), "a 3 celdas ya no")
+	open.apply([HouseData.write(1, "floors", "11,11", {"item": "floor_basic"})])
+	var removal := HouseRules.check_removal(open, [HouseData.write(0, "objects", "p1", null)])
+	_check(not removal["blocked"].is_empty(), "no se puede quitar el pilar que sostiene el piso")
+	_check(HouseRules.removal_reason(open, HouseData.write(0, "objects", "p1", null)).begins_with("Este pilar sostiene"),
+		"aviso: \"%s\"" % HouseRules.removal_reason(open, HouseData.write(0, "objects", "p1", null)))
+	_check(HouseRules.is_supported(open, 0, "objects", "m1", {"item": "stairs_metal", "cell": [14, 14], "rot": 0}),
+		"la escalera metálica va afuera, sobre el pasto")
+
+	# Una pared que sostiene el piso de arriba no se puede quitar.
+	var two := _box_house()
+	two.apply([HouseData.write(1, "floors", "2,0", {"item": "floor_basic"})])
+	two.apply([HouseData.write(0, "floors", "2,0", null)])  # Abajo, solo la pared lo sostiene.
+	_check(HouseRules.removal_reason(two, HouseData.write(0, "walls", "h:2,0", null)) == "Esta pared sostiene el piso de arriba.",
+		"\"Esta pared sostiene el piso de arriba\"")
+
+	# Techos: bloqueados si los atraviesa una pared o un piso de arriba.
+	var roofed := _box_house()
+	var roof := {"item": "roof_flat", "rect": [0, 0, 6, 6]}
+	_check(HouseRules.is_supported(roofed, 0, "roofs", "r1", roof), "techo plano sobre la casa")
+	roofed.apply([HouseData.write(1, "walls", "v:3,2", {"item": "wall_basic"})])
+	_check(not HouseRules.is_supported(roofed, 0, "roofs", "r1", roof), "no se puede poner techo si una pared lo atraviesa")
+	_check(HouseRules.roof_blocker(roofed, 0, Rect2i(0, 0, 6, 6)).contains("pared"), "y se explica por qué")
+	var under := _box_house()
+	under.apply([HouseData.write(0, "roofs", "r1", roof)])
+	_check(not HouseRules.is_supported(under, 1, "walls", "v:3,2", {"item": "wall_basic"}), "ni una pared arriba atravesando el techo")
+	_check(not HouseRules.is_supported(under, 1, "floors", "2,2", {"item": "floor_basic"}), "ni un piso adentro del techo")
+
+	# Sin escalera no se sube: el piso de arriba queda "sin acceso".
+	var upstairs := _box_house()
+	upstairs.apply([HouseData.write(1, "floors", "1,1", {"item": "floor_basic"})])
+	_check(not HouseRules.has_access(upstairs, 1), "sin escalera: piso 1 sin acceso")
+	var problems := HouseRules.problems(upstairs)
+	_check(problems.size() == 1 and problems[0]["text"].contains("sin acceso"), "lo que falta: \"%s\"" % (problems[0]["text"] if problems.size() > 0 else ""))
+	upstairs.apply([HouseData.write(0, "objects", "s1", {"item": "stairs_spiral", "cell": [3, 3], "rot": 0})])
+	_check(HouseRules.has_access(upstairs, 1) and HouseRules.problems(upstairs).is_empty(), "con la escalera de caracol: con acceso")
+	_check(upstairs.object_cells(0, "s1").size() == 4, "la escalera de caracol ocupa 2x2")
+
+	# Copiar contorno de abajo: losa completa + paredes de afuera.
+	var outline := HouseBuilder.outline_writes(_box_house(), 1)
+	var floors := outline.filter(func(w): return w["layer"] == "floors").size()
+	var walls := outline.filter(func(w): return w["layer"] == "walls").size()
+	_check(floors == 36 and walls == 24, "copiar contorno: 36 pisos y 24 paredes (%d, %d)" % [floors, walls])
+	var check := HouseRules.check_placement(_box_house(), outline)
+	_check(check["blocked"].is_empty(), "el contorno copiado se puede construir")
+
+
+func _test_pulido_faces_and_rooms() -> void:
+	var house := _box_house()
+	_check(WallFaces.side_for_cell("h:2,0", Vector2i(2, 0)) == "b" and WallFaces.side_for_cell("h:2,0", Vector2i(2, -1)) == "a",
+		"lado a = norte, lado b = sur")
+	var next := WallFaces.next_face(house, 0, "h:2,0", "b", 1)
+	_check(next == {"edge": "h:3,0", "side": "b"}, "la pared de al lado (sigue derecha)")
+	var corner := WallFaces.next_face(house, 0, "h:5,0", "b", 1)
+	_check(corner == {"edge": "v:6,0", "side": "a"}, "en la esquina de adentro dobla (%s)" % [corner])
+	var outside := WallFaces.next_face(house, 0, "h:5,0", "a", 1)
+	_check(outside == {"edge": "v:6,0", "side": "b"}, "por afuera rodea la esquina (%s)" % [outside])
+
+	# Pintar una cara no pinta la otra.
+	var wall: Dictionary = house.get_piece(0, "walls", "h:2,0").duplicate()
+	wall["color_b"] = "#ff0000"
+	house.apply([HouseData.write(0, "walls", "h:2,0", wall)])
+	_check(HousePieces.wall_face_color(house.get_piece(0, "walls", "h:2,0"), "b") == Color("#ff0000")
+		and HousePieces.wall_face_color(house.get_piece(0, "walls", "h:2,0"), "a") != Color("#ff0000"),
+		"pintar adentro no pinta afuera")
+	_check(HousePermissions.is_minor(house, [HouseData.write(0, "walls", "h:2,1", {"item": "wall_basic", "color_a": "#00ff00"})]) == false,
+		"una pared nueva no es cambio menor")
+	_check(HousePermissions.is_minor(house, [HouseData.write(0, "walls", "h:2,0", {"item": "wall_basic", "color_a": "#00ff00"})]),
+		"pintar una cara sí es cambio menor")
+
+	# Cuartos: cerrados por paredes; el tipo sale de los muebles.
+	var rooms := HouseRooms.detect(house, 0)
+	_check(rooms.size() == 1 and rooms[0]["cells"].size() == 36 and rooms[0]["type"] == "empty", "un cuarto cerrado y vacío")
+	house.apply([HouseData.write(0, "objects", "b1", {"item": "bed_basic", "cell": [1, 1], "rot": 0})])
+	var room := HouseRooms.room_at(house, 0, Vector2i(4, 4))
+	_check(room["type"] == "bedroom" and room["name"] == "Dormitorio", "con una cama es dormitorio")
+	_check(HouseRooms.recommended_items(room)[0] in ["bed_basic", "bed_double"], "la Tienda recomienda primero cosas de dormitorio")
+	house.apply([HouseData.write(0, "objects", "k1", {"item": "stove_basic", "cell": [4, 1], "rot": 0})])
+	_check(HouseRooms.room_at(house, 0, Vector2i(4, 4))["type"] == "mixed", "cama y cocina: multiuso")
+	house.apply([HouseData.write(0, "walls", "h:0,0", null)])
+	_check(HouseRooms.room_at(house, 0, Vector2i(4, 4)).is_empty(), "si se abre una pared ya no es un cuarto")
+
+
+func _test_pulido_migration() -> void:
+	# Una casa de antes: pintura de toda la pared y ventanas unidas solas.
+	var old := {"levels": [{"walls": {
+		"h:1,1": {"item": "wall_basic", "opening": "window_basic", "color": "#ffd966"},
+		"h:2,1": {"item": "wall_basic", "opening": "window_basic"},
+		"h:5,1": {"item": "wall_basic", "opening": "window_basic"},
+		"h:6,1": {"item": "wall_basic", "opening": "window_basic", "separate": true},
+	}}], "next_id": 3, "lot_size": [32, 32]}
+	var house := HouseData.new()
+	house.from_dict(old)
+	var a: Dictionary = house.get_piece(0, "walls", "h:1,1")
+	_check(a.get("color_a") == "#ffd966" and a.get("color_b") == "#ffd966" and not a.has("color"), "migración: la pintura pasa a las dos caras")
+	_check(a.get("join_end", false), "migración: las ventanas que se veían unidas quedan unidas en la juntura")
+	_check(not house.get_piece(0, "walls", "h:5,1").has("join_end") and not house.get_piece(0, "walls", "h:6,1").has("separate"),
+		"migración: las separadas quedan separadas (y sin la marca vieja)")
+	_check(house.to_dict()["format"] == HouseData.FORMAT, "la casa se guarda con formato 3")
+	var again := HouseData.new()
+	var dict := house.to_dict()
+	dict["levels"][0]["walls"]["h:1,1"].erase("join_end")  # El jugador las separó.
+	again.from_dict(dict)
+	_check(not again.get_piece(0, "walls", "h:1,1").has("join_end"), "una casa nueva no se vuelve a migrar")
+	var save := SaveMigrations.migrate({"format_version": 2, "state": {"house": old.duplicate(true), "economy": {}}}, 3)
+	_check(save["state"]["house"]["format"] == 3
+		and save["state"]["house"]["levels"][0]["walls"]["h:1,1"].get("color_b") == "#ffd966", "guardado v2 → v3")

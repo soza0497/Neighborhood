@@ -16,7 +16,7 @@ const PRE_MIGRATION_PATH := "user://save.pre_migration.json"
 
 ## Versión del formato del archivo. Subila cuando cambie la forma de los
 ## datos guardados (la Fase 3 agrega migraciones de versiones viejas).
-const FORMAT_VERSION := 2
+const FORMAT_VERSION := 3
 
 
 func _ready() -> void:

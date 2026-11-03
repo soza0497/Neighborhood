@@ -42,6 +42,11 @@ var _sync_retry_at := 0
 ## El personaje de la pareja (en la casa compartida), o null.
 var partner_character: Character
 var _partner_saved_unix := -1
+## Pulido 1: hay que volver a revisar "lo que falta" (se hace como mucho
+## cada PROBLEMS_INTERVAL segundos, y solo en modo construir).
+var _problems_dirty := true
+var _problems_timer := 0.0
+const PROBLEMS_INTERVAL := 0.4
 
 
 func _ready() -> void:
@@ -79,6 +84,19 @@ func _ready() -> void:
 	EventBus.view_roofs_toggle_requested.connect(_on_roofs_toggle)
 	EventBus.view_walls_toggle_requested.connect(_on_walls_toggle)
 	EventBus.camera_focus_character_requested.connect(_focus_character)
+	# Constructor 2.0 (Pulido 1).
+	EventBus.build_nudge_requested.connect(_builder.nudge_selected)
+	EventBus.build_paint_step_requested.connect(_builder.paint_step)
+	EventBus.build_context_action_requested.connect(_builder.context_action)
+	EventBus.build_erase_multi_toggled.connect(_builder.set_erase_multi)
+	EventBus.build_copy_outline_requested.connect(_builder.copy_outline)
+	EventBus.proposal_send_requested.connect(_builder.send_draft)
+	EventBus.proposal_discard_requested.connect(_builder.discard_draft)
+	EventBus.proposal_review_requested.connect(_on_proposal_review_requested)
+	EventBus.proposal_answer_requested.connect(_on_proposal_answer_requested)
+	EventBus.proposal_close_requested.connect(_builder.close_review)
+	house.piece_changed.connect(func(_l: int, _layer: String, _k: String) -> void: _problems_dirty = true)
+	house.reloaded.connect(func() -> void: _problems_dirty = true)
 	EventBus.build_confirm_requested.connect(_builder.confirm_pending)
 	EventBus.build_cancel_requested.connect(_builder.cancel_pending)
 	EventBus.undo_requested.connect(_undo)
@@ -107,8 +125,21 @@ func _ready() -> void:
 	history.refresh()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_check_home_sync()
+	_problems_timer -= delta
+	if _problems_dirty and _problems_timer <= 0.0 and mode == "build":
+		_problems_dirty = false
+		_problems_timer = PROBLEMS_INTERVAL
+		_update_problems()
+
+
+## Lista de "lo que falta" (sin apoyo, sin acceso): las piezas se pintan de
+## rojo y la interfaz muestra el aviso. Solo en modo construir.
+func _update_problems() -> void:
+	var problems: Array = HouseRules.problems(house) if mode == "build" else []
+	_house_view.set_problems(problems)
+	EventBus.house_problems_changed.emit(problems)
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -123,11 +154,16 @@ func _unhandled_key_input(event: InputEvent) -> void:
 # (se calculó con la casa de antes).
 func _undo() -> void:
 	_builder.cancel_pending()
+	if _builder.has_draft():
+		_builder.draft_undo()  # Dentro de la propuesta, deshace en ella.
+		return
 	history.undo()
 
 
 func _redo() -> void:
 	_builder.cancel_pending()
+	if _builder.has_draft():
+		return
 	history.redo()
 
 
@@ -139,6 +175,11 @@ func set_mode(new_mode: String) -> void:
 	if new_mode == "build" and Economy.server_mode and not GameServer.online:
 		EventBus.toast.emit(Economy.OFFLINE_TEXT + ": por ahora no se puede construir.")
 		return
+	if new_mode == "live" and _builder.has_draft():
+		if _builder.draft_mode() == "own":
+			EventBus.toast.emit("Primero mandá o descartá la propuesta.")
+			return
+		_builder.close_review()
 	mode = new_mode
 	_builder.set_active(mode == "build")
 	_live.active = mode == "live"
@@ -150,6 +191,9 @@ func set_mode(new_mode: String) -> void:
 		if partner_character != null:
 			partner_character.reset_after_build()
 	EventBus.game_mode_changed.emit(mode)
+	_problems_dirty = true
+	if mode == "live":
+		_update_problems()  # Fuera de construir no se pinta nada de rojo.
 
 
 func _on_build_item_selected(item_id: String) -> void:
@@ -167,6 +211,8 @@ func _on_level_change_requested(delta: int) -> void:
 func _set_level(level: int) -> void:
 	var new_level := _builder.set_level(level)
 	_house_view.set_top_visible_level(new_level)
+	# La cámara mira a la altura de ese piso (la planta baja queda igual).
+	_camera_rig.set_floor_height(new_level * HouseGrid.WALL_HEIGHT)
 	EventBus.build_level_changed.emit(new_level)
 
 
@@ -336,6 +382,8 @@ func _check_home_sync() -> void:
 		return
 	if Economy.busy or _syncing or Economy.now() < _sync_retry_at:
 		return
+	if _builder.has_draft():
+		return  # Con una propuesta a la vista, se pone al día al cerrarla.
 	if not _sync_pending and house.rev == Economy.house_rev:
 		return
 	if not _sync_pending and Economy.own_rev == Economy.house_rev and house.rev == Economy.house_rev - 1:
@@ -475,6 +523,32 @@ func _on_character_edit_finished(data: Dictionary) -> void:
 
 func _on_game_saving() -> void:
 	GameState.camera = _camera_rig.get_state()
-	GameState.house = house.to_dict()
+	# Una propuesta a la vista no se guarda: se guarda la casa de verdad.
+	GameState.house = _builder.house_without_draft().to_dict() if _builder.has_draft() else house.to_dict()
 	GameState.character = _character.to_dict()
 	GameState.clock = {"minutes": GameClock.minutes}
+
+
+# --- Propuesta de la pareja (Pulido 1) ---
+
+## Ver en la casa la propuesta de la pareja (Menú → Casa → Ver).
+func _on_proposal_review_requested(request_id: int) -> void:
+	if mode != "build":
+		set_mode("build")
+		if mode != "build":
+			return
+	var result: Dictionary = await Couple.get_request(request_id)
+	if not result["ok"]:
+		return
+	_builder.show_review(result["request"], result["writes"])
+	EventBus.toast.emit("Así quedaría la propuesta de %s." % str(result["request"].get("by_name", "")))
+
+
+## Aprobar o rechazar la propuesta que se está viendo.
+func _on_proposal_answer_requested(approve: bool) -> void:
+	var request := _builder.review_request()
+	if request.is_empty():
+		return
+	_builder.close_review()
+	await Couple.answer_request(int(request.get("id", 0)), approve)
+	_sync_pending = true

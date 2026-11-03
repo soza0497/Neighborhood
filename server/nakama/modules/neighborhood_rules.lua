@@ -42,7 +42,7 @@ local LAYER_KINDS = {
   foundation = { foundation = true },
   floors = { floor = true },
   walls = { wall = true },
-  objects = { furniture = true, stairs = true },
+  objects = { furniture = true, stairs = true, pillar = true },
   roofs = { roof = true },
 }
 local OPENING_KINDS = { door = true, window = true }
@@ -236,6 +236,9 @@ function rules.new_data(catalog, progression, jobs)
     data.jobs[job.id] = job
   end
   data.levels = data.progression.levels or { 0 }
+  -- La última que se armó queda a mano para normalize_house (necesita saber
+  -- qué pieza es ventana al convertir casas viejas).
+  rules.data = data
   return data
 end
 
@@ -255,12 +258,71 @@ function rules.level_for_xp(data, xp)
   return level
 end
 
+-- Versión del formato de la casa (HouseData.FORMAT): 3 = Pulido 1.
+rules.HOUSE_FORMAT = 3
+
 function rules.empty_house()
   local levels = {}
   for i = 1, rules.MAX_LEVELS do
     levels[i] = { foundation = {}, floors = {}, walls = {}, objects = {}, roofs = {} }
   end
-  return { levels = levels, next_id = 1, lot_size = { rules.LOT_SIZE, rules.LOT_SIZE } }
+  return { levels = levels, next_id = 1, lot_size = { rules.LOT_SIZE, rules.LOT_SIZE }, format = rules.HOUSE_FORMAT }
+end
+
+-- Casas de antes del Pulido 1 (HouseData.upgrade_legacy, la misma cuenta):
+-- el color de una pared pasa a sus dos caras, y las ventanas iguales que se
+-- veían unidas (sin "separate", solo esas dos en la esquina) quedan unidas
+-- en la juntura (join_end en la pared que termina ahí).
+local function next_in_line(key)
+  local x, z, horizontal = house_rules.parse_edge(key)
+  if horizontal then
+    return house_rules.edge_key(x + 1, z, true), x + 1, z
+  end
+  return house_rules.edge_key(x, z + 1, false), x, z + 1
+end
+
+local function window_kind(data, item_id)
+  local item = item_id and data and data.items[item_id]
+  return item ~= nil and item.kind == "window"
+end
+
+function rules.upgrade_legacy(data, house)
+  for _, level in ipairs(house.levels) do
+    local walls = level.walls or {}
+    local joins = {}
+    for key, wall in pairs(walls) do
+      if type(wall) == "table" and wall.opening ~= nil and wall.separate ~= true and window_kind(data, wall.opening) then
+        local next_key, vx, vz = next_in_line(key)
+        local other = walls[next_key]
+        if type(other) == "table" and other.opening == wall.opening and other.separate ~= true then
+          local around = 0
+          for _, edge in ipairs({ house_rules.edge_key(vx, vz, true), house_rules.edge_key(vx - 1, vz, true),
+              house_rules.edge_key(vx, vz, false), house_rules.edge_key(vx, vz - 1, false) }) do
+            if walls[edge] ~= nil then
+              around = around + 1
+            end
+          end
+          if around == 2 then
+            table.insert(joins, key)
+          end
+        end
+      end
+    end
+    for _, wall in pairs(walls) do
+      if type(wall) == "table" then
+        if wall.color ~= nil then
+          wall.color_a = wall.color_a or wall.color
+          wall.color_b = wall.color_b or wall.color
+          wall.color = nil
+        end
+        wall.separate = nil
+      end
+    end
+    for _, key in ipairs(joins) do
+      walls[key].join_end = true
+    end
+  end
+  house.format = rules.HOUSE_FORMAT
 end
 
 -- Completa una casa leída (le pueden faltar niveles o capas vacías).
@@ -279,6 +341,9 @@ function rules.normalize_house(house)
   end
   house.next_id = math.floor(num(house.next_id) or 1)
   house.lot_size = house.lot_size or { rules.LOT_SIZE, rules.LOT_SIZE }
+  if (num(house.format) or 1) < rules.HOUSE_FORMAT then
+    rules.upgrade_legacy(rules.data, house)
+  end
   return house
 end
 
@@ -382,11 +447,15 @@ local function clean_value(data, layer, value)
     refuse(item.name .. " no va ahí.")
   end
   local clean = { item = value.item }
-  if value.color ~= nil then
-    if not check_color(value.color) then
-      refuse("Color inválido.")
+  -- color: piso, mueble, techo (y paredes de antes). color_a / color_b:
+  -- las dos caras de una pared (Pulido 1).
+  for _, field in ipairs({ "color", "color_a", "color_b" }) do
+    if value[field] ~= nil then
+      if not check_color(value[field]) or (field ~= "color" and layer ~= "walls") then
+        refuse("Color inválido.")
+      end
+      clean[field] = value[field]
     end
-    clean.color = value.color
   end
   if layer == "walls" then
     if value.opening ~= nil then
@@ -396,8 +465,8 @@ local function clean_value(data, layer, value)
       end
       clean.opening = value.opening
     end
-    if value.separate == true then
-      clean.separate = true
+    if value.join_end == true then
+      clean.join_end = true
     end
   elseif layer == "objects" then
     local cell, rot = value.cell, value.rot or 0
@@ -414,6 +483,13 @@ local function clean_value(data, layer, value)
     end
     clean.cell = { cell[1], cell[2] }
     clean.rot = rot
+    -- 45° más (solo muebles; las reglas de apoyo lo revisan).
+    if value.diag == true then
+      if item.kind ~= "furniture" then
+        refuse("Eso no se puede poner en diagonal.")
+      end
+      clean.diag = true
+    end
   elseif layer == "roofs" then
     local r = value.rect
     if type(r) ~= "table" or not in_range(r[1], 0, rules.LOT_SIZE - 1) or not in_range(r[2], 0, rules.LOT_SIZE - 1)

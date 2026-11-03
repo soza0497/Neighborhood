@@ -66,6 +66,20 @@ static func piece_color(value: Dictionary) -> Color:
 	return Color.from_string(item.get("color", "#ff00ff"), Color.MAGENTA)
 
 
+## Color de una cara de pared ("a" o "b", ver HouseData): la pintada, o el
+## color viejo de toda la pared, o el del catálogo.
+static func wall_face_color(value: Dictionary, face: String) -> Color:
+	var field := "color_" + face
+	if value.has(field):
+		return Color.from_string(value[field], Color.MAGENTA)
+	return piece_color(value)
+
+
+## Pinta de rojo una pieza con problemas (sin apoyo): la lista de "lo que falta".
+static func make_problem(node: Node) -> void:
+	_apply_override(node, transparent_material(Color(1.0, 0.15, 0.1, 0.75)))
+
+
 ## Pinta una pieza que todavía se está construyendo (naranja transparente).
 static func make_construction(node: Node) -> void:
 	_apply_override(node, transparent_material(Color(1.0, 0.7, 0.2, 0.5)))
@@ -127,7 +141,10 @@ static func build_wall(key: String, value: Dictionary, visible_height: float, fu
 
 	var t := HouseGrid.WALL_THICKNESS
 	var length := 1.0 if full_length else 1.0 - t
-	var wall_mat := material(piece_color(value))
+	# Cada cara con su color (Pulido 1): la cara "a" mira a -Z local (norte u
+	# oeste). Si las dos son iguales, una sola caja.
+	var color_a := wall_face_color(value, "a")
+	var color_b := wall_face_color(value, "b")
 
 	# Partes macizas de la pared: todo, menos el hueco de la puerta o ventana.
 	var solid: Array = [[0.0, HouseGrid.WALL_HEIGHT]]
@@ -150,8 +167,13 @@ static func build_wall(key: String, value: Dictionary, visible_height: float, fu
 	for part in solid:
 		var bottom: float = part[0]
 		var top: float = minf(part[1], visible_height)
-		if top - bottom > 0.01:
-			add_box(node, Vector3(0, (bottom + top) / 2.0, 0), Vector3(length, top - bottom, t), wall_mat)
+		if top - bottom <= 0.01:
+			continue
+		if color_a == color_b:
+			add_box(node, Vector3(0, (bottom + top) / 2.0, 0), Vector3(length, top - bottom, t), material(color_a))
+		else:
+			add_box(node, Vector3(0, (bottom + top) / 2.0, -t / 4.0), Vector3(length, top - bottom, t / 2.0), material(color_a))
+			add_box(node, Vector3(0, (bottom + top) / 2.0, t / 4.0), Vector3(length, top - bottom, t / 2.0), material(color_b))
 	return node
 
 
@@ -223,8 +245,10 @@ static func build_post(vertex: Vector2i, color: Color, visible_height: float, wi
 	return node
 
 
-## Mueble o escalera. Se arma "mirando" hacia +Z y después se gira.
-static func build_object(value: Dictionary) -> Node3D:
+## Mueble, escalera o pilar. Se arma "mirando" hacia +Z y después se gira
+## (de a 90°, o 45° más si va en diagonal). `ground_drop` = cuánto más abajo
+## está el suelo (algo de afuera sobre el pasto, sin cimientos).
+static func build_object(value: Dictionary, ground_drop := 0.0) -> Node3D:
 	var item := Catalog.get_item(value["item"])
 	var footprint := HouseData.item_footprint(item)
 	var rot := int(value.get("rot", 0))
@@ -232,8 +256,8 @@ static func build_object(value: Dictionary) -> Node3D:
 	var size := HouseGrid.rotated_size(footprint, rot)
 
 	var node := Node3D.new()
-	node.position = Vector3(anchor.x + size.x / 2.0, 0, anchor.y + size.y / 2.0)
-	node.rotation.y = -rot * PI / 2.0
+	node.position = Vector3(anchor.x + size.x / 2.0, -ground_drop, anchor.y + size.y / 2.0)
+	node.rotation.y = -deg_to_rad(HouseGrid.object_angle(rot, value.get("diag", false)))
 
 	var w := float(footprint.x)
 	var d := float(footprint.y)
@@ -244,7 +268,20 @@ static func build_object(value: Dictionary) -> Node3D:
 	var light_mat := material(color.lightened(0.6))
 
 	if item.get("kind", "") == "stairs":
-		_build_stairs(node, w, d, main_mat, dark_mat)
+		var rise := HouseGrid.WALL_HEIGHT + ground_drop
+		match item.get("stairs_style", "straight"):
+			"spiral":
+				_build_spiral_stairs(node, w, d, rise, main_mat, dark_mat)
+			"metal":
+				_build_metal_stairs(node, w, d, rise, main_mat, dark_mat)
+			_:
+				_build_stairs(node, w, d, rise, main_mat, dark_mat)
+		return node
+	if item.get("kind", "") == "pillar":
+		var tall := HouseGrid.WALL_HEIGHT + ground_drop
+		add_box(node, Vector3(0, tall / 2.0, 0), Vector3(0.32, tall, 0.32), main_mat)
+		add_box(node, Vector3(0, 0.08, 0), Vector3(0.46, 0.16, 0.46), dark_mat)
+		add_box(node, Vector3(0, tall - 0.08, 0), Vector3(0.46, 0.16, 0.46), dark_mat)
 		return node
 
 	match item.get("shape", "box"):
@@ -269,6 +306,18 @@ static func build_object(value: Dictionary) -> Node3D:
 			add_box(node, Vector3(0, h / 2.0, -d * 0.36), Vector3(w * 0.92, h, d * 0.2), dark_mat)
 			for sx in [-1, 1]:
 				add_box(node, Vector3(sx * w * 0.42, h * 0.35, 0.05), Vector3(w * 0.08, h * 0.7, d * 0.75), dark_mat)
+		"plant":
+			var pot := material(Color("#c9774f"))
+			add_box(node, Vector3(0, 0.15, 0), Vector3(0.4, 0.3, 0.4), pot)
+			add_box(node, Vector3(0, 0.3 + (h - 0.3) * 0.45, 0), Vector3(0.55, (h - 0.3) * 0.9, 0.55), main_mat)
+			add_box(node, Vector3(0, h - 0.12, 0), Vector3(0.35, 0.24, 0.35), light_mat)
+		"lamp":
+			add_box(node, Vector3(0, 0.03, 0), Vector3(0.35, 0.06, 0.35), dark_mat)
+			add_box(node, Vector3(0, h / 2.0, 0), Vector3(0.05, h, 0.05), dark_mat)
+			add_box(node, Vector3(0, h - 0.15, 0), Vector3(0.4, 0.3, 0.4), main_mat)
+		"vase":
+			add_box(node, Vector3(0, h * 0.3, 0), Vector3(0.3, h * 0.6, 0.3), main_mat)
+			add_box(node, Vector3(0, h * 0.8, 0), Vector3(0.4, h * 0.4, 0.4), material(Color("#ff9db5")))
 		_:
 			add_box(node, Vector3(0, h / 2.0, 0), Vector3(w * 0.9, h, d * 0.9), main_mat)
 			# Marca en el frente, para saber hacia dónde mira.
@@ -277,12 +326,42 @@ static func build_object(value: Dictionary) -> Node3D:
 
 
 ## Escalones que suben hacia atrás (-Z) hasta el nivel de arriba.
-static func _build_stairs(node: Node3D, w: float, d: float, mat: Material, side_mat: Material) -> void:
+static func _build_stairs(node: Node3D, w: float, d: float, rise: float, mat: Material, side_mat: Material) -> void:
 	var step_depth := d / STAIR_STEPS
 	for i in STAIR_STEPS:
-		var step_top := (i + 1) * HouseGrid.WALL_HEIGHT / STAIR_STEPS
+		var step_top := (i + 1) * rise / STAIR_STEPS
 		var z := d / 2.0 - (i + 0.5) * step_depth
 		add_box(node, Vector3(0, step_top / 2.0, z), Vector3(w * 0.85, step_top, step_depth), mat if i % 2 == 0 else side_mat)
+
+
+## Escalera metálica (de afuera): escalones finos sin relleno, dos largueros
+## y una baranda de un lado.
+static func _build_metal_stairs(node: Node3D, w: float, d: float, rise: float, mat: Material, side_mat: Material) -> void:
+	var step_depth := d / STAIR_STEPS
+	for i in STAIR_STEPS:
+		var step_top := (i + 1) * rise / STAIR_STEPS
+		var z := d / 2.0 - (i + 0.5) * step_depth
+		add_box(node, Vector3(0, step_top - 0.03, z), Vector3(w * 0.8, 0.06, step_depth * 0.9), mat)
+	var slope := atan2(rise, d)
+	var length := sqrt(rise * rise + d * d)
+	for side in [-1, 1]:
+		var rail := add_box(node, Vector3(side * w * 0.42, rise / 2.0, 0), Vector3(0.06, 0.18, length), side_mat)
+		rail.rotation.x = slope
+	var handrail := add_box(node, Vector3(w * 0.42, rise / 2.0 + 0.9, 0), Vector3(0.05, 0.05, length), side_mat)
+	handrail.rotation.x = slope
+
+
+## Escalera de caracol: un poste en el medio y escalones en abanico que dan
+## una vuelta completa.
+static func _build_spiral_stairs(node: Node3D, w: float, d: float, rise: float, mat: Material, side_mat: Material) -> void:
+	var radius := minf(w, d) * 0.45
+	add_box(node, Vector3(0, rise / 2.0, 0), Vector3(0.14, rise, 0.14), side_mat)
+	var steps := STAIR_STEPS + 2
+	for i in steps:
+		var step := add_box(node, Vector3.ZERO, Vector3(radius, 0.06, 0.42), mat if i % 2 == 0 else side_mat)
+		var angle := PI / 2.0 + float(i) / steps * TAU
+		step.position = Vector3(cos(angle) * radius / 2.0, (i + 1) * rise / steps - 0.03, -sin(angle) * radius / 2.0)
+		step.rotation.y = angle
 
 
 ## Techo a dos aguas sobre un rectángulo de celdas. Va encima de las paredes.
@@ -290,6 +369,8 @@ static func _build_stairs(node: Node3D, w: float, d: float, mat: Material, side_
 ## las paredes, `gable_color`) para que no quede un hueco bajo el techo.
 static func build_roof(value: Dictionary, gable_color: Color) -> Node3D:
 	var rect := HouseData.roof_rect(value)
+	if Catalog.get_item(value.get("item", "")).get("roof_style", "gable") == "flat":
+		return build_flat_roof(value)
 
 	# Se arma con la cumbrera (la parte más alta) a lo largo del lado largo,
 	# en un sistema "a lo largo" (x) y "a lo ancho" (z), centrado.
@@ -367,3 +448,24 @@ static func _add_tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, normal
 static func _add_quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, normal: Vector3) -> void:
 	_add_tri(st, a, b, c, normal)
 	_add_tri(st, a, c, d, normal)
+
+
+## Techo plano de concreto (casa moderna): una losa con un pretil bajito
+## alrededor. Va encima de las paredes, como el de dos aguas.
+static func build_flat_roof(value: Dictionary) -> Node3D:
+	var rect := HouseData.roof_rect(value)
+	var node := Node3D.new()
+	node.position = Vector3(rect.position.x + rect.size.x / 2.0, HouseGrid.WALL_HEIGHT,
+		rect.position.y + rect.size.y / 2.0)
+	var color := piece_color(value)
+	var slab := 0.22
+	var over := 0.12
+	var size := Vector2(rect.size.x + over * 2.0, rect.size.y + over * 2.0)
+	add_box(node, Vector3(0, slab / 2.0, 0), Vector3(size.x, slab, size.y), material(color))
+	var parapet_mat := material(color.darkened(0.12))
+	var ph := 0.3
+	var pt := 0.14
+	for side in [-1, 1]:
+		add_box(node, Vector3(0, slab + ph / 2.0, side * (size.y - pt) / 2.0), Vector3(size.x, ph, pt), parapet_mat)
+		add_box(node, Vector3(side * (size.x - pt) / 2.0, slab + ph / 2.0, 0), Vector3(pt, ph, size.y - pt * 2.0), parapet_mat)
+	return node

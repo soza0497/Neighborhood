@@ -10,7 +10,7 @@ class_name SaveMigrations
 const STARTING_MONEY := 3000
 
 ## version de origen → función que la sube a la siguiente.
-const STEPS := {1: "_v1_to_v2"}
+const STEPS := {1: "_v1_to_v2", 2: "_v2_to_v3"}
 
 
 ## Sube `data` hasta la versión `target`. Devuelve el diccionario nuevo.
@@ -48,5 +48,21 @@ static func _v1_to_v2(data: Dictionary) -> Dictionary:
 		"discovered": discovered.keys(),
 		"job": {},
 	}
+	data["state"] = state
+	return data
+
+
+## v2 → v3 (Pulido 1): la pintura de cada pared pasa a sus dos caras y la
+## unión de ventanas se guarda en la juntura (ver HouseData.upgrade_legacy).
+## Los muebles no cambian: los de antes siguen derechos (sin "diag").
+static func _v2_to_v3(data: Dictionary) -> Dictionary:
+	var state: Dictionary = data.get("state", {})
+	var house_dict: Dictionary = state.get("house", {})
+	# Solo los niveles: lo demás (por ejemplo el tamaño de la parcela, que mueve
+	# la casa al cargar) queda igual.
+	if not house_dict.is_empty() and int(house_dict.get("format", 1)) < HouseData.FORMAT:
+		HouseData.upgrade_legacy(house_dict.get("levels", []))
+		house_dict["format"] = HouseData.FORMAT
+		state["house"] = house_dict
 	data["state"] = state
 	return data

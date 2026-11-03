@@ -6,8 +6,13 @@ extends RefCounted
 ## clave → valor:
 ##   foundation: "x,z" → {item}               (solo nivel 0)
 ##   floors:     "x,z" → {item, color?}
-##   walls:      "h:x,z" / "v:x,z" → {item, color?, opening?}
-##   objects:    "o7" → {item, cell: [x, z], rot, color?}   (muebles, escaleras)
+##   walls:      "h:x,z" / "v:x,z" → {item, color_a?, color_b?, opening?, join_end?}
+##               color_a = cara que mira a la 1.ª celda de HouseGrid.edge_cells
+##               (norte u oeste), color_b = la otra (Pulido 1: cada cara se
+##               pinta aparte). join_end = la ventana se une con la de la
+##               pared que sigue en línea (la unión es de esa juntura).
+##   objects:    "o7" → {item, cell: [x, z], rot, diag?, color?}   (muebles,
+##               escaleras, pilares; diag = 45° más, ver HouseGrid)
 ##   roofs:      "o8" → {item, rect: [x, z, ancho, fondo], color?}
 ##
 ## TODO cambio pasa por apply(), con una lista de "escrituras":
@@ -24,6 +29,9 @@ signal piece_changed(level: int, layer: String, key: String)
 signal reloaded
 
 const LAYERS := ["foundation", "floors", "walls", "objects", "roofs"]
+## Versión del formato de la casa. 3 = Pulido 1 (pintura por cara de pared y
+## unión de ventanas en la juntura). Las casas sin número son de antes.
+const FORMAT := 3
 
 ## levels[nivel][capa][clave] = valor
 var levels: Array = []
@@ -130,8 +138,14 @@ func object_cells(level: int, key: String) -> Array[Vector2i]:
 	var value: Variant = get_piece(level, "objects", key)
 	if value == null:
 		return []
-	var item := Catalog.get_item(value["item"])
-	return HouseGrid.object_cells(item_footprint(item), object_anchor(value), int(value.get("rot", 0)))
+	return value_cells(value)
+
+
+## Celdas que ocupa un objeto (diccionario de la capa "objects").
+static func value_cells(value: Dictionary) -> Array[Vector2i]:
+	var item := Catalog.get_item(value.get("item", ""))
+	return HouseGrid.object_cells_full(item_footprint(item), object_anchor(value), int(value.get("rot", 0)),
+		bool(value.get("diag", false)))
 
 
 ## Celda de anclaje de un objeto (los números del JSON llegan como decimales).
@@ -165,6 +179,7 @@ func to_dict() -> Dictionary:
 		"levels": levels.duplicate(true),
 		"next_id": next_id,
 		"lot_size": [HouseGrid.LOT_SIZE.x, HouseGrid.LOT_SIZE.y],
+		"format": FORMAT,
 	}
 
 
@@ -176,6 +191,8 @@ func from_dict(data: Dictionary) -> void:
 		for layer in LAYERS:
 			levels[i][layer] = (saved_levels[i] as Dictionary).get(layer, {}).duplicate(true)
 	next_id = int(data.get("next_id", 1))
+	if int(data.get("format", 1)) < FORMAT:
+		upgrade_legacy(levels)
 
 	# Migración: las casas guardadas antes tenían un lote de 12x12. Si la
 	# parcela cambió de tamaño, la casa se centra en la nueva.
@@ -184,6 +201,50 @@ func from_dict(data: Dictionary) -> void:
 	if migrated_offset != Vector2i.ZERO:
 		_shift(migrated_offset)
 	reloaded.emit()
+
+
+## Casas de antes del Pulido 1 (sin "format"): la misma cuenta que
+## normalize_house en el servidor (neighborhood_rules.lua, upgrade_legacy).
+##   - Pintura: el color de una pared pasa a sus DOS caras.
+##   - Ventanas: antes se unían solas si eran iguales y ninguna estaba
+##     "separada". Ahora la unión se guarda en la juntura (join_end en la
+##     pared que termina ahí): se marca donde antes se veían unidas.
+static func upgrade_legacy(house_levels: Array) -> void:
+	for level in house_levels:
+		var walls: Dictionary = level.get("walls", {})
+		var joins: Array = []
+		for key in walls:
+			if _legacy_joined(walls, key):
+				joins.append(key)
+		for key in walls:
+			var wall: Dictionary = walls[key]
+			if wall.has("color"):
+				wall["color_a"] = wall.get("color_a", wall["color"])
+				wall["color_b"] = wall.get("color_b", wall["color"])
+				wall.erase("color")
+			wall.erase("separate")
+		for key in joins:
+			walls[key]["join_end"] = true
+
+
+## ¿Esta pared (con ventana) se veía unida con la que sigue en línea?
+static func _legacy_joined(walls: Dictionary, key: String) -> bool:
+	var wall: Dictionary = walls[key]
+	var opening: String = wall.get("opening", "")
+	if opening == "" or Catalog.get_item(opening).get("kind", "") != "window" or wall.get("separate", false):
+		return false
+	var next := HouseGrid.next_in_line(key)
+	if not walls.has(next):
+		return false
+	var other: Dictionary = walls[next]
+	if other.get("opening", "") != opening or other.get("separate", false):
+		return false
+	# En esa esquina tienen que juntarse solo esas dos.
+	var count := 0
+	for edge in HouseGrid.vertex_edges(HouseGrid.edge_vertices(key)[1]):
+		if walls.has(edge):
+			count += 1
+	return count == 2
 
 
 ## Mueve toda la casa `offset` celdas (para las migraciones).

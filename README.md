@@ -22,45 +22,79 @@ Hecho con **Godot 4.7.2** (GDScript).
   mueve el mapa, **clic derecho** gira, **rueda** acerca/aleja.
 - Cámara táctil: con 1 dedo se mueve el mapa **solo si no hay pieza elegida**;
   con 2 dedos siempre se mueve, pellizca y gira.
-- **Centrar** vuelve la cámara al inicio. La cámara y la casa se guardan solas.
+- La **brújula** (flechita, a la izquierda) apunta hacia tu personaje;
+  tocarla centra la cámara en él. La cámara y la casa se guardan solas.
 
-## Construir (modo Construir)
+## La pantalla (Pulido 1)
 
-1. Abajo elegí una **categoría** y una **pieza**. Arriba aparece qué hacer.
-2. Arrastrá sobre el lote: se ve en **verde** lo que se puede poner y en
-   **rojo** lo que no. Muebles, puertas, ventanas y pintura se aplican al
-   soltar. Cimientos, pisos, paredes, cuartos y techos quedan **esperando**:
-   aparecen dos círculos (manijas) que podés arrastrar para ajustar, y se
-   aplican con **Confirmar** (en la PC, Enter; Cancelar o Escape descarta).
-3. Tocar **fuera de la parcela** siempre mueve la cámara, aunque haya una
-   pieza elegida. La parcela mide 32 × 32 m: cabe más de una construcción.
-4. Orden lógico: **Cimientos** → **Cuarto** (o Piso + Pared) → **Puertas y
-   ventanas** → **Muebles** → **Pintura** → **Techo**.
-5. **Subir / Bajar** (izquierda) cambia de piso. Arriba, el piso va sobre
-   otro piso o junto a una pared de abajo (sirve para balcones). La
-   **Escalera** se pone en la planta baja.
-6. Dos ventanas iguales una al lado de la otra se unen solas en una ventana
-   larga. Con **Unir / separar** (en Puertas y ventanas) se tocan para separarlas o volver a unirlas.
-7. **Borrar** (abajo a la derecha): la pieza elegida pasa a quitar en vez de poner.
-8. Muebles: **Mover (mano)** toca un mueble para elegirlo, arrastralo para
-   moverlo; **Girar** y **Quitar** actúan sobre el elegido.
-9. **Deshacer / Rehacer** arriba (en la PC también Ctrl+Z / Ctrl+Y).
-10. **Vista** (solo afecta al piso actual; los de abajo se ven completos y los de arriba no se dibujan) cambia entre: completa (con techo), sin techo, paredes bajas.
-11. Tocar otra vez la pieza elegida la suelta (vuelve el dedo a mover la cámara).
-12. **Vivir** vuelve al modo vivir (el juego arranca ahí).
+Casi vacía, con íconos propios (dejando el mouse encima, en la PC, se ve qué
+hace cada uno):
 
-## Vivir (modo Vivir)
+- **Arriba a la izquierda**: dinero y nivel; el **ánimo** (carita + palabra:
+  tocalo para ver las necesidades con su barra y qué está afectando el
+  ánimo; tocar afuera la cierra); tu pareja (punto + nombre); las obras.
+- **Arriba a la derecha**: deshacer / rehacer (construir), velocidad **x1, x2,
+  x5** (vivir), construir / vivir (casco o casita) y el **menú** (tres rayas).
+- **A la izquierda**: el ícono del **techo** (tachado = sin techos), el de las
+  **paredes** (altas o bajitas, siempre del piso que estás viendo), la
+  **maqueta de pisos** (tocá un piso para ir: el actual va en naranja y el
+  punto rosado es tu personaje) y la **brújula**.
+- **Menú → Info**: FPS, versión, conexión, día y hora, caja de la casa y lo
+  que hace tu pareja. Ahí está **Mostrar FPS en pantalla** para medir en el
+  teléfono. Hasta **5 pisos**.
+
+## Construir (constructor 2.0)
+
+Abajo hay tres herramientas:
+
+1. **Tienda** (bolsa): muebles, electrodomésticos, electrónica, plantas y
+   adornos. Si la cámara mira un **cuarto** (área cerrada por paredes), la
+   primera pestaña es **★ ese cuarto** (por ejemplo "★ Dormitorio") con lo
+   que le va; nada está prohibido.
+2. **Obra** (casco), con dos modos:
+   - **Agregar** (+): cimientos, cuartos, paredes, pisos, puertas, ventanas,
+     techos (de tejas o **plano de concreto**), escaleras (recta, **de
+     caracol**, **metálica exterior**) y **pilares**. Arrastrá sobre el lote:
+     verde se puede, rojo no. Cimientos, pisos, paredes, cuartos y techos
+     esperan **Confirmar** (con dos círculos para ajustar). En un piso de
+     arriba, el botón **Copiar contorno de abajo** pone la losa y las paredes
+     de afuera de una vez.
+   - **Modificar** (mano): **tocá un mueble** y aparecen flechas **N/S/E/O**,
+     girar (de a 45°: 8 direcciones) y borrar. **Mantené presionado** un
+     mueble para llevarlo con el dedo. Tocá una **pared, techo, piso o
+     cimiento** para ver qué se le puede hacer (mover, pintar, borrar). Los
+     **puntitos** entre dos ventanas son las junturas: tocalos para unirlas o
+     separarlas. Abajo están los **colores**: elegí uno y **tocá una pared**:
+     se pinta solo esa cara (adentro o afuera) y aparecen flechas para pintar
+     la de al lado. **Mantené presionado** para pintar arrastrando (solo
+     paredes si empezaste en pared, solo pisos si empezaste en piso).
+3. **Borrar** (basurero): tocá algo, se pone rojo y pregunta "¿Borrar el
+   techo? Te devuelven $X". Con **modo selección** (cuadraditos, a la
+   derecha) vas tocando varias cosas y las borrás todas juntas. Mantené
+   presionado y arrastrá para elegir muchos pisos o paredes. Una pared o un
+   pilar que **sostiene** algo de arriba no se puede borrar (te dice por qué).
+
+Reglas que conviene saber:
+- Arriba, el piso va sobre otro piso, junto a una pared de abajo o **cerca de
+  un pilar** (a 2 celdas). Así se hacen balcones, casas elevadas y puentes.
+- **Sin escalera no se sube**: un piso sin escalera que llegue queda "sin
+  acceso". Arriba aparece **Falta: N** con la lista; lo que tiene problemas
+  se ve en rojo.
+- No se puede poner un techo donde lo atraviesa una pared (o un piso) del
+  piso de arriba.
+- Arrastrar sin mantener presionado (en Modificar y Borrar) mueve la cámara.
+- **Deshacer / Rehacer** arriba (en la PC también Ctrl+Z / Ctrl+Y).
+
+## Vivir
 
 - Tu personaje vive solo: cuando tiene hambre, sueño, está sucio o aburrido,
   busca un mueble que lo ayude (refrigeradora, cocina, cama, ducha, tele...).
-- A la izquierda: sus necesidades (Comida, Energía, Limpieza, Diversión), su
-  ánimo y qué está haciendo. Arriba: el reloj del juego y la velocidad
-  (**x1**, x3, x10). A x1, 1 segundo real = 1 minuto del juego.
+- Tocá el **ánimo** (arriba) para ver sus necesidades y qué está haciendo.
+  Velocidad **x1, x2, x5**: a x1, 1 segundo real = 1 minuto del juego.
 - **Tocá un mueble** para darle una orden (por ejemplo, "Ver tele").
-- **Menú** (arriba): **Personaje** cambia nombre, colores y hasta 2 rasgos
-  (Cocinero, Perezoso, Gamer...); **Diario** muestra lo que hizo y cómo se
-  sentía, con caritas; **Opciones** muestra u oculta FPS y ayudas.
-- **Subir / Bajar** también funciona en Vivir: se ve solo hasta ese piso.
+- **Menú**: **Personaje** cambia nombre, colores y hasta 2 rasgos; **Diario**
+  muestra lo que hizo y cómo se sentía; **Info** y **Mostrar ayudas**.
+- La maqueta de pisos también funciona en Vivir: se ve solo hasta ese piso.
 - En modo Construir el tiempo se detiene. Las necesidades nunca bajan de un
   mínimo, y si no jugás un tiempo, solo bajan un poco.
 
@@ -114,17 +148,20 @@ Todo pasa por el servidor: hace falta estar conectado (en la red de casa).
   persona acepta o dice que no), y **Terminar la relación** (tocar dos veces).
   Los interruptores **Permitir drama** y **Modo familiar** quedan preparados
   (todavía no hay drama en el juego).
-- Arriba a la izquierda: **Pareja: nombre ● en línea · cocinando (Cocina)**.
+- Arriba a la izquierda: **● nombre** (rosado = en línea). En **Menú → Info**:
+  "en línea · cocinando (Cocina)".
   Viviendo juntos, el personaje de tu pareja aparece en la casa (con su nombre
   encima) y hace lo mismo que en su teléfono: si cocina, va a la cocina y
   cocina. Si está fuera de línea, vive solo con su IA.
 - **Cambios menores** (mover, girar y pintar muebles, pintar paredes y pisos,
   poner un mueble nuevo, unir/separar ventanas): se hacen al instante. A la
   otra persona le aparece un aviso arriba con **Deshacer**.
-- **Cambios estructurales** (cimientos, pisos, paredes, puertas, ventanas,
-  techos, escaleras, y quitar/vender cualquier cosa): el botón dice **Pedir
-  permiso**; tu pareja lo aprueba o no en **Menú → Casa**. Al aprobarlo se
-  construye y lo paga quien lo pidió.
+- **Remodelar** (cimientos, pisos, paredes, puertas, ventanas, techos,
+  escaleras, y quitar/vender cualquier cosa) se arma como **propuesta**: vas
+  haciendo todos los cambios (se ven en tu casa y Deshacer saca el último),
+  y arriba aparece **Mandar a (tu pareja)** o **Descartar**. Tu pareja, en
+  **Menú → Casa → Ver**, la ve en su casa y la **aprueba o no entera**. Al
+  aprobarla se construye y la paga quien la propuso. Y al revés.
 - **Menú → Casa**: la **caja de la casa** (aportar $100, $500, $1000), **Unir
   ingresos** (tu sueldo va a la caja), los **pedidos de permiso** y el
   **historial** de la casa. Lo que se construye se paga primero con la caja; lo
@@ -163,7 +200,9 @@ La primera revisa las reglas de construcción y el deshacer; la segunda, las
 necesidades, la IA y los caminos; la tercera, precios, niveles, obras, empleos
 y la migración del guardado; la cuarta, el cliente del servidor (sin red); la
 quinta, la pareja y la casa compartida (sin red). Deben terminar con
-`PRUEBAS: N pasaron, 0 fallaron`. (`tests/visual_demo.tscn`,
+`PRUEBAS: N pasaron, 0 fallaron`. (`tests/ui_demo.tscn` prueba la interfaz
+y el constructor nuevos con clics de verdad y saca capturas `ui_*.png`;
+`tests/visual_demo.tscn`,
 `tests/character_demo.tscn` y `tests/economy_demo.tscn` arman casas de ejemplo y sacan capturas, pero
 **pisan la partida guardada**. `tests/server_demo.tscn`,
 `tests/economy_server_demo.tscn`, `tests/login_demo.tscn`,

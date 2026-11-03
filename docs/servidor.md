@@ -42,7 +42,7 @@ empleo), reiniciá Nakama para que lo lea.
 | Deshacer / rehacer (`build_undo`, `build_redo`) | Guarda hasta 100 pasos y devuelve **exactamente** lo cobrado |
 | Acelerar obras (`build_accelerate`) | Cobra 6 monedas por minuto que falta y termina todas |
 | Empleos (`job_apply`, `job_status`, `job_accelerate`, `job_quit`) | Currículum con espera en hora real; acelerar la respuesta cuesta igual que una obra |
-| Turnos (`shift_start`, `shift_complete`) | Un turno se cobra si pasó al menos su duración a velocidad x10, y se empieza como mucho uno cada 144 s |
+| Turnos (`shift_start`, `shift_complete`) | Un turno se cobra si pasó al menos su duración a velocidad x5 (la más rápida desde el Pulido 1), y se empieza como mucho uno cada 288 s |
 | Al entrar (`work_settle`) | Cobra el turno que quedó a medias y un turno por cada día del juego sin entrar (tope 3) |
 | "Sigo jugando" (`game_heartbeat`) | Anota la hora, para no pagar como "días sin jugar" el tiempo que se jugó |
 
@@ -53,7 +53,7 @@ El servidor también manda en la **pareja** y la **casa compartida**:
 | Lo que pide el juego | Qué hace el servidor |
 |---|---|
 | Invitar, aceptar, casarse, mudarse, terminar (`couple_invite`, `couple_answer`, `couple_propose`, `couple_respond`, `couple_end`…) | Revisa que se pueda (una invitación por vez, no a alguien en pareja…), guarda la relación de los dos juntos y avisa al otro al instante |
-| Construir en la casa compartida (`build_apply`) | Si es un cambio **menor** (mover, girar, pintar, mueble nuevo) lo hace y avisa; si es **estructural** (paredes, pisos, puertas, techos, escaleras, vender) lo guarda como **pedido** |
+| Construir en la casa compartida (`build_apply`) | Si es un cambio **menor** (mover, girar, pintar, mueble nuevo) lo hace y avisa; si es **estructural** (paredes, pisos, puertas, techos, escaleras, vender) lo guarda como **pedido**. Desde el Pulido 1 el teléfono junta toda una remodelación en una **propuesta** y la manda en un solo pedido; la pareja la ve con `home_request` (las piezas del pedido) antes de aprobarla |
 | Aprobar o rechazar (`home_answer`) | Al aprobar, construye como si lo hubiera hecho quien lo pidió (paga la caja y su billetera) |
 | Deshacer lo de la pareja (`home_revert`) | Solo cambios menores que nadie tocó después; el dinero vuelve a quien lo pagó |
 | Aportar a la caja (`home_contribute`), "unir ingresos" (`couple_switches`) | La caja vive en el hogar de la casa; con "unir ingresos" el sueldo va a la caja |
@@ -220,7 +220,7 @@ godot --headless --path . res://tests/economy_server_demo.tscn
 La de la Fase 4B (tarda menos de un minuto): construye y compara el precio
 del servidor con el del teléfono, prueba el bloqueo por nivel, la falta de
 dinero, deshacer y rehacer, acelerar, mandar un currículum, un turno completo
-hecho por el personaje (espera ~25 s), dos pedidos a la vez y que el teléfono
+hecho por el personaje (espera ~50 s), dos pedidos a la vez y que el teléfono
 no pueda hacer trampa. Tiene que terminar con
 `DEMO ECONOMÍA EN EL SERVIDOR: N pasaron, 0 fallaron`.
 

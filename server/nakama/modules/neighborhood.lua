@@ -39,6 +39,8 @@ RPC (el teléfono las llama con GameServer.call_rpc):
   home_load        la casa donde vive (para ponerse al día) + hogar
   home_answer      {id, approve}  aprobar o rechazar un pedido estructural
   home_cancel      {id}  retirar un pedido propio
+  home_request     {id}  las piezas de un pedido, para previsualizarlo
+                   (Pulido 1: la remodelación se manda entera como propuesta)
   home_revert      {id}  deshacer un cambio menor del historial
   home_contribute  {amount}  poner dinero en la caja de la casa
 
@@ -1075,6 +1077,19 @@ local function home_cancel(state, input, _now)
   return { changed = { home = true }, result = { home = home_summary(state) } }
 end
 
+-- RPC home_request {id}: un pedido con sus piezas (writes, como texto JSON),
+-- para que la pareja vea la propuesta antes de aprobarla. No cambia nada.
+local function home_request(state, input, _now)
+  local id = request_id(input)
+  for _, r in ipairs(state.home.requests) do
+    if r.id == id then
+      return { changed = {}, result = { request = { id = r.id, by_me = r.by == state.actor, by_name = r.by_name,
+        text = r.text, cost = r.cost, writes_json = nk.json_encode(r.writes or {}) } } }
+    end
+  end
+  rules.refuse("Ese pedido ya no existe.")
+end
+
 -- RPC home_revert {id}: deshacer un cambio menor del historial (de la
 -- pareja, o propio). El dinero vuelve a quien lo pagó.
 local function home_revert(state, input, _now)
@@ -1181,5 +1196,6 @@ nk.register_rpc(couple_rpc(couple_switches), "couple_switches")
 nk.register_rpc(home_load, "home_load")
 nk.register_rpc(home_answer, "home_answer")
 nk.register_rpc(game_rpc("home_cancel", home_cancel), "home_cancel")
+nk.register_rpc(game_rpc("home_request", home_request), "home_request")
 nk.register_rpc(game_rpc("home_revert", home_revert), "home_revert")
 nk.register_rpc(game_rpc("home_contribute", home_contribute), "home_contribute")

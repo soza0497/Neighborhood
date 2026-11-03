@@ -1,0 +1,14 @@
+{
+	"_ayuda": "Tipos de cuarto que el juego entiende (Pulido 1). Un cuarto es un área de piso cerrada por paredes (las puertas cuentan como pared). Su tipo sale de los muebles que tiene: cada mueble suma los puntos que dice 'items' a cada tipo. Gana el de más puntos; si el segundo tiene al menos 'mixed_ratio' de los puntos del primero, el cuarto es 'mixed' (multiuso). La Tienda recomienda primero los muebles del tipo más probable y después los del segundo; nunca prohíbe nada. Los ids de los muebles son los de catalog.json.",
+	"format_version": 1,
+	"mixed_ratio": 0.6,
+	"mixed": { "id": "mixed", "name": "Multiuso" },
+	"empty": { "id": "empty", "name": "Cuarto vacío" },
+	"types": [
+		{ "id": "bedroom", "name": "Dormitorio", "items": { "bed_basic": 3, "bed_double": 3, "lamp_floor": 1, "bookshelf_basic": 1, "plant_pot": 1 } },
+		{ "id": "kitchen", "name": "Cocina", "items": { "stove_basic": 3, "fridge_basic": 3, "table_basic": 1, "chair_basic": 1, "vase_basic": 1 } },
+		{ "id": "bathroom", "name": "Baño", "items": { "toilet_basic": 3, "shower_basic": 3, "plant_pot": 1 } },
+		{ "id": "living", "name": "Sala", "items": { "sofa_basic": 3, "tv_basic": 3, "lamp_floor": 1, "plant_tall": 1, "vase_basic": 1 } },
+		{ "id": "study", "name": "Estudio", "items": { "desk_basic": 3, "computer_basic": 2, "bookshelf_basic": 2, "chair_basic": 1, "lamp_floor": 1 } }
+	]
+}
