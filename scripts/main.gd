@@ -39,6 +39,9 @@ var _was_online := false
 var _sync_pending := false
 var _syncing := false
 var _sync_retry_at := 0
+## El personaje de la pareja (en la casa compartida), o null.
+var partner_character: Character
+var _partner_saved_unix := -1
 
 
 func _ready() -> void:
@@ -85,11 +88,14 @@ func _ready() -> void:
 	EventBus.server_status_changed.connect(_on_server_status_changed)
 	EventBus.home_remote_changed.connect(_on_home_remote_changed)
 	EventBus.home_reload_requested.connect(_on_home_reload_requested)
+	EventBus.couple_changed.connect(_update_partner_character)
+	EventBus.partner_presence_changed.connect(_on_partner_presence_changed)
 	_was_online = GameServer.online
 	house.rev = Economy.house_rev
 	Economy.own_rev = -1
 
 	set_mode("live")
+	_update_partner_character()
 	EventBus.view_mode_changed.emit(_house_view.view_mode)
 	_set_level(_character.level)  # Se empieza viendo el piso del personaje.
 	history.refresh()
@@ -135,6 +141,8 @@ func set_mode(new_mode: String) -> void:
 	GameClock.set_paused(mode == "build")
 	if mode == "live":
 		_character.reset_after_build()
+		if partner_character != null:
+			partner_character.reset_after_build()
 	EventBus.game_mode_changed.emit(mode)
 
 
@@ -325,6 +333,8 @@ func _sync_home() -> void:
 		house.apply(writes)
 		house.next_id = maxi(house.next_id, int(server_house.get("next_id", 1)))
 		_character.on_house_changed()
+		if partner_character != null:
+			partner_character.on_house_changed()
 		_autosave_timer.start()
 	house.rev = int(CoupleState.normalize_home(data.get("home", {}))["rev"])
 	if not Economy.busy and data.get("state") is Dictionary:
@@ -354,8 +364,55 @@ func _on_home_reload_requested() -> void:
 	# En otra casa, el personaje entra por el frente.
 	_character.place_at(0, Character.SPAWN_CELL)
 	_character.reset_after_build()
+	_update_partner_character()
 	history.refresh()
 	_autosave_timer.start()
+
+
+## En la casa compartida aparece el personaje de la pareja (con su aspecto,
+## nombre y rasgos). Si se separan, se va.
+func _update_partner_character() -> void:
+	var wanted := Economy.server_mode and Couple.shared() and not Couple.partner.is_empty()
+	if not wanted:
+		if partner_character != null:
+			partner_character.queue_free()
+			partner_character = null
+			_character.companion = null
+			_partner_saved_unix = -1
+		return
+	var saved: Dictionary = Couple.partner.get("character", {})
+	var saved_unix := int(saved.get("saved_unix", 0))
+	if partner_character != null and saved_unix == _partner_saved_unix:
+		return
+	var partner_data := CharacterData.create_default()
+	partner_data.name = Couple.partner_name()
+	if not saved.is_empty():
+		partner_data.from_dict(saved.get("data", {}))
+	if partner_character == null:
+		partner_character = Character.new()
+		partner_character.name = "PartnerCharacter"
+		partner_character.is_partner = true
+		_house_view.add_child(partner_character)
+		var cell_array: Array = saved.get("cell", [Character.SPAWN_CELL.x + 1, Character.SPAWN_CELL.y])
+		partner_character.level = int(saved.get("level", 0))
+		partner_character.cell = Vector2i(int(cell_array[0]), int(cell_array[1]))
+		partner_character.setup(partner_data, house, nav, _house_view)
+		partner_character.reset_after_build()  # Por si su lugar ya no está libre.
+		partner_character.companion = _character
+		_character.companion = partner_character
+		partner_character.follow_intention(Couple.partner_online, Couple.partner_intention)
+	else:
+		# Cambió de look en su teléfono.
+		partner_character.data.name = partner_data.name
+		partner_character.data.appearance = partner_data.appearance
+		partner_character.data.traits = partner_data.traits
+		partner_character.refresh_look()
+	_partner_saved_unix = saved_unix
+
+
+func _on_partner_presence_changed(online: bool, intention: Dictionary) -> void:
+	if partner_character != null:
+		partner_character.follow_intention(online, intention)
 
 
 ## Cierra la sesión: guarda, sube lo que falte a la nube y vuelve a la

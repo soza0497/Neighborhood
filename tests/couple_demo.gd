@@ -29,6 +29,7 @@ var _a_notices: Array = []
 var _main: Node
 var _user_a := ""
 var _user_b := ""
+var _shift_started_msec := 0
 
 
 func _ready() -> void:
@@ -273,6 +274,12 @@ func _test_fund() -> void:
 	result = await _b.call_rpc("couple_switches", {"pool_income": true})
 	_check(result["data"].get("ok", false), "B prende \"unir ingresos\" (su sueldo irá a la caja)")
 	_check(await _wait_until(func() -> bool: return Couple.couple["partner_pool_income"]), "A lo ve")
+	# B consigue empleo y empieza un turno (se cobra más adelante, en el 8).
+	await _b.call_rpc("job_apply", {"job_id": "courier"})
+	await _b.call_rpc("job_accelerate", {})
+	result = await _b.call_rpc("shift_start", {})
+	_shift_started_msec = Time.get_ticks_msec()
+	_check(result["data"].get("ok", false), "B empieza un turno de Repartidor")
 
 
 # --- 7) Conflictos: los dos a la vez ---
@@ -323,7 +330,15 @@ func _test_conflicts() -> void:
 # --- 8) Separarse ---
 
 func _test_separation() -> void:
-	print("\n8) Separarse")
+	print("\n8) El sueldo de B va a la caja; después se separan")
+	await _wait_until(func() -> bool: return Time.get_ticks_msec() - _shift_started_msec > 24000, 30.0)
+	await _wait_until(func() -> bool: return not Economy.busy)
+	var fund_before := Economy.fund
+	var b_before := int((await _b.call_rpc("game_load", {}))["data"]["money"])
+	var paid: Dictionary = await _b.call_rpc("shift_complete", {})
+	_check(paid["data"].get("ok", false) and paid["data"].get("to_fund", false)
+		and int(paid["data"]["state"]["money"]) == b_before, "B cobra el turno: $%d van a la caja, no a su billetera" % int(paid["data"].get("pay", 0)))
+	_check(await _wait_until(func() -> bool: return Economy.fund == fund_before + 120), "A ve la caja con el sueldo de B ($%d)" % Economy.fund)
 	await _wait_until(func() -> bool: return not Economy.busy)
 	await _b.call_rpc("home_contribute", {"amount": 301})
 	# A se entera por el aviso del servidor (Couple vuelve a preguntar solo).

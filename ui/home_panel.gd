@@ -87,12 +87,12 @@ func _build_requests(home: Dictionary, usable: bool) -> void:
 		var cost_text := " ($%d)" % request["cost"] if request["cost"] > 0 else ""
 		if request["by_me"]:
 			_content.add_child(PanelRows.row([
-				PanelRows.label("Pediste: %s%s. Esperando a %s." % [request["text"], cost_text, Couple.partner_name()]),
+				PanelRows.label("Pediste permiso para: %s%s. Esperando a %s." % [request["text"], cost_text, Couple.partner_name()]),
 				PanelRows.button("Retirar", _on_cancel_request.bind(request["id"]), not usable, 130),
 			]))
 		else:
 			_content.add_child(PanelRows.row([
-				PanelRows.label("%s pide: %s%s" % [request["by_name"], request["text"], cost_text]),
+				PanelRows.label("%s pide permiso para: %s%s" % [request["by_name"], request["text"], cost_text]),
 				PanelRows.button("Aprobar", _on_answer_request.bind(request["id"], true), not usable, 130),
 				PanelRows.button("No", _on_answer_request.bind(request["id"], false), not usable, 90),
 			]))

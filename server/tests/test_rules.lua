@@ -451,6 +451,7 @@ check(kind({ w(0, "objects", "o1", { item = "sofa_basic", cell = { 3, 3 }, rot =
 check(hr.describe(data, h, { w(0, "objects", "o1", { item = "sofa_basic", cell = { 3, 3 }, rot = 0 }) }) == "movió: Sofá", "historial: 'movió: Sofá'")
 check(hr.describe(data, h, { w(0, "walls", "h:2,0", WALL), w(0, "walls", "h:3,0", WALL) }) == "puso: " .. data.items.wall_basic.name .. " x2", "historial: varias paredes")
 check(hr.describe(data, h, { w(0, "walls", "h:1,0", { item = "wall_basic", opening = "door_basic" }) }) == "puso: Puerta", "historial: puerta")
+check(hr.describe(data, h, { w(0, "objects", "o1", nil) }, true) == "quitar Sofá", "pedido: 'quitar Sofá'")
 
 
 -- === Fase 5: caja de la casa y deshacer entre dos ===

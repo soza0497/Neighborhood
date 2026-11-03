@@ -574,10 +574,11 @@ func request_settle(away_minutes: float) -> void:
 	settled = true
 	GameServer.heartbeat_enabled = true
 	var data: Dictionary = result["data"]
+	var where := " (a la caja de la casa)" if data.get("to_fund", false) else ""
 	if int(data.get("pending_pay", 0)) > 0:
-		EventBus.toast.emit("Cobraste el turno que quedó a medias: $%d" % int(data["pending_pay"]))
+		EventBus.toast.emit("Cobraste el turno que quedó a medias: $%d%s" % [int(data["pending_pay"]), where])
 	if int(data.get("offline_shifts", 0)) > 0:
-		EventBus.toast.emit("Mientras no estabas, trabajaste %d turno(s): $%d" % [int(data["offline_shifts"]), int(data["offline_pay"])])
+		EventBus.toast.emit("Mientras no estabas, trabajaste %d turno(s): $%d%s" % [int(data["offline_shifts"]), int(data["offline_pay"]), where])
 	if data.has("pending_seconds_left"):
 		_pay_retry_at = now() + int(data["pending_seconds_left"])
 

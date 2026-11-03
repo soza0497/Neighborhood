@@ -149,7 +149,11 @@ static func encode_status(intention: Dictionary) -> String:
 static func decode_status(status: String) -> Dictionary:
 	if status == "":
 		return {}
-	var data: Variant = JSON.parse_string(status)
+	# JSON.new().parse no llena la consola de errores si el texto no sirve.
+	var json := JSON.new()
+	if json.parse(status) != OK:
+		return {}
+	var data: Variant = json.data
 	if not data is Dictionary or int(data.get("v", 0)) != STATUS_VERSION:
 		return {}
 	return {

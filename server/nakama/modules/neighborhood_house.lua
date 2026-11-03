@@ -457,8 +457,13 @@ function M.write_verb(house, w)
   return "cambió"
 end
 
--- Texto corto de un cambio (con la casa ANTES de aplicarlo).
-function M.describe(data, house, writes)
+-- El mismo verbo para un pedido ("pide permiso para: poner Pared x2").
+local INFINITIVE = { ["puso"] = "poner", ["quitó"] = "quitar", ["movió"] = "mover", ["pintó"] = "pintar",
+  ["cambió"] = "cambiar" }
+
+-- Texto corto de un cambio (con la casa ANTES de aplicarlo): "puso: Cama,
+-- Silla x2". Con `infinitive`, para un pedido: "poner Cama, Silla x2".
+function M.describe(data, house, writes, infinitive)
   local order, groups = {}, {}
   for _, w in ipairs(writes) do
     local verb = M.write_verb(house, w)
@@ -497,7 +502,11 @@ function M.describe(data, house, writes)
       local n = g.counts[name]
       table.insert(names, n > 1 and (name .. " x" .. n) or name)
     end
-    table.insert(parts, verb .. ": " .. table.concat(names, ", "))
+    if infinitive then
+      table.insert(parts, INFINITIVE[verb] .. " " .. table.concat(names, ", "))
+    else
+      table.insert(parts, verb .. ": " .. table.concat(names, ", "))
+    end
   end
   return table.concat(parts, "; ")
 end

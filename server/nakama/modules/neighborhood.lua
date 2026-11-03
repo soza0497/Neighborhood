@@ -941,11 +941,12 @@ local function build_apply(state, input, now)
   -- Casa compartida: un cambio estructural espera la aprobación de la pareja.
   if state.shared and house_rules.change_kind(data, state.house, clean) == "structural" then
     local trial = rules.build(data, sandbox_of(state), clean, now, nil)
+    local wish = house_rules.describe(data, state.house, clean, true)
     local request = rules.add_request(state.home, { by = state.actor, by_name = state.username or "", at = now,
-      writes = trial.writes, text = text, cost = -trial.money_change })
+      writes = trial.writes, text = wish, done_text = text, cost = -trial.money_change })
     table.insert(state.notify, { to = housemate(state), code = NOTIFY_REQUESTS, content = {
-      text = string.format("%s pide permiso para: %s", state.username or "", text) } })
-    return { changed = { home = true }, result = { requested = true, request_id = request.id, text = text,
+      text = string.format("%s pide permiso para: %s", state.username or "", wish) } })
+    return { changed = { home = true }, result = { requested = true, request_id = request.id, text = wish,
       cost = request.cost } }
   end
   local result = rules.build(data, state, clean, now, encode_history)
@@ -1030,8 +1031,8 @@ local function home_answer(context, payload)
     end
     rules.take_request(requester.home, id)
     local result = rules.build(data, requester, request.writes, now, encode_history)
-    log_and_notify(requester, { kind = "approved", text = string.format("%s (aprobado por %s)", request.text,
-      context.username), money_fund = result.money_fund, money_own = result.money_own })
+    log_and_notify(requester, { kind = "approved", text = string.format("%s (aprobado por %s)",
+      request.done_text or request.text, context.username), money_fund = result.money_fund, money_own = result.money_own })
     table.insert(requester.notify, { to = request.by, code = NOTIFY_REQUESTS, content = {
       text = string.format("%s aprobó: %s", context.username, request.text) } })
     save_state(requester, { house = true, home = true, progress = result.xp_gained > 0, history = true },

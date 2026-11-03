@@ -287,6 +287,7 @@ Decisiones técnicas (de Claude, cambiables):
   2024 (v3.4.0) y no está probado con Godot 4.7; para la Fase 4 alcanzan
   pocas llamadas (autenticar, renovar sesión, leer/escribir storage, RPC). En
   la Fase 5 (tiempo real) se evalúa de nuevo el addon o un socket propio.
+  → **Decidido en la Fase 5: socket propio** (ver "Pareja y casa compartida").
 - **El servidor manda en**: billetera (wallet de Nakama, con historial), casa
   (storage escrito solo por el servidor), experiencia, nivel, desbloqueos,
   obras (hora del servidor), empleos y turnos. El cliente sigue calculando
@@ -301,7 +302,7 @@ Decisiones técnicas (de Claude, cambiables):
   empieza en el inicial ($3000).
 - **Reglas de apoyo (pisos, paredes…)** siguen en el teléfono por ahora: no
   tocan dinero. Pasarlas al servidor queda para cuando se edite la casa entre
-  dos (Fase 5).
+  dos (Fase 5). → **Hecho en la Fase 5** (`neighborhood_house.lua`).
 - Las pruebas locales siguen valiendo: la economía local queda como
   "modo de prueba" (sin cuenta), no se ofrece en la interfaz.
 
@@ -431,3 +432,130 @@ Decisiones técnicas (de Claude, cambiables):
   del servidor ya no espera la casa "idéntica" (el servidor la revisa y la
   completa con el segundo piso vacío).
 - **Versión 0.5.0** del juego.
+
+## Pareja y casa compartida (Fase 5) — 2026-11-03, sesión en la nube
+
+Sub-fases (cada una con su commit, probada por separado):
+- **5A — servidor**: reglas de apoyo, relación, casa compartida, caja (Lua,
+  probado sin Nakama con `lua5.1`).
+- **5B — teléfono**: tiempo real, Couple, paneles, ponerse al día (probado con
+  `couple_demo`, dos cuentas a la vez contra Nakama).
+- **5C — el personaje de la pareja** en mi pantalla, "unir ingresos" de punta
+  a punta y documentación (`couple_live_demo`, con ventana y capturas).
+
+### Tiempo real
+- **Socket propio** (`RealtimeSocket`, con el `WebSocketPeer` que trae Godot) en
+  vez del addon oficial `nakama-godot`. Por qué: el addon no tiene versión nueva
+  desde marzo de 2024 (v3.4.0, revisado en la 4A) ni está probado con Godot 4.7;
+  y del socket solo hacen falta 3 cosas (conectarse con el pase, seguir a la
+  pareja, mandar mi estado y recibir avisos): ~250 líneas propias, comentadas,
+  sin código de terceros, y probadas contra el Nakama de verdad. Cambiarlo por
+  el addon más adelante es tocar solo `realtime_socket.gd`.
+- **Mismo puerto 7350** (`/ws`): no hay que abrir ni publicar nada nuevo.
+- **Estado = intención del personaje** (`Character.get_intention`, ~200 letras
+  en JSON), con el "status" de Nakama: sirve a la vez de **indicador de en
+  línea** (presencia) y de "qué hace". Se manda solo cuando cambia, como mucho
+  cada 2 s. Se mandan estados, no movimientos (VISION). Cualquier cuenta del
+  servidor podría seguir ese estado; para la familia no importa (anotado).
+- **Los avisos solo dicen "algo cambió"** (notificaciones 101 relación, 103
+  hogar, 104 pedidos), no guardados: el teléfono vuelve a preguntar
+  (`couple_load`, `home_load`). La verdad está siempre en el servidor; si se
+  pierde un aviso (sin conexión), al reconectar se pregunta todo de nuevo.
+- **Ponerse al día con la casa**: el hogar tiene un número de versión (`rev`)
+  que sube con cada cambio. Si mi pedido fue lo único que cambió (subió 1), ya
+  estoy al día; si no, se pide la casa y se aplican **solo las piezas que
+  cambiaron** (la vista 3D no se rehace entera).
+
+### Relación
+- Estados: **sin pareja → en pareja → matrimonio**; mudarse se puede desde "en
+  pareja" (libertad). Textos neutros ("En pareja", "Matrimonio", "en línea"),
+  sin suponer el género.
+- Una invitación saliente por vez; hasta 10 recibidas. Si B ya me invitó,
+  invitarlo es aceptar. Al formar pareja se limpian todas las invitaciones de
+  los dos (también las que otros les mandaron).
+- **Terminar la relación** está incluido aunque la fase no lo pide: sin eso,
+  una prueba (o un error) deja a dos cuentas atadas para siempre. No necesita
+  que el otro acepte. Reglas simples: la casa queda de su dueño, quien se mudó
+  vuelve a **su casa de antes (quedó guardada, sin tocar)**, la caja se
+  reparte en dos (la moneda impar, al dueño) y lo que se compró queda en la
+  casa. Más adelante (drama, VISION) se puede discutir algo más fino.
+- Cada uno guarda su **historial de relaciones** (últimos 30 hechos).
+- **Drama y modo familiar: solo el interruptor.** Drama apagado y modo familiar
+  prendido por defecto (todavía es pregunta abierta si juegan menores). Hay
+  drama solo si los DOS lo permiten y ninguno tiene el modo familiar
+  (`drama_enabled`). No hay nada que ocultar todavía.
+
+### Casa compartida: permisos
+- **Menor** (al instante, con aviso y "Deshacer" para el otro): mover, girar o
+  pintar un mueble, pintar paredes y pisos, unir/separar ventanas, y **poner un
+  mueble nuevo** (VISION no lo nombra; pedir permiso para cada silla sería
+  pesado, y quien lo pone lo paga).
+- **Estructural** (pedido + aprobación): cimientos, pisos, paredes, puertas,
+  ventanas, techos, escaleras y **quitar cualquier cosa** ("vender"). Un
+  cambio con una sola cosa estructural es todo estructural.
+- Lo decide el **servidor** (`neighborhood_house.lua`); el teléfono tiene una
+  copia (`HousePermissions`) solo para que el botón diga "Pedir permiso".
+- Al **aprobar**, se construye como si lo hubiera hecho quien lo pidió: paga
+  (caja + su billetera), gana su experiencia y le queda en su Deshacer. Se
+  vuelve a revisar todo en ese momento (dinero, apoyo); si ya no se puede, el
+  pedido queda para rechazarlo. Hasta 10 pedidos esperando. Quien pidió lo
+  puede retirar.
+- Deshacer mi propio cambio (aunque haya sido aprobado) no pide permiso: es
+  volver atrás lo mío y devuelve lo exacto.
+
+### Casa compartida: dinero
+- **Billetera propia** de cada uno (la de Nakama, como en la 4B) y **caja de la
+  casa** (vive en `game/home` del dueño de la casa).
+- Lo que se construye se paga **primero con la caja**; lo que falta, con la
+  billetera de quien construye. Lo que se **vende vuelve a la caja**. Acelerar
+  obras, igual. Deshacer devuelve a cada uno lo que puso.
+- **Aportar** es de ida (billetera → caja). No hay "retirar" de la caja: así no
+  hace falta aprobar retiros; al separarse se reparte.
+- **"Unir ingresos" es de cada uno**: "mi sueldo va a la caja" (también los
+  turnos pagados por días sin jugar). Si los dos lo prenden, están unidos.
+
+### Casa compartida: conflictos e historial
+- Dos pedidos a la vez: el servidor guarda con control de versión y, si chocan,
+  **reintenta con lo nuevo** (hasta 6): en los cambios menores gana la última
+  escritura. Los `version check failed` del log de Nakama son esto, normales.
+- **Deshacer no pisa lo del otro**: cada uno tiene su propio Deshacer (hasta
+  100 pasos); si las piezas de ese paso cambiaron después (por la pareja), el
+  paso se **descarta** con un aviso en vez de pisarlas (y no traba los pasos
+  anteriores). Rehacer, igual.
+- **Historial de la casa** (`game/home`, últimos 40): quién, cuándo y qué
+  ("movió: Sofá", "puso: Pared lisa x2", "aprobado por…"). Los cambios menores
+  guardan sus piezas (si son menos de 300) para poder **deshacerlos desde el
+  historial o el aviso**: solo si nadie los tocó después, y el dinero vuelve a
+  quien lo pagó (nunca a quien deshace).
+
+### Reglas de apoyo en el servidor
+- `neighborhood_house.lua` es copia de `house_rules.gd`/`house_grid.gd`, con los
+  mismos casos de prueba. Diferencia: el servidor revisa el **resultado**
+  (aplica todo a una copia y mira que cada pieza tocada y lo que se apoyaba en
+  ella siga apoyado); así sirve igual para construir, deshacer, rehacer y
+  deshacer lo del otro. Además una escalera "prohíbe" el piso de encima.
+- Se revisan **después** del nivel y del dinero (avisos más útiles primero).
+- Cambió una demo vieja: en `economy_server_demo` la cama estaba "en el aire"
+  (sin piso debajo); ahora va girada sobre los dos pisos que se ponen.
+
+### El personaje de la pareja
+- El mismo `Character` en modo "pareja" (`is_partner`): no avisa a mi
+  interfaz, no va a trabajar con MI empleo y no se guarda. Aparece solo
+  viviendo juntos, con su nombre encima (rosado).
+- **En línea**: hace lo que dice su intención (camina al mismo mueble y hace la
+  misma acción hasta que cambie; si trabaja, sale por la acera; si pasea,
+  pasea). **Fuera de línea**: vive con su propia IA y sus necesidades de la
+  última vez que guardó ("creíble, no exacto").
+- **Reserva simple**: un personaje no elige el mueble que está usando el otro
+  (el pendiente anotado en la Fase 2). Si la pareja en línea usa el mismo
+  mueble que el mío, igual va (es lo que hace en su teléfono).
+- La necesidad **Social** (DECISIONES de la Fase 2 decía "llega con la pareja")
+  **no se hizo**: la Fase 5 no la pide y necesita interacciones entre
+  personajes. Queda en pendientes.
+
+### Otros
+- **Versión 0.6.0.**
+- Un segundo `GameServer` (con `emits_events = false`) permite probar dos
+  jugadores en un mismo programa (`couple_demo`, `couple_live_demo`).
+- Las demos que abren la escena principal apartan la partida del jugador y la
+  devuelven al terminar (la escena guarda sola).

@@ -1,12 +1,82 @@
 # Progreso
 
-## Fase actual: 5 — Pareja y casa compartida (en curso, sesión en la nube, rama `fase-5`)
+## Fase actual: 5 — Pareja y casa compartida (hecha en la nube; falta probarla en la PC del dueño y en dos teléfonos)
 
-### Fase 5 — avance (2026-11-03)
-- 5A (servidor) y 5B (teléfono) hechas y probadas contra Nakama 3.41.0 en la
-  nube: Lua 187/187, sin red 231/231, `couple_demo` 66/66 (dos cuentas a la
-  vez), demos viejas OK. Falta 5C: el personaje de la pareja animado en la
-  casa compartida y la documentación completa (abajo se completa al terminar).
+### Fase 5 — hecho (2026-11-03, sesión en la nube, rama `fase-5`)
+- **5A — servidor** (`server/nakama/modules/`): reglas de apoyo de la casa en
+  el servidor (`neighborhood_house.lua`, copia de `house_rules.gd`); relación
+  (`neighborhood_couple.lua`: invitar, aceptar, en pareja, matrimonio, mudarse,
+  terminar; interruptores de drama y modo familiar, preparados); casa
+  compartida en `neighborhood_rules.lua` (caja, aportes, unir ingresos,
+  historial, pedidos, deshacer lo del otro, deshacer que no pisa lo del otro).
+  13 RPC nuevas y avisos en tiempo real (101/103/104).
+- **5B — teléfono**: `RealtimeSocket` (WebSocket propio con Nakama: presencia,
+  estado = intención del personaje, avisos, reconexión), autoload `Couple` +
+  `CoupleState`, la casa se pone al día sola (solo lo que cambió), paneles
+  **Menú → Pareja** y **Menú → Casa**, indicador "Pareja: X ● en línea ·
+  cocinando", aviso con **Deshacer**, botón **Pedir permiso**.
+- **5C — el personaje de la pareja** en la casa compartida: hace lo que dice
+  su intención (camina al mueble y hace la acción) o, fuera de línea, vive con
+  su IA; no usa el mueble que usa el otro. Sueldo a la caja con "unir ingresos".
+- Pruebas (en la nube, Nakama 3.41.0 + PostgreSQL 16): Lua **188** (80 + 108),
+  sin red **277** (231 + 46 de `test_couple`), `server_demo` 24/24,
+  `economy_server_demo` 39/39, `login_demo` 17/17, **`couple_demo` 69/69**
+  (dos cuentas a la vez) y **`couple_live_demo` 12/12** (con ventana y capturas).
+- Versión del juego 0.6.0. Docs: DECISIONES ("Pareja y casa compartida"),
+  `docs/servidor.md`, README. No se exportó el APK (no hay SDK en la nube).
+
+### Falta para cerrar la Fase 5
+**En la PC** (con la rama `fase-5`):
+1. [Dueño] Traer la rama: `git fetch origin fase-5` y `git switch fase-5`.
+2. [Dueño] Reiniciar Nakama para que lea el código nuevo:
+   `docker compose restart nakama` (en `server/`). En los logs tiene que decir
+   que leyó el catálogo, sin `"level":"error"`.
+3. [Dueño] Pruebas: las 5 sin red (`test_house`, `test_character`,
+   `test_economy`, `test_server`, `test_couple`), `lua5.1
+   server/tests/test_rules.lua`, y contra el servidor `server_demo`,
+   `economy_server_demo`, `login_demo`, **`couple_demo`** (headless) y
+   **`couple_live_demo`** (con ventana: mirar que el personaje de B cocina).
+4. [Dueño] Exportar el APK 0.6.0.
+
+**En dos teléfonos** (o un teléfono y el juego en la PC con F5: sirven como
+dos jugadores), en la red de casa, con dos cuentas:
+5. Cuenta 1 → Menú → Pareja → invitar a la cuenta 2. En el otro aparece el
+   aviso; aceptar. Arriba los dos ven "Pareja: … ● en línea".
+6. Mientras uno cocina o duerme, el otro ve el texto ("cocinando (Cocina)").
+   Cerrar el juego en uno: el otro lo ve "fuera de línea" en segundos.
+7. Proponer casamiento y aceptar. Después "Vivir juntos en mi casa" y aceptar:
+   el que se mudó ve la casa del otro; los dos ven los DOS personajes, y el de
+   la pareja hace lo mismo que en su teléfono.
+8. Cambio menor: uno mueve un mueble → al otro le aparece arriba "X movió:
+   Sofá [Deshacer]"; tocar Deshacer lo devuelve.
+9. Cambio estructural: uno pone una pared → el botón dice "Pedir permiso"; el
+   otro va a Menú → Casa y aprueba (o no). Se construye en los dos.
+10. Menú → Casa: aportar $100 a la caja; poner un mueble (sale de la caja);
+    prender "Unir ingresos" y esperar un turno (el sueldo va a la caja).
+11. Los dos mueven el mismo mueble casi a la vez: los dos teléfonos terminan
+    iguales.
+12. Con el wifi apagado en uno: se puede vivir, no construir; al volver se
+    pone al día solo.
+13. Terminar la relación: cada uno en su casa, la caja repartida.
+14. Medir los FPS con los dos personajes en una casa de dos pisos (≥ 30).
+15. [Claude] Corregir lo que salga; commit "Fase 5 cerrada"; unir a `main`.
+
+### Preguntas para el dueño
+- ¿Tu pareja usa Android o iPhone? (VISION). Si es iPhone, para probar ahora
+  sirve el juego en la PC como segundo jugador.
+- ¿Van a jugar menores? Por ahora el modo familiar viene prendido y el drama
+  apagado.
+
+### Pendientes nuevos (Fase 5)
+- Si la pareja cambia su look, mi teléfono lo ve la próxima vez que pregunta
+  (al abrir Pareja/Casa, al reconectar o con cualquier aviso), no al instante.
+- La necesidad "Social" y que los dos personajes interactúen (charlar) no se
+  hicieron: la fase no lo pedía.
+- Un mueble nuevo es "cambio menor"; vender (quitar) es estructural. Si en la
+  prueba molesta pedir permiso para quitar algo que uno mismo puso por error,
+  se puede usar Deshacer (no pide permiso) o cambiar la regla.
+- Cualquier cuenta del servidor podría ver el "estado" (qué hace el personaje)
+  de otra si conoce su id: para la familia no importa.
 
 ## Fase anterior: 4 — Cuentas y servidor (4A y 4B hechas; falta probarlas en la PC del dueño y en el teléfono)
 
@@ -59,11 +129,8 @@
    "Wallet Ledger" muestran cada cobro.
 5. [Claude] Corregir lo que salga; commit "Fase 4 cerrada".
 
-### Fase 5 — próximo paso exacto
-Cuando la Fase 4 esté probada: en una conversación nueva (**Opus, esfuerzo
-alto**): "Leé CLAUDE.md, PROGRESO.md, DECISIONES.md y VISION.md y hacé la
-Fase 5". Antes hace falta la respuesta a la pregunta abierta de VISION.md
-(¿la pareja usa Android o iPhone?).
+### Fase 5
+Hecha (arriba). La Fase 4 se prueba junto con la 5 en los teléfonos.
 
 ### Fase 4A — hecho (2026-11-03)
 - Servidor en `server/` (Docker): `neighborhood-nakama` (Nakama 3.41.0) y
@@ -197,4 +264,5 @@ Todo en un solo tramo (1A + 1B + 1C):
 - ¿Tu pareja usa Android o iPhone? (VISION.md)
 
 ## Fases siguientes
-- Fase 5 — Pareja y casa compartida (**Opus, esfuerzo alto**).
+- Fase 6 — Primer negocio: restaurante (Sonnet alcanza; Opus si el cálculo de
+  ingresos en el servidor se complica). Antes: cerrar la Fase 5 en los teléfonos.

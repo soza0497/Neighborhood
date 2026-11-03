@@ -9,8 +9,18 @@ extends Node3D
 ##   WALKING → sigue un camino (HouseNav) hasta el objeto o a pasear.
 ##   ACTING  → usa el objeto: las necesidades suben, suena su animación.
 ##
-## Su estado se puede resumir en una "intención" (get_intention), lo que en la
-## Fase 5 se mandará a la pareja para animar al personaje en su pantalla.
+## Su estado se puede resumir en una "intención" (get_intention), lo que se
+## manda a la pareja para animar al personaje en su pantalla (Fase 5).
+##
+## Fase 5: el mismo script sirve para el personaje de la PAREJA en la casa
+## compartida (`is_partner`). Ese no avisa a la interfaz, no va a trabajar
+## con mi empleo y no se guarda:
+##   - Con la pareja en línea (`remote_driven`), hace lo que dice su
+##     intención: camina hasta el mismo mueble y hace la misma acción, o
+##     pasea. Se mandan estados, no movimientos: lo que se ve es creíble, no
+##     exacto.
+##   - Con la pareja fuera de línea, vive con su propia IA (con sus
+##     necesidades de la última vez que guardó), como mi personaje.
 
 enum State { IDLE, WALKING, ACTING, WORKING }
 
@@ -57,6 +67,15 @@ var _body: Node3D
 var _animator: CharacterAnimator
 var _bubble: Label3D
 
+# --- Fase 5: la pareja ---
+## true = es el personaje de la pareja (ver arriba).
+var is_partner := false
+## true = lo maneja la intención que manda la pareja (en línea).
+var remote_driven := false
+## El otro personaje de la casa: no se eligen los muebles que está usando.
+var companion: Character
+var _name_tag: Label3D
+
 
 func _ready() -> void:
 	_rng.randomize()
@@ -80,6 +99,19 @@ func setup(new_data: CharacterData, new_house: HouseData, new_nav: HouseNav, new
 	house = new_house
 	nav = new_nav
 	view = new_view
+	if is_partner and _name_tag == null:
+		_name_tag = Label3D.new()
+		_name_tag.position.y = 1.95  # Arriba de la burbuja.
+		_name_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_name_tag.no_depth_test = true
+		_name_tag.font_size = 40
+		_name_tag.outline_size = 10
+		_name_tag.pixel_size = 0.006
+		_name_tag.modulate = Color("#ffb3d1")
+		_name_tag.outline_modulate = Color(0.15, 0.2, 0.3)
+		add_child(_name_tag)
+	if _name_tag != null:
+		_name_tag.text = data.name
 	refresh_look()
 	place_at(level, cell)
 	_set_idle()
@@ -92,6 +124,8 @@ func refresh_look() -> void:
 	_body = CharacterLook.build(data.appearance)
 	add_child(_body)
 	_animator.body = _body
+	if _name_tag != null:
+		_name_tag.text = data.name
 
 
 ## Pone al personaje parado en una celda.
@@ -157,8 +191,9 @@ func _process(delta: float) -> void:
 	var minutes := GameClock.game_minutes(delta)
 	if minutes > 0.0:
 		data.decay(minutes)
-		# Si ya va camino al trabajo, no se vuelve a empezar.
-		if state != State.WORKING and not _plan.has("work") and Economy.shift_due():
+		# Si ya va camino al trabajo, no se vuelve a empezar. (La pareja va a
+		# trabajar en SU teléfono: aquí solo se ve por su intención.)
+		if not is_partner and state != State.WORKING and not _plan.has("work") and Economy.shift_due():
 			_go_to_work()
 		match state:
 			State.IDLE:
@@ -170,7 +205,8 @@ func _process(delta: float) -> void:
 			State.ACTING:
 				_act(minutes)
 			State.WORKING:
-				_work(minutes)
+				if not is_partner:
+					_work(minutes)
 
 	# Si construyen en la planta baja, no se ve al personaje que está arriba.
 	visible = (view == null or level <= view.top_visible_level) and state != State.WORKING
@@ -179,14 +215,18 @@ func _process(delta: float) -> void:
 	if _report_timer <= 0.0:
 		_report_timer = NEEDS_REPORT_SECONDS
 		_update_bubble()
-		_note_emotion()
-		EventBus.character_needs_changed.emit(data.needs, data.mood_text())
+		if not is_partner:
+			_note_emotion()
+			EventBus.character_needs_changed.emit(data.needs, data.mood_text())
 
 
 # --- Pensar ---
 
 ## Elige qué hacer: primero las órdenes del jugador, si no, la IA.
 func _think() -> void:
+	if remote_driven:
+		_wander()  # Lo que hace lo dice su intención; mientras, pasea.
+		return
 	var choice := _order
 	_order = {}
 	if choice.is_empty():
@@ -206,6 +246,9 @@ func _gather_options() -> Array:
 			if HouseData.is_under_construction(piece):
 				continue
 			var item_id: String = piece["item"]
+			# Lo que está usando el otro personaje no se elige (Fase 5).
+			if companion != null and companion.using(object_level, key):
+				continue
 			for action in Catalog.get_item_actions(item_id):
 				var option := _option_for(object_level, key, action)
 				if not option.is_empty():
@@ -313,6 +356,8 @@ func _start_action() -> void:
 
 
 func _act(minutes: float) -> void:
+	if remote_driven:
+		return  # Sigue con la acción hasta que la pareja haga otra cosa.
 	var action: Dictionary = _plan["action"]
 	var total := float(action.get("minutes", 30))
 	_act_minutes += minutes
@@ -401,8 +446,10 @@ func _work(minutes: float) -> void:
 func _collect_pay() -> void:
 	var pay: int = await Economy.request_shift_pay()
 	if pay > 0:
-		data.add_journal("Terminó el turno y cobró $%d" % pay)
-		EventBus.toast.emit("%s cobró $%d del trabajo." % [data.name, pay])
+		# Fase 5: con "unir ingresos", el sueldo va a la caja de la casa.
+		var where := " (a la caja de la casa)" if Economy.shared and Economy.pool_income else ""
+		data.add_journal("Terminó el turno y cobró $%d%s" % [pay, where])
+		EventBus.toast.emit("%s cobró $%d del trabajo%s." % [data.name, pay, where])
 	else:
 		data.add_journal("Terminó el turno (se cobra cuando responda el servidor)")
 
@@ -469,6 +516,8 @@ static func intention_text(intention: Dictionary) -> String:
 	var text: String = "%s: %s" % [intention["character"], intention["verb"]]
 	if intention["object"] != "":
 		text += " (%s)" % intention["object"]
+	if int(intention.get("since", 0)) <= 0:
+		return text
 	var since := Time.get_datetime_dict_from_unix_time(int(intention["since"]) + _utc_offset())
 	return text + ", desde las %02d:%02d" % [since["hour"], since["minute"]]
 
@@ -479,7 +528,53 @@ static func _utc_offset() -> int:
 
 func _mark_intention() -> void:
 	_since = int(Time.get_unix_time_from_system())
-	EventBus.character_intention_changed.emit(get_intention())
+	if not is_partner:
+		EventBus.character_intention_changed.emit(get_intention())
+
+
+# --- Fase 5: la pareja ---
+
+## ¿Está usando (o yendo a usar) ese mueble?
+func using(object_level: int, key: String) -> bool:
+	return _plan.get("key", "") == key and int(_plan.get("level", -1)) == object_level
+
+
+## La pareja se conectó, se desconectó o cambió lo que hace. Solo para el
+## personaje de la pareja (`is_partner`).
+func follow_intention(online: bool, intention: Dictionary) -> void:
+	if data == null:
+		return
+	var was_working := state == State.WORKING
+	remote_driven = online and not intention.is_empty()
+	if not remote_driven:
+		# Fuera de línea: sigue con su IA (lo que se ve es creíble, no exacto).
+		if was_working:
+			place_at(0, WORK_CELL)
+			_set_idle()
+		return
+	if intention.get("state", "") == "working":
+		_stop_action()
+		state = State.WORKING
+		_animator.play("idle")
+		return
+	if was_working:
+		place_at(0, WORK_CELL)
+		_set_idle()
+	var key: String = intention.get("key", "")
+	var object_level := int(intention.get("object_level", 0))
+	var action: Dictionary = Catalog.actions.get(intention.get("action", ""), {})
+	if key != "" and not action.is_empty() and house.has_piece(object_level, "objects", key):
+		if using(object_level, key) and _plan.get("action", {}).get("id", "") == action.get("id", ""):
+			return  # Ya está en eso.
+		var option := _option_for(object_level, key, action)
+		if not option.is_empty():
+			_stop_action()
+			_go(option)
+			return
+	# Sin mueble (pasea, piensa): deja lo que hacía y pasea por la casa.
+	if state == State.ACTING or _plan.has("action"):
+		_stop_action()
+		_set_idle()
 
 
 # --- Guardado ---

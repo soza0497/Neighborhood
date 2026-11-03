@@ -104,6 +104,37 @@ Hecho con **Godot 4.7.2** (GDScript).
   entrar a su consola o cambiar la IP en [`docs/servidor.md`](docs/servidor.md).
   La dirección que usa el juego está en `data/server.json`.
 
+## Pareja y casa compartida (Fase 5)
+
+Todo pasa por el servidor: hace falta estar conectado (en la red de casa).
+
+- **Menú → Pareja**: escribí el usuario de tu pareja y tocá **Invitar**. Le
+  llega al instante; cuando acepta, son pareja. Desde ahí también: **Proponer
+  casamiento**, **Vivir juntos en mi casa** o **Mudarme a su casa** (la otra
+  persona acepta o dice que no), y **Terminar la relación** (tocar dos veces).
+  Los interruptores **Permitir drama** y **Modo familiar** quedan preparados
+  (todavía no hay drama en el juego).
+- Arriba a la izquierda: **Pareja: nombre ● en línea · cocinando (Cocina)**.
+  Viviendo juntos, el personaje de tu pareja aparece en la casa (con su nombre
+  encima) y hace lo mismo que en su teléfono: si cocina, va a la cocina y
+  cocina. Si está fuera de línea, vive solo con su IA.
+- **Cambios menores** (mover, girar y pintar muebles, pintar paredes y pisos,
+  poner un mueble nuevo, unir/separar ventanas): se hacen al instante. A la
+  otra persona le aparece un aviso arriba con **Deshacer**.
+- **Cambios estructurales** (cimientos, pisos, paredes, puertas, ventanas,
+  techos, escaleras, y quitar/vender cualquier cosa): el botón dice **Pedir
+  permiso**; tu pareja lo aprueba o no en **Menú → Casa**. Al aprobarlo se
+  construye y lo paga quien lo pidió.
+- **Menú → Casa**: la **caja de la casa** (aportar $100, $500, $1000), **Unir
+  ingresos** (tu sueldo va a la caja), los **pedidos de permiso** y el
+  **historial** de la casa. Lo que se construye se paga primero con la caja; lo
+  que falta, con tu billetera. Lo que se vende vuelve a la caja.
+- Si los dos editan a la vez, en los cambios menores gana el último. Tu
+  **Deshacer** nunca pisa lo que cambió tu pareja después (ese paso se
+  descarta y te avisa).
+- Al terminar: la casa queda de quien era, quien se había mudado vuelve a su
+  casa de antes (quedó guardada), y la caja se reparte en dos.
+
 ## Pruebas automáticas
 
 En la terminal, dentro de la carpeta del proyecto:
@@ -124,13 +155,19 @@ godot --headless --path . res://tests/test_economy.tscn
 godot --headless --path . res://tests/test_server.tscn
 ```
 
+```bash
+godot --headless --path . res://tests/test_couple.tscn
+```
+
 La primera revisa las reglas de construcción y el deshacer; la segunda, las
 necesidades, la IA y los caminos; la tercera, precios, niveles, obras, empleos
-y la migración del guardado; la cuarta, el cliente del servidor (sin red). Deben terminar con
+y la migración del guardado; la cuarta, el cliente del servidor (sin red); la
+quinta, la pareja y la casa compartida (sin red). Deben terminar con
 `PRUEBAS: N pasaron, 0 fallaron`. (`tests/visual_demo.tscn`,
 `tests/character_demo.tscn` y `tests/economy_demo.tscn` arman casas de ejemplo y sacan capturas, pero
 **pisan la partida guardada**. `tests/server_demo.tscn`,
-`tests/economy_server_demo.tscn` y `tests/login_demo.tscn` prueban contra el
+`tests/economy_server_demo.tscn`, `tests/login_demo.tscn`,
+`tests/couple_demo.tscn` y `tests/couple_live_demo.tscn` prueban contra el
 servidor de verdad: ver `docs/servidor.md`.)
 
 Y las reglas del servidor (opcional, necesita Lua 5.1, ver `docs/servidor.md`):
@@ -186,7 +223,11 @@ Están siempre cargados y se usan desde cualquier script por su nombre:
 - **GameState**: todos los datos de la partida que se guardan.
 - **GameServer**: la conexión con el servidor (cuenta, sesión recordada,
   indicador de conexión, llamar las funciones del servidor, subir personaje y
-  opciones a la nube, avisar "sigo jugando").
+  opciones a la nube, avisar "sigo jugando"). Desde la Fase 5 también la
+  conexión en tiempo real (`GameServer.socket`): avisos al instante y
+  presencia de la pareja.
+- **Couple** (Fase 5): la pareja y la casa compartida: relación, si la pareja
+  está en línea y qué hace su personaje, caja, pedidos de permiso e historial.
 - **SaveSystem**: guarda/carga `GameState` en `user://save.json` (con copia de
   respaldo y migración de versiones viejas)
   (en la PC: `~/.local/share/godot/app_userdata/Neighborhood/`).
