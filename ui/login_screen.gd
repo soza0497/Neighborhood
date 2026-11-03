@@ -100,6 +100,8 @@ func _load_and_enter() -> void:
 	Economy.from_dict(GameState.economy)
 	Economy.use_server(true)
 	Economy.apply_server_state(result["data"])
+	Couple.apply_answer(result["data"])
+	GameServer.start_realtime()
 	SaveSystem.save_game()
 	_enter_game()
 

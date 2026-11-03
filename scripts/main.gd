@@ -8,6 +8,9 @@ extends Node3D
 ## - Cada cambio en la casa se guarda solo, un segundo después.
 ## - Con cuenta (Fase 4B) el servidor manda en el dinero y la casa: sin
 ##   conexión no se puede Construir (se sigue viviendo).
+## - Casa compartida (Fase 5): si la pareja cambia algo, el servidor avisa y
+##   aquí la casa "se pone al día" (solo las piezas que cambiaron). Si se
+##   mudan juntos o se separan, se carga la casa entera de nuevo.
 
 ## Segundos de espera después de un cambio antes de guardar.
 const AUTOSAVE_DELAY := 1.0
@@ -31,6 +34,11 @@ var mode := ""
 var _autosave_timer: Timer
 ## Para saber cuándo VUELVE la conexión.
 var _was_online := false
+## Fase 5: hay que preguntar al servidor cómo está la casa (la pareja cambió
+## algo), y si ya se está preguntando.
+var _sync_pending := false
+var _syncing := false
+var _sync_retry_at := 0
 
 
 func _ready() -> void:
@@ -75,12 +83,20 @@ func _ready() -> void:
 	EventBus.construction_accelerate_requested.connect(_on_accelerate_requested)
 	EventBus.logout_requested.connect(_on_logout_requested)
 	EventBus.server_status_changed.connect(_on_server_status_changed)
+	EventBus.home_remote_changed.connect(_on_home_remote_changed)
+	EventBus.home_reload_requested.connect(_on_home_reload_requested)
 	_was_online = GameServer.online
+	house.rev = Economy.house_rev
+	Economy.own_rev = -1
 
 	set_mode("live")
 	EventBus.view_mode_changed.emit(_house_view.view_mode)
 	_set_level(_character.level)  # Se empieza viendo el piso del personaje.
 	history.refresh()
+
+
+func _process(_delta: float) -> void:
+	_check_home_sync()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -249,6 +265,9 @@ func _load_from_server() -> void:
 		house.from_dict(merged["house"])
 		_character.reset_after_build()  # Por si quedó parado donde ahora hay algo.
 	Economy.apply_server_state(result["data"])
+	house.rev = Economy.house_rev
+	Couple.apply_answer(result["data"])
+	GameServer.start_realtime()
 	history.refresh()
 	EventBus.toast.emit("Volvió la conexión: tu partida está al día.")
 	_autosave_timer.start()
@@ -262,6 +281,83 @@ static func _same_house(a: Dictionary, b: Dictionary) -> bool:
 	return JSON.stringify(levels_a, "", true) == JSON.stringify(levels_b, "", true)
 
 
+# --- Casa compartida (Fase 5): ponerse al día ---
+
+## La pareja cambió algo (aviso del servidor con la versión nueva).
+func _on_home_remote_changed(notice: Dictionary) -> void:
+	if int(notice.get("rev", 0)) > house.rev or notice.get("kind", "") in ["approved", "revert"]:
+		_sync_pending = true
+
+
+## ¿La casa está al día con el servidor? Si mi último pedido fue lo único
+## que cambió (la versión subió 1), ya está; si no, se pregunta.
+func _check_home_sync() -> void:
+	if not Economy.server_mode or not GameServer.online or not GameServer.game_loaded:
+		return
+	if Economy.busy or _syncing or Economy.now() < _sync_retry_at:
+		return
+	if not _sync_pending and house.rev == Economy.house_rev:
+		return
+	if not _sync_pending and Economy.own_rev == Economy.house_rev and house.rev == Economy.house_rev - 1:
+		house.rev = Economy.house_rev
+		return
+	_sync_home()
+
+
+## Pide la casa al servidor y aplica solo lo que cambió.
+func _sync_home() -> void:
+	_syncing = true
+	_sync_pending = false
+	var result: Dictionary = await GameServer.call_rpc("home_load", {})
+	_syncing = false
+	if not result["ok"] or not result["data"].get("ok", false):
+		_sync_retry_at = Economy.now() + 5
+		_sync_pending = true
+		return
+	var data: Dictionary = result["data"]
+	var server_house: Variant = JSON.parse_string(str(data.get("house", ""))) if str(data.get("house", "")) != "" else {}
+	if not server_house is Dictionary:
+		server_house = {}
+	var writes := CoupleState.diff_writes(house.to_dict(), server_house)
+	if not writes.is_empty():
+		_builder.cancel_pending()
+		_builder.select_object("")
+		house.apply(writes)
+		house.next_id = maxi(house.next_id, int(server_house.get("next_id", 1)))
+		_character.on_house_changed()
+		_autosave_timer.start()
+	house.rev = int(CoupleState.normalize_home(data.get("home", {}))["rev"])
+	if not Economy.busy and data.get("state") is Dictionary:
+		Economy.apply_server_state(data["state"])
+		house.rev = Economy.house_rev
+	Couple.apply_answer({"home": data.get("home", {})})
+	history.refresh()
+
+
+## Se mudaron juntos o se separaron: la casa es otra. Se carga entera.
+func _on_home_reload_requested() -> void:
+	if not Economy.server_mode or not GameServer.online:
+		return
+	while Economy.busy:
+		await get_tree().process_frame
+	SaveSystem.save_game()
+	var result: Dictionary = await GameServer.call_rpc("game_load", {})
+	if not result["ok"]:
+		return
+	var merged := CloudSync.merge(GameState.to_dict(), result["data"], GameServer.user_id(), GameServer.username())
+	_builder.cancel_pending()
+	_builder.select_object("")
+	house.from_dict(merged["house"])
+	Economy.apply_server_state(result["data"])
+	house.rev = Economy.house_rev
+	Couple.apply_answer(result["data"])
+	# En otra casa, el personaje entra por el frente.
+	_character.place_at(0, Character.SPAWN_CELL)
+	_character.reset_after_build()
+	history.refresh()
+	_autosave_timer.start()
+
+
 ## Cierra la sesión: guarda, sube lo que falte a la nube y vuelve a la
 ## pantalla de entrada. La partida queda en el teléfono.
 func _on_logout_requested() -> void:
@@ -269,6 +365,7 @@ func _on_logout_requested() -> void:
 	if GameServer.online:
 		await GameServer.upload_cloud()
 	GameServer.logout()
+	Couple.clear()
 	Economy.use_server(false)
 	get_tree().change_scene_to_file(LOGIN_SCENE)
 

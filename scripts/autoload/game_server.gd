@@ -12,6 +12,9 @@ extends Node
 ##   - Subir el personaje y las opciones a la nube después de guardar.
 ##   - Avisar "sigo jugando" cada tanto (game_heartbeat): así el servidor no
 ##     paga como "días sin jugar" el tiempo que se estuvo jugando.
+##   - Fase 5: la conexión en TIEMPO REAL (`socket`, un RealtimeSocket): avisos
+##     al instante y presencia de la pareja. Se prende con start_realtime()
+##     al entrar al juego y se apaga al cerrar sesión.
 ##
 ## No hace nada hasta que la pantalla de entrada llama a start(): así las
 ## pruebas y demos que no lo usan no hablan con el servidor.
@@ -53,6 +56,11 @@ var heartbeat_enabled := false
 ## true cuando en esta sesión ya se cargó la partida del servidor (al entrar
 ## con conexión). Si se entró "sin conexión", es false hasta que vuelva.
 var game_loaded := false
+## Tiempo real (Fase 5).
+var socket: RealtimeSocket
+## false = no avisa por EventBus (para un SEGUNDO jugador dentro de una demo:
+## así no confunde a la interfaz del primero).
+var emits_events := true
 
 var _health_timer := 0.0
 var _heartbeat_timer := HEARTBEAT_INTERVAL
@@ -68,6 +76,32 @@ func _ready() -> void:
 	_load_config()
 	_load_session()
 	EventBus.game_saved.connect(_on_game_saved)
+	socket = RealtimeSocket.new()
+	socket.name = "Realtime"
+	socket.host_port = address_text()
+	socket.use_ssl = base_url.begins_with("https")
+	socket.token_provider = _socket_token
+	add_child(socket)
+
+
+## Prende la conexión en tiempo real (al entrar al juego con cuenta).
+func start_realtime() -> void:
+	socket.set_wanted(has_session())
+
+
+func stop_realtime() -> void:
+	socket.set_wanted(false)
+
+
+## El pase para el socket. Si está por vencer, primero se renueva (mientras
+## tanto el socket espera).
+func _socket_token() -> String:
+	if not has_session():
+		return ""
+	if session.token_expiring(int(Time.get_unix_time_from_system()), 120):
+		_ensure_token()
+		return ""
+	return session.token
 
 
 ## Lo llama la pantalla de entrada: desde aquí se revisa la conexión y se sube
@@ -164,6 +198,7 @@ func resume() -> Dictionary:
 
 ## Cierra la sesión: el teléfono olvida la cuenta (la partida queda guardada).
 func logout() -> void:
+	stop_realtime()
 	session = null
 	heartbeat_enabled = false
 	game_loaded = false
@@ -243,7 +278,7 @@ func check_connection() -> bool:
 
 
 func _on_game_saved(success: bool) -> void:
-	if success and active:
+	if success and active and emits_events:
 		_upload_pending = true
 
 
@@ -384,4 +419,5 @@ func _set_online(value: bool) -> void:
 
 
 func _emit_status() -> void:
-	EventBus.server_status_changed.emit(online, username())
+	if emits_events:
+		EventBus.server_status_changed.emit(online, username())

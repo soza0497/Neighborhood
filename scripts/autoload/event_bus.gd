@@ -90,6 +90,9 @@ signal level_up(level: int, unlocked_names: Array)
 signal toast(text: String)
 ## Lo que cuesta la selección que espera Confirmar (negativo = se devuelve dinero).
 signal build_cost_changed(cost: int)
+## Fase 5: la selección que espera Confirmar necesita la aprobación de la
+## pareja (casa compartida, cambio estructural).
+signal build_approval_changed(needs_approval: bool)
 ## Obras en marcha: cuántas hay y cuánto cuesta acelerarlas todas.
 signal construction_changed(count: int, accelerate_cost: int)
 ## El jugador pidió acelerar todas las obras.
@@ -108,3 +111,24 @@ signal logout_requested
 ## Se está esperando (o se dejó de esperar) una respuesta del servidor
 ## (Fase 4B): mientras tanto, los botones que cambian dinero no responden.
 signal server_busy_changed(busy: bool)
+
+# --- Pareja y casa compartida (Fase 5) ---
+## Cambió la caja de la casa común (`shared` = viven juntos).
+signal fund_changed(shared: bool, fund: int)
+## Cambió la relación, la pareja o el hogar (leer Couple.couple / .home).
+signal couple_changed
+## La pareja se conectó o desconectó, o cambió lo que hace su personaje
+## (`intention` como Character.get_intention; {} si no se sabe).
+signal partner_presence_changed(online: bool, intention: Dictionary)
+## La pareja cambió algo del hogar (aviso del servidor): {rev, entry_id,
+## kind, text, by_name, can_revert}. La escena principal se pone al día.
+signal home_remote_changed(notice: Dictionary)
+## Hay que volver a cargar la casa entera (se mudaron juntos o se separaron).
+signal home_reload_requested
+## La interfaz pide abrir el panel de la pareja o el de la casa.
+signal couple_panel_requested
+signal home_panel_requested
+## Aviso con botón "Deshacer" (un cambio menor de la pareja): texto y la
+## entrada del historial que se puede deshacer (0 = sin botón).
+signal partner_notice(text: String, entry_id: int)
+

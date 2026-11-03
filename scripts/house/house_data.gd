@@ -29,6 +29,9 @@ const LAYERS := ["foundation", "floors", "walls", "objects", "roofs"]
 var levels: Array = []
 ## Contador para dar nombres únicos a objetos y techos ("o1", "o2"...).
 var next_id := 1
+## Fase 5: versión del hogar en el servidor a la que corresponde esta casa
+## (no se guarda: la pone la escena principal al cargar o al ponerse al día).
+var rev := 0
 ## Si al cargar se movió la casa (parcela de otro tamaño), cuánto se movió.
 ## Quien guarda posiciones aparte (el personaje) debe moverse igual.
 var migrated_offset := Vector2i.ZERO

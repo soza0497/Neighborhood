@@ -61,6 +61,23 @@ var working_now := false
 ## Ya se cobró lo pendiente al entrar (work_settle).
 var settled := false
 
+# --- Casa compartida (Fase 5): lo copia de cada respuesta del servidor ---
+## Versión del hogar en el servidor (sube con cada cambio de cualquiera de
+## los dos). La escena principal la compara con la de su casa.
+var house_rev := 0
+## true = vive en una casa compartida con su pareja.
+var shared := false
+## Caja de la casa común y "unir ingresos" (mi sueldo va a la caja).
+var fund := 0
+var pool_income := false
+## Pedidos de aprobación esperando (de cualquiera de los dos).
+var requests_count := 0
+## Último house_rev que cambió SOLO por un pedido mío (subió exactamente 1
+## mientras esperaba la respuesta). La escena principal lo usa para saber si
+## su casa ya está al día o si la pareja cambió algo en el medio.
+var own_rev := -1
+var _rev_at_send := 0
+
 var _timer := 0.0
 ## Hora en que se vuelve a preguntar por el currículum o por el turno sin cobrar.
 var _resume_check_at := 0
@@ -96,9 +113,10 @@ func add_money(amount: int) -> void:
 	_emit_changed()
 
 
-## ¿Alcanza el dinero para un cambio (negativo = pago)?
+## ¿Alcanza el dinero para un cambio (negativo = pago)? En la casa
+## compartida también cuenta la caja (se paga primero con ella).
 func can_change(money_change: int) -> bool:
-	return money + money_change >= 0
+	return money + (fund if shared else 0) + money_change >= 0
 
 
 # --- Nivel y experiencia ---
@@ -386,6 +404,9 @@ func use_server(enabled: bool) -> void:
 	_pay_retry_at = 0
 	if not enabled:
 		server_offset = 0
+		shared = false
+		fund = 0
+		house_rev = 0
 
 
 ## Pide algo al servidor y espera la respuesta. De a un pedido por vez.
@@ -395,6 +416,7 @@ func request(rpc_id: String, payload := {}) -> Dictionary:
 	if busy:
 		return {"ok": false, "error": BUSY_TEXT, "data": {}, "offline": false, "busy": true}
 	_set_busy(true)
+	_rev_at_send = house_rev
 	var result: Dictionary = await GameServer.call_rpc(rpc_id, payload)
 	_set_busy(false)
 	result["busy"] = false
@@ -405,6 +427,8 @@ func request(rpc_id: String, payload := {}) -> Dictionary:
 	var data: Dictionary = result["data"]
 	if data.get("state") is Dictionary:
 		apply_server_state(data["state"])
+		if house_rev == _rev_at_send + 1:
+			own_rev = house_rev
 	if not data.get("ok", false):
 		result["ok"] = false
 		result["error"] = str(data.get("error", "El servidor no aceptó el cambio."))
@@ -430,6 +454,11 @@ func apply_server_state(state: Dictionary) -> void:
 	last_shift_unix = job["last_shift_unix"]
 	server_can_undo = bool(state.get("can_undo", false))
 	server_can_redo = bool(state.get("can_redo", false))
+	house_rev = int(state.get("house_rev", house_rev))
+	shared = bool(state.get("shared", false))
+	fund = int(state.get("fund", 0))
+	pool_income = bool(state.get("pool_income", false))
+	requests_count = int(state.get("requests", 0))
 	_set_xp(economy["xp"])
 	_emit_changed()
 	if was_applied != "" and applied_job == "" and job_id == was_applied:
@@ -574,6 +603,7 @@ func debug_unlock_all() -> void:
 func _emit_changed() -> void:
 	var progress := xp_progress()
 	EventBus.economy_changed.emit(money, level(), progress.x, progress.y)
+	EventBus.fund_changed.emit(shared, fund)
 
 
 func _on_game_saving() -> void:

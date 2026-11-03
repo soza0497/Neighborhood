@@ -347,6 +347,7 @@ func _update(screen_pos: Vector2) -> void:
 	_pending_ok = check["ok"]
 	_pending_blocked = check["blocked"]
 	if tool in HANDLE_TOOLS and _pressing:
+		EventBus.build_approval_changed.emit(needs_approval(_pending_ok))
 		EventBus.build_cost_changed.emit(-Economy.quote(house, _pending_ok)["money"])
 	_show_preview()
 
@@ -428,13 +429,27 @@ func _apply(writes: Array) -> bool:
 	return true
 
 
+## Fase 5: en la casa compartida, ¿este cambio necesita la aprobación de
+## la pareja? (lo decide el servidor; esto es para avisar antes)
+func needs_approval(writes: Array) -> bool:
+	return Economy.shared and not writes.is_empty() and not HousePermissions.is_minor(house, writes)
+
+
 ## Manda el cambio al servidor y aplica lo que él aceptó.
+## En la casa compartida, un cambio estructural no se aplica: queda como
+## pedido de permiso hasta que la pareja lo apruebe.
 func _apply_on_server(writes: Array) -> bool:
 	EventBus.build_hint.emit(Economy.BUSY_TEXT)
 	var result: Dictionary = await Economy.request("build_apply", {"writes": writes})
 	if not result["ok"]:
 		EventBus.build_hint.emit(result["error"])
 		return false
+	if result["data"].get("requested", false):
+		var text := "Le pediste permiso a %s (%s). Te avisamos cuando responda." % [
+			Couple.partner_name(), str(result["data"].get("text", ""))]
+		EventBus.build_hint.emit(text)
+		EventBus.toast.emit("Pedido enviado a %s." % Couple.partner_name())
+		return true
 	history.apply_remote(CloudSync.writes_from_server(result["data"].get("writes", [])))
 	_show_money_hint(int(result["data"].get("money_change", 0)))
 	return true

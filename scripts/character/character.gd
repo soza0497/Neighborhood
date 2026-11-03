@@ -117,6 +117,21 @@ func reset_after_build() -> void:
 	_set_idle()
 
 
+## La casa cambió sin pasar por Construir (Fase 5: la pareja editó algo).
+## Si el mueble que iba a usar cambió, o le pusieron algo encima, se
+## reubica y vuelve a pensar; si no, sigue con lo suyo.
+func on_house_changed() -> void:
+	if state == State.WORKING or data == null:
+		return
+	var stale := not nav.is_walkable(level, cell) and state != State.ACTING
+	if _plan.has("key"):
+		var object: Variant = house.get_piece(_plan["level"], "objects", _plan["key"])
+		stale = stale or object == null or _plan.get("anchor") != HouseData.object_anchor(object) \
+			or HouseData.is_under_construction(object)
+	if stale:
+		reset_after_build()
+
+
 ## Orden del jugador: usar la acción `action_id` del objeto `key`.
 func order(object_level: int, key: String, action_id: String) -> void:
 	var action: Dictionary = Catalog.actions.get(action_id, {})
@@ -209,7 +224,8 @@ func _option_for(object_level: int, key: String, action: Dictionary) -> Dictiona
 				continue
 		if best.is_empty() or path.size() < best["path_length"]:
 			best = {"action": action, "level": object_level, "key": key, "spot": spot,
-				"path": path, "path_length": path.size()}
+				"path": path, "path_length": path.size(),
+				"anchor": HouseData.object_anchor(house.get_piece(object_level, "objects", key))}
 	return best
 
 
@@ -424,12 +440,18 @@ func get_intention() -> Dictionary:
 		"action": "",
 		"verb": "paseando",
 		"object": "",
+		# Fase 5: qué mueble (clave y piso), para que la pareja anime a este
+		# personaje en su pantalla junto al mismo mueble.
+		"key": "",
+		"object_level": 0,
 		"level": level,
 		"since": _since,
 	}
 	if _plan.has("action"):
 		var object: Variant = house.get_piece(_plan["level"], "objects", _plan["key"])
 		intention["action"] = _plan["action"]["id"]
+		intention["key"] = _plan["key"]
+		intention["object_level"] = _plan["level"]
 		intention["verb"] = _plan["action"].get("verb", "")
 		intention["object"] = Catalog.get_item(object["item"]).get("name", "") if object != null else ""
 		if state == State.WALKING:

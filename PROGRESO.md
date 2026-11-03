@@ -1,6 +1,14 @@
 # Progreso
 
-## Fase actual: 4 — Cuentas y servidor (4A y 4B hechas; falta probarlas en la PC del dueño y en el teléfono)
+## Fase actual: 5 — Pareja y casa compartida (en curso, sesión en la nube, rama `fase-5`)
+
+### Fase 5 — avance (2026-11-03)
+- 5A (servidor) y 5B (teléfono) hechas y probadas contra Nakama 3.41.0 en la
+  nube: Lua 187/187, sin red 231/231, `couple_demo` 66/66 (dos cuentas a la
+  vez), demos viejas OK. Falta 5C: el personaje de la pareja animado en la
+  casa compartida y la documentación completa (abajo se completa al terminar).
+
+## Fase anterior: 4 — Cuentas y servidor (4A y 4B hechas; falta probarlas en la PC del dueño y en el teléfono)
 
 ### Fase 4B — hecho (2026-11-03, en una sesión en la nube, rama `fase-4b`)
 - **El servidor manda en el dinero y la propiedad.** Reglas en

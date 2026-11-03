@@ -67,6 +67,15 @@ const NEED_COLORS := {
 @onready var _rotate_button: Button = %RotateButton
 @onready var _delete_button: Button = %DeleteButton
 @onready var _erase_button: Button = %EraseButton
+# Fase 5: pareja y casa compartida.
+@onready var _partner_label: Label = %PartnerLabel
+@onready var _fund_label: Label = %FundLabel
+@onready var _couple_button: Button = %CoupleButton
+@onready var _home_button: Button = %HomeButton
+@onready var _notice_box: Control = %NoticeBox
+@onready var _notice_label: Label = %NoticeLabel
+@onready var _notice_undo_button: Button = %NoticeUndoButton
+@onready var _notice_close_button: Button = %NoticeCloseButton
 
 var _mode := "build"
 var _last_save_text := "sin guardar todavía"
@@ -86,6 +95,12 @@ var _toast_tween: Tween
 var _can_undo := false
 var _can_redo := false
 var _server_busy := false
+## Aviso de la pareja que se está mostrando (entrada del historial que se
+## puede deshacer; 0 = ninguna).
+var _notice_entry := 0
+## La selección que espera Confirmar necesita aprobación (casa compartida).
+var _needs_approval := false
+var _notice_tween: Tween
 
 
 func _ready() -> void:
@@ -123,6 +138,7 @@ func _ready() -> void:
 	EventBus.economy_changed.connect(_on_economy_changed)
 	EventBus.toast.connect(_on_toast)
 	EventBus.build_cost_changed.connect(_on_build_cost_changed)
+	EventBus.build_approval_changed.connect(func(needed: bool) -> void: _needs_approval = needed)
 	EventBus.construction_changed.connect(_on_construction_changed)
 	_setup_xp_bar()
 	var progress := Economy.xp_progress()
@@ -141,6 +157,17 @@ func _ready() -> void:
 	EventBus.character_intention_changed.connect(_on_intention_changed)
 	EventBus.object_menu_requested.connect(_on_object_menu_requested)
 	_create_need_bars()
+	# Fase 5
+	_couple_button.pressed.connect(_open_from_menu.bind(EventBus.couple_panel_requested))
+	_home_button.pressed.connect(_open_from_menu.bind(EventBus.home_panel_requested))
+	EventBus.couple_changed.connect(_update_partner_label)
+	EventBus.partner_presence_changed.connect(func(_online: bool, _intention: Dictionary) -> void: _update_partner_label())
+	EventBus.fund_changed.connect(_on_fund_changed)
+	EventBus.partner_notice.connect(_on_partner_notice)
+	_notice_undo_button.pressed.connect(_on_notice_undo)
+	_notice_close_button.pressed.connect(_notice_box.hide)
+	_update_partner_label()
+	_on_fund_changed(Economy.shared, Economy.fund)
 
 	if SaveSystem.has_save():
 		_last_save_text = "partida cargada"
@@ -327,13 +354,14 @@ func _on_economy_changed(money: int, level: int, xp_in_level: int, xp_needed: in
 
 ## Lo que cuesta (o devuelve) la selección que espera Confirmar.
 func _on_build_cost_changed(cost: int) -> void:
+	var verb := "Pedir permiso" if _needs_approval else "Confirmar"
 	if cost > 0:
-		_confirm_button.text = "Confirmar ($%d)" % cost
+		_confirm_button.text = "%s ($%d)" % [verb, cost]
 	elif cost < 0:
-		_confirm_button.text = "Confirmar (+$%d)" % -cost
+		_confirm_button.text = "%s (+$%d)" % [verb, -cost]
 	else:
-		_confirm_button.text = "Confirmar"
-	_confirm_button.disabled = cost > Economy.money or _server_busy
+		_confirm_button.text = verb
+	_confirm_button.disabled = not Economy.can_change(-cost) or _server_busy
 
 
 func _on_toast(text: String) -> void:
@@ -452,6 +480,58 @@ func _on_server_busy_changed(busy: bool) -> void:
 	if _confirm_button.visible:
 		_confirm_button.disabled = busy
 	_builds_button.disabled = busy or (Economy.server_mode and not GameServer.online)
+
+
+# --- Pareja (Fase 5) ---
+
+## Arriba: con quién estás, si está conectada y qué hace su personaje.
+func _update_partner_label() -> void:
+	_partner_label.visible = Couple.in_couple()
+	if not Couple.in_couple():
+		return
+	var text := "Pareja: %s " % Couple.partner_name()
+	if Couple.partner_online:
+		text += "● en línea"
+		var intention := Couple.partner_intention
+		if not intention.is_empty():
+			text += " · " + str(intention.get("verb", ""))
+			if str(intention.get("object", "")) != "":
+				text += " (%s)" % intention["object"]
+		_partner_label.add_theme_color_override("font_color", Color("#ffb3d1"))
+	else:
+		text += "○ fuera de línea"
+		_partner_label.add_theme_color_override("font_color", Color("#d0c0c8"))
+	_partner_label.text = text
+
+
+func _on_fund_changed(shared: bool, fund: int) -> void:
+	_fund_label.visible = shared
+	_fund_label.text = "Caja de la casa: $ %d" % fund
+
+
+## La pareja cambió algo: aviso arriba con "Deshacer" (si se puede).
+func _on_partner_notice(text: String, entry_id: int) -> void:
+	_notice_label.text = text
+	_notice_entry = entry_id
+	_notice_undo_button.visible = entry_id > 0
+	_notice_undo_button.disabled = false
+	_notice_box.show()
+	if _notice_tween != null:
+		_notice_tween.kill()
+	_notice_tween = create_tween()
+	_notice_tween.tween_interval(8.0)
+	_notice_tween.tween_callback(_notice_box.hide)
+
+
+func _on_notice_undo() -> void:
+	if _notice_entry <= 0:
+		return
+	_notice_undo_button.disabled = true
+	var result: Dictionary = await Couple.revert(_notice_entry)
+	if result["ok"]:
+		_notice_box.hide()
+	else:
+		_notice_undo_button.disabled = false
 
 
 func _on_game_saved(success: bool) -> void:

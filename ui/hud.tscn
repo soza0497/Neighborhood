@@ -5,6 +5,8 @@
 [ext_resource type="Script" path="res://ui/drag_scroll.gd" id="3_drag"]
 [ext_resource type="PackedScene" path="res://ui/diary_panel.tscn" id="4_diary"]
 [ext_resource type="PackedScene" path="res://ui/jobs_panel.tscn" id="5_jobs"]
+[ext_resource type="PackedScene" path="res://ui/couple_panel.tscn" id="6_couple"]
+[ext_resource type="PackedScene" path="res://ui/home_panel.tscn" id="7_home"]
 
 [sub_resource type="StyleBoxFlat" id="Style_bar"]
 bg_color = Color(0.13, 0.17, 0.25, 0.85)
@@ -91,6 +93,18 @@ theme_override_constants/outline_size = 6
 theme_override_font_sizes/font_size = 16
 text = "● Sin conexión"
 
+[node name="PartnerLabel" type="Label" parent="Root/Layout/TopRow/TopLeft"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(420, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.75, 0.85, 1)
+theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 16
+text = "Pareja: ○ fuera de línea"
+text_overrun_behavior = 3
+
 [node name="ClockLabel" type="Label" parent="Root/Layout/TopRow/TopLeft"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -108,6 +122,16 @@ theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
 theme_override_constants/outline_size = 6
 theme_override_font_sizes/font_size = 24
 text = "$ 3000 · Nivel 1"
+
+[node name="FundLabel" type="Label" parent="Root/Layout/TopRow/TopLeft"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.95, 0.8, 1)
+theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 18
+text = "Caja de la casa: $ 0"
 
 [node name="XpBar" type="ProgressBar" parent="Root/Layout/TopRow/TopLeft"]
 unique_name_in_owner = true
@@ -382,6 +406,41 @@ theme_override_font_sizes/font_size = 20
 theme_override_styles/normal = SubResource("Style_hint")
 horizontal_alignment = 1
 
+[node name="NoticeBox" type="PanelContainer" parent="Root"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 0
+theme_override_styles/panel = SubResource("Style_bar")
+
+[node name="Row" type="HBoxContainer" parent="Root/NoticeBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="NoticeLabel" type="Label" parent="Root/NoticeBox/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.92, 1)
+theme_override_font_sizes/font_size = 19
+text = "sofia movió: Sofá"
+vertical_alignment = 1
+
+[node name="NoticeUndoButton" type="Button" parent="Root/NoticeBox/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Deshacer"
+
+[node name="NoticeCloseButton" type="Button" parent="Root/NoticeBox/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "X"
+
 [node name="SideMenu" type="PanelContainer" parent="Root"]
 unique_name_in_owner = true
 visible = false
@@ -420,6 +479,20 @@ custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Empleos"
+
+[node name="CoupleButton" type="Button" parent="Root/SideMenu/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Pareja"
+
+[node name="HomeButton" type="Button" parent="Root/SideMenu/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Casa"
 
 [node name="OptionsTitle" type="Label" parent="Root/SideMenu/Rows"]
 layout_mode = 2
@@ -460,3 +533,7 @@ text = "Cerrar"
 [node name="DiaryPanel" parent="." instance=ExtResource("4_diary")]
 
 [node name="JobsPanel" parent="." instance=ExtResource("5_jobs")]
+
+[node name="CouplePanel" parent="." instance=ExtResource("6_couple")]
+
+[node name="HomePanel" parent="." instance=ExtResource("7_home")]
