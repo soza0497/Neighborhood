@@ -70,6 +70,9 @@ func _run() -> void:
 			"la casa vino del servidor (%d cimientos)" % built.size())
 
 	print("3) Sin servidor")
+	# Primero se espera a que terminen los pedidos al servidor real que quedaron
+	# en camino: si uno contesta tarde, el juego se marca "Conectado" (con razón).
+	await _wait_until(func() -> bool: return not GameServer.get_children().any(func(c): return c is HTTPRequest))
 	var real_url := GameServer.base_url
 	GameServer.base_url = "http://127.0.0.1:7359"
 	login = await _open_login()

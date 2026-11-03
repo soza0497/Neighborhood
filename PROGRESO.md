@@ -29,17 +29,20 @@
   personaje, visual) OK. Re-sincronización 4A → 4B probada a mano.
 - Versión del juego 0.5.0. Docs: `docs/servidor.md`, README, DECISIONES.
 
-### Falta para cerrar la Fase 4 (en la PC del dueño)
-Lo que la nube NO pudo probar: el Docker del dueño (imagen
-`heroiclabs/nakama:3.41.0` + `postgres:18`), su cuenta real de la 4A, el APK y
-el teléfono. Qué verificar, en orden:
-1. [Dueño] Bajar la rama `fase-4b` y reiniciar Nakama
-   (`docker compose restart nakama`). En los logs tiene que decir
-   `Catálogo del juego leído: 32 piezas, 3 empleos, 6 niveles` y ningún
-   `"level":"error"`.
-2. [Dueño] Pruebas: las 4 automáticas y las demos `server_demo`,
-   `economy_server_demo` y `login_demo` (checklist del chat).
-3. [Dueño] Exportar el APK 0.5.0 e instalarlo. Probar en la red de casa: al
+### Verificado en la PC del dueño (2026-11-03)
+- Rama `fase-4b` traída desde `fase-4b.bundle` (la nube no tenía permiso de
+  escritura en GitHub) y unida a `main`.
+- Nakama reiniciado con su Docker (`postgres:18`): lee el catálogo (32 piezas,
+  3 empleos, 6 niveles) y arranca sin errores.
+- Pruebas: 231 sin red, todas OK. Contra el servidor real: `server_demo`
+  24/24, `economy_server_demo` 39/39, `login_demo` 17/17.
+- `login_demo` fallaba 2/17 en la PC: una carrera de la propia demo (un
+  pedido del paso 2 contestaba tarde, ya en el paso 3 "sin servidor").
+  Arreglado: la demo espera a que terminen los pedidos pendientes.
+- APK 0.5.0 exportado.
+
+### Falta para cerrar la Fase 4
+1. [Dueño] Instalar el APK 0.5.0. Probar en la red de casa: al
    entrar, la casa de las pruebas de la 4A sigue ahí (re-sincronización) y el
    dinero es $3000; construir cobra; deshacer devuelve; acelerar; currículum;
    un turno; con el wifi apagado "Construir" queda apagado y se puede vivir;
