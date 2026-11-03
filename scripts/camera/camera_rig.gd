@@ -27,6 +27,9 @@ extends Node3D
 @export var wheel_zoom_factor := 1.1
 ## Si es false, la cámara ignora los toques (útil cuando otro modo los usa).
 @export var input_enabled := true
+## Si es false, un solo dedo (o el clic izquierdo) NO mueve la cámara: lo usa
+## el constructor. Dos dedos, clic derecho, rueda y rueda apretada siguen igual.
+var single_finger_pan := true
 
 @onready var _pitch: Node3D = $Pitch
 @onready var _camera: Camera3D = $Pitch/Camera3D
@@ -34,7 +37,8 @@ extends Node3D
 var _distance := 22.0
 ## Dedos que están tocando la pantalla: número de dedo → posición.
 var _touches: Dictionary = {}
-var _mouse_panning := false
+var _mouse_left_down := false
+var _mouse_middle_down := false
 var _mouse_rotating := false
 
 
@@ -106,8 +110,9 @@ func _handle_drag(event: InputEventScreenDrag) -> void:
 	var old_position: Vector2 = _touches[event.index]
 
 	if _touches.size() == 1:
-		# Un dedo: arrastrar el mapa.
-		_pan(old_position, event.position)
+		# Un dedo: arrastrar el mapa (si el constructor no está usando el dedo).
+		if single_finger_pan:
+			_pan(old_position, event.position)
 	elif _touches.size() == 2:
 		# Dos dedos: comparar dónde estaban y dónde están ahora.
 		var other_index: int = _touches.keys()[0] if _touches.keys()[0] != event.index else _touches.keys()[1]
@@ -131,8 +136,10 @@ func _handle_drag(event: InputEventScreenDrag) -> void:
 
 func _handle_mouse_button(event: InputEventMouseButton) -> void:
 	match event.button_index:
-		MOUSE_BUTTON_LEFT, MOUSE_BUTTON_MIDDLE:
-			_mouse_panning = event.pressed
+		MOUSE_BUTTON_LEFT:
+			_mouse_left_down = event.pressed
+		MOUSE_BUTTON_MIDDLE:
+			_mouse_middle_down = event.pressed
 		MOUSE_BUTTON_RIGHT:
 			_mouse_rotating = event.pressed
 		MOUSE_BUTTON_WHEEL_UP:
@@ -144,7 +151,9 @@ func _handle_mouse_button(event: InputEventMouseButton) -> void:
 
 
 func _handle_mouse_motion(event: InputEventMouseMotion) -> void:
-	if _mouse_panning:
+	# Se revisa single_finger_pan al moverse (no al apretar) porque el
+	# constructor decide en el mismo clic si lo va a usar.
+	if _mouse_middle_down or (_mouse_left_down and single_finger_pan):
 		_pan(event.position - event.relative, event.position)
 	elif _mouse_rotating:
 		rotation_degrees.y -= event.relative.x * mouse_rotate_speed

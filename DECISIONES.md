@@ -76,3 +76,43 @@ Lo marcado **(pregunta)** necesita tu visto bueno antes de cambiarse.
 
 - Rama `main`. Se versionan los `.uid` que crea Godot (lo recomienda Godot
   4.4+); se ignoran `.godot/`, `build/` y los APK.
+
+## Constructor de casas (Fase 1)
+
+- **Cuadrícula de 1 × 1 m, lote de 12 × 12 celdas, 2 niveles** (planta baja
+  + primer piso). Constantes en `scripts/house/house_grid.gd`: cambiar
+  `MAX_LEVELS` o `LOT_SIZE` es una línea (las casas guardadas siguen sirviendo).
+- **Paredes en los bordes entre celdas**, no dentro de las celdas. Las
+  esquinas se tapan solas con una columna en cada vértice que toca una pared.
+- **Cimientos obligatorios**: la planta baja va 30 cm sobre el pasto, y
+  pisos y paredes de abajo se apoyan en cimientos. Así todas las alturas son
+  fijas y simples. Arriba, piso sobre piso y pared sobre piso o pared.
+- **Puertas y ventanas son parte de la pared** (campo `opening`), no piezas
+  aparte: una pared tiene a lo sumo una. Si se borra la pared, se va con ella.
+- **Escalera = objeto de 1 × 3** que se pone abajo y abre el hueco en el piso
+  de arriba (quita esas baldosas en el mismo paso de deshacer).
+- **Techo a dos aguas sobre un rectángulo** que dibuja el jugador (no
+  automático). Un techo automático "inteligente" para formas en L es mucho
+  trabajo; se puede agregar después si hace falta.
+- **Datos = escrituras clave → valor** (`HouseData.apply`). Cada acción es una
+  lista de escrituras y devuelve la lista inversa: con eso funciona deshacer, y
+  en la Fase 5 se mandarán esas mismas escrituras a la pareja (permisos,
+  aviso + deshacer, historial).
+- **Reglas aparte** (`house_rules.gd`, sin nada 3D) para que en la Fase 4 el
+  servidor pueda validar igual. Al borrar varias piezas juntas se simula el
+  resultado: no se puede dejar nada "en el aire".
+- **Borrar = modo** (botón Borrar) que invierte la herramienta elegida, en vez
+  de una herramienta por cada cosa que se borra.
+- **Pintura**: una pared se pinta entera (las dos caras del mismo color). Pintar
+  cada cara por separado complica datos e interfaz; se agrega si se pide.
+- **Gestos**: con una pieza elegida, 1 dedo construye y 2 dedos mueven la
+  cámara. Sin pieza (o con la mano en el vacío), 1 dedo mueve la cámara. Se
+  aplica al **soltar**, con vista previa verde/roja mientras se arrastra.
+- **Guardado automático** 1 segundo después de cada cambio (además de al
+  salir): Android puede cerrar la app sin aviso.
+- **Se muestran precios** en la barra, pero todavía **no se cobra**: la
+  moneda llega en la Fase 3.
+- **Rendimiento (a medir)**: cada pieza es una caja aparte. Una casa de
+  ejemplo (2 cuartos, primer piso, muebles) da ~390 llamadas de dibujo. Si en
+  el teléfono baja de 30 FPS, el arreglo es juntar pisos y paredes de cada
+  nivel en una sola malla (cambio interno de `HouseView`, no toca datos).

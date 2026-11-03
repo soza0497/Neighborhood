@@ -9,17 +9,21 @@ extends Node
 
 ## Posición, giro y zoom de la cámara. Vacío = usar los valores por defecto.
 var camera: Dictionary = {}
+## La casa del jugador (ver HouseData.to_dict). Vacío = lote sin construir.
+var house: Dictionary = {}
 
 
 ## Vuelve todo a una partida nueva.
 func reset() -> void:
 	camera = {}
+	house = {}
 
 
 ## Convierte el estado en un diccionario simple que se puede escribir en JSON.
 func to_dict() -> Dictionary:
 	return {
 		"camera": camera,
+		"house": house,
 	}
 
 
@@ -27,3 +31,4 @@ func to_dict() -> Dictionary:
 func from_dict(data: Dictionary) -> void:
 	reset()
 	camera = data.get("camera", {})
+	house = data.get("house", {})

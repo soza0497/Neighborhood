@@ -2,6 +2,28 @@
 
 [ext_resource type="Script" path="res://ui/hud.gd" id="1_hud"]
 
+[sub_resource type="StyleBoxFlat" id="Style_bar"]
+bg_color = Color(0.13, 0.17, 0.25, 0.85)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+content_margin_left = 12.0
+content_margin_top = 10.0
+content_margin_right = 12.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="Style_hint"]
+bg_color = Color(0.13, 0.17, 0.25, 0.7)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 14.0
+content_margin_top = 6.0
+content_margin_right = 14.0
+content_margin_bottom = 6.0
+
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hud")
 
@@ -12,40 +34,174 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-theme_override_constants/margin_left = 24
-theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 24
-theme_override_constants/margin_bottom = 16
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 12
 
-[node name="TopLeft" type="VBoxContainer" parent="Root"]
+[node name="Layout" type="VBoxContainer" parent="Root"]
 layout_mode = 2
-size_flags_horizontal = 0
-size_flags_vertical = 0
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="TopRow" type="HBoxContainer" parent="Root/Layout"]
+layout_mode = 2
 mouse_filter = 2
 
-[node name="FpsLabel" type="Label" parent="Root/TopLeft"]
+[node name="TopLeft" type="VBoxContainer" parent="Root/Layout/TopRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="FpsLabel" type="Label" parent="Root/Layout/TopRow/TopLeft"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
 theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 26
+theme_override_font_sizes/font_size = 22
 text = "0 FPS"
 
-[node name="InfoLabel" type="Label" parent="Root/TopLeft"]
+[node name="InfoLabel" type="Label" parent="Root/Layout/TopRow/TopLeft"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
 theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 15
 text = "Neighborhood"
 
-[node name="CenterButton" type="Button" parent="Root"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 64)
+[node name="TopButtons" type="HBoxContainer" parent="Root/Layout/TopRow"]
 layout_mode = 2
-size_flags_horizontal = 8
-size_flags_vertical = 8
-theme_override_font_sizes/font_size = 22
+size_flags_vertical = 0
+theme_override_constants/separation = 8
+
+[node name="UndoButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 60)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Deshacer"
+
+[node name="RedoButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 60)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Rehacer"
+
+[node name="ViewButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(170, 60)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Vista"
+
+[node name="CenterButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 60)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
 text = "Centrar"
+
+[node name="ModeButton" type="Button" parent="Root/Layout/TopRow/TopButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 60)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Vivir"
+
+[node name="HintLabel" type="Label" parent="Root/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 18
+theme_override_styles/normal = SubResource("Style_hint")
+text = "Elegí una pieza en la barra de abajo."
+
+[node name="Middle" type="HBoxContainer" parent="Root/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="LevelPanel" type="VBoxContainer" parent="Root/Layout/Middle"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 6
+
+[node name="LevelUpButton" type="Button" parent="Root/Layout/Middle/LevelPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 60)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Subir"
+
+[node name="LevelLabel" type="Label" parent="Root/Layout/Middle/LevelPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.15, 0.2, 0.3, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 20
+text = "Planta baja"
+horizontal_alignment = 1
+
+[node name="LevelDownButton" type="Button" parent="Root/Layout/Middle/LevelPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 60)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Bajar"
+
+[node name="BottomBar" type="PanelContainer" parent="Root/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_bar")
+
+[node name="Rows" type="VBoxContainer" parent="Root/Layout/BottomBar"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CategoryRow" type="HBoxContainer" parent="Root/Layout/BottomBar/Rows"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Categories" type="HBoxContainer" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="RotateButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Girar"
+
+[node name="DeleteButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Quitar"
+
+[node name="EraseButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+toggle_mode = true
+text = "Borrar"
+
+[node name="ItemScroll" type="ScrollContainer" parent="Root/Layout/BottomBar/Rows"]
+custom_minimum_size = Vector2(0, 84)
+layout_mode = 2
+vertical_scroll_mode = 0
+
+[node name="Items" type="HBoxContainer" parent="Root/Layout/BottomBar/Rows/ItemScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8

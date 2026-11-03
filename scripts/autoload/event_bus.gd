@@ -26,3 +26,33 @@ signal catalog_loaded(item_count: int)
 # --- Cámara ---
 ## Alguien (por ejemplo, un botón de la interfaz) pide centrar la cámara.
 signal camera_reset_requested
+
+# --- Modos de juego ---
+## La interfaz pide cambiar de modo: "build" (construir) o "live" (vivir).
+signal game_mode_change_requested(mode: String)
+## El modo cambió.
+signal game_mode_changed(mode: String)
+
+# --- Constructor (la interfaz pide → la escena principal hace) ---
+## Se eligió una pieza del catálogo ("" = ninguna, "move" = la mano).
+signal build_item_selected(item_id: String)
+signal build_erase_toggled(enabled: bool)
+signal build_rotate_requested
+signal build_delete_requested
+## Subir (+1) o bajar (-1) de piso.
+signal build_level_change_requested(delta: int)
+## Pasar a la siguiente vista de paredes (completa → sin techo → bajas).
+signal view_mode_cycle_requested
+signal undo_requested
+signal redo_requested
+
+# --- Constructor (avisos para la interfaz) ---
+## Texto de ayuda para mostrar arriba.
+signal build_hint(text: String)
+signal build_level_changed(level: int)
+## Hay (o no) un mueble elegido con la mano.
+signal build_selection_changed(has_selection: bool)
+## Cambió la vista de paredes (ver HouseView.ViewMode).
+signal view_mode_changed(mode: int)
+## Para habilitar los botones de deshacer y rehacer.
+signal history_changed(can_undo: bool, can_redo: bool)

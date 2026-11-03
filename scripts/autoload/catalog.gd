@@ -8,7 +8,7 @@ extends Node
 const CATALOG_PATH := "res://data/catalog.json"
 
 ## Campos que todo objeto del catálogo debe tener.
-const REQUIRED_ITEM_FIELDS := ["id", "name", "category", "price"]
+const REQUIRED_ITEM_FIELDS := ["id", "name", "category", "kind", "price"]
 
 ## Categorías por id. Ejemplo: categories["furniture"] = {"id": ..., "name": ...}
 var categories: Dictionary = {}
