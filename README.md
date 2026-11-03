@@ -95,7 +95,11 @@ Hecho con **Godot 4.7.2** (GDScript).
   servidor (casa, experiencia, piezas descubiertas, personaje y opciones). El
   dinero del servidor empieza en $3000.
 - Arriba a la izquierda: **● Conectado: usuario** (verde) o **● Sin conexión**.
-  Fuera de casa se puede jugar sin conexión. Menú → **Cerrar sesión**.
+  Menú → **Cerrar sesión**.
+- Desde la Fase 4B **el servidor manda en el dinero y la casa**: construir,
+  deshacer, acelerar, mandar currículos y cobrar el trabajo se le piden a él
+  (el juego espera su respuesta). **Fuera de casa** (sin conexión) se puede
+  Vivir, pero **Construir queda apagado** ("Sin conexión al servidor").
 - El servidor corre en esta PC con Docker: cómo arrancarlo, ver sus mensajes,
   entrar a su consola o cambiar la IP en [`docs/servidor.md`](docs/servidor.md).
   La dirección que usa el juego está en `data/server.json`.
@@ -125,8 +129,15 @@ necesidades, la IA y los caminos; la tercera, precios, niveles, obras, empleos
 y la migración del guardado; la cuarta, el cliente del servidor (sin red). Deben terminar con
 `PRUEBAS: N pasaron, 0 fallaron`. (`tests/visual_demo.tscn`,
 `tests/character_demo.tscn` y `tests/economy_demo.tscn` arman casas de ejemplo y sacan capturas, pero
-**pisan la partida guardada**. `tests/server_demo.tscn` y `tests/login_demo.tscn`
-prueban contra el servidor de verdad: ver `docs/servidor.md`.)
+**pisan la partida guardada**. `tests/server_demo.tscn`,
+`tests/economy_server_demo.tscn` y `tests/login_demo.tscn` prueban contra el
+servidor de verdad: ver `docs/servidor.md`.)
+
+Y las reglas del servidor (opcional, necesita Lua 5.1, ver `docs/servidor.md`):
+
+```bash
+lua5.1 server/tests/test_rules.lua
+```
 
 ## Exportar a Android
 
@@ -169,10 +180,13 @@ Están siempre cargados y se usan desde cualquier script por su nombre:
   `traits.json`, `character_options.json` (personaje). `Catalog.get_item("bed_basic")`.
 - **GameClock**: el reloj del juego (velocidad, pausa, día y hora).
 - **Economy**: dinero, experiencia, nivel, piezas descubiertas, obras con
-  temporizador y empleo. Todo cambio de dinero pasa por aquí.
+  temporizador y empleo. Todo cambio de dinero pasa por aquí: con cuenta se
+  lo pide al servidor (`Economy.request`); sin cuenta (solo las pruebas
+  automáticas, "modo de prueba") lo calcula solo.
 - **GameState**: todos los datos de la partida que se guardan.
 - **GameServer**: la conexión con el servidor (cuenta, sesión recordada,
-  indicador de conexión, `game_load`, subir personaje y opciones a la nube).
+  indicador de conexión, llamar las funciones del servidor, subir personaje y
+  opciones a la nube, avisar "sigo jugando").
 - **SaveSystem**: guarda/carga `GameState` en `user://save.json` (con copia de
   respaldo y migración de versiones viejas)
   (en la PC: `~/.local/share/godot/app_userdata/Neighborhood/`).

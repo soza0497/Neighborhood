@@ -81,6 +81,11 @@ var _need_bars: Dictionary = {}
 var _current_category := ""
 var _last_level := 0
 var _toast_tween: Tween
+## Lo último que dijo el historial (para volver a prender los botones después
+## de esperar al servidor).
+var _can_undo := false
+var _can_redo := false
+var _server_busy := false
 
 
 func _ready() -> void:
@@ -129,6 +134,7 @@ func _ready() -> void:
 	_menu_close_button.pressed.connect(_action_menu.hide)
 	_logout_button.pressed.connect(_open_from_menu.bind(EventBus.logout_requested))
 	EventBus.server_status_changed.connect(_on_server_status_changed)
+	EventBus.server_busy_changed.connect(_on_server_busy_changed)
 	_on_server_status_changed(GameServer.online, GameServer.username())
 	GameClock.speed_changed.connect(_on_speed_changed)
 	EventBus.character_needs_changed.connect(_on_needs_changed)
@@ -327,7 +333,7 @@ func _on_build_cost_changed(cost: int) -> void:
 		_confirm_button.text = "Confirmar (+$%d)" % -cost
 	else:
 		_confirm_button.text = "Confirmar"
-	_confirm_button.disabled = cost > Economy.money
+	_confirm_button.disabled = cost > Economy.money or _server_busy
 
 
 func _on_toast(text: String) -> void:
@@ -366,8 +372,14 @@ func _apply_settings() -> void:
 # --- Servidor ---
 
 ## Indicador de conexión: verde con el usuario, o gris "sin conexión".
+## Con cuenta y sin conexión, el botón Construir se ve apagado (tocarlo
+## avisa "Sin conexión al servidor"; ver main.gd, set_mode).
 func _on_server_status_changed(online: bool, username: String) -> void:
 	_logout_button.visible = username != ""
+	var can_build := online or not Economy.server_mode
+	_mode_button.modulate = Color.WHITE if can_build or _mode == "build" else Color(1, 1, 1, 0.45)
+	_mode_button.tooltip_text = "" if can_build else Economy.OFFLINE_TEXT
+	_builds_button.disabled = not can_build
 	if online and username != "":
 		_server_label.text = "● Conectado: %s" % username
 		_server_label.add_theme_color_override("font_color", Color("#7bed9f"))
@@ -394,6 +406,7 @@ func _on_game_mode_changed(mode: String) -> void:
 	_action_menu.hide()
 	_side_menu.hide()
 	_apply_settings()
+	_on_server_status_changed(GameServer.online, GameServer.username())
 	if not building:
 		# Al volver a construir se empieza sin pieza elegida.
 		var pressed := _item_group.get_pressed_button()
@@ -425,8 +438,20 @@ func _on_view_mode_changed(mode: int) -> void:
 
 
 func _on_history_changed(can_undo: bool, can_redo: bool) -> void:
-	_undo_button.disabled = not can_undo
-	_redo_button.disabled = not can_redo
+	_can_undo = can_undo
+	_can_redo = can_redo
+	_undo_button.disabled = not can_undo or _server_busy
+	_redo_button.disabled = not can_redo or _server_busy
+
+
+## Mientras se espera al servidor, los botones que cambian dinero no
+## responden (así no hay dobles toques).
+func _on_server_busy_changed(busy: bool) -> void:
+	_server_busy = busy
+	_on_history_changed(_can_undo, _can_redo)
+	if _confirm_button.visible:
+		_confirm_button.disabled = busy
+	_builds_button.disabled = busy or (Economy.server_mode and not GameServer.online)
 
 
 func _on_game_saved(success: bool) -> void:

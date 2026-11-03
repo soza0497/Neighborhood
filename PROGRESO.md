@@ -1,6 +1,58 @@
 # Progreso
 
-## Fase actual: 4 — Cuentas y servidor (4A hecha, sin probar en el teléfono; falta la 4B)
+## Fase actual: 4 — Cuentas y servidor (4A y 4B hechas; falta probarlas en la PC del dueño y en el teléfono)
+
+### Fase 4B — hecho (2026-11-03, en una sesión en la nube, rama `fase-4b`)
+- **El servidor manda en el dinero y la propiedad.** Reglas en
+  `server/nakama/modules/neighborhood_rules.lua` (sin Nakama, se prueban
+  solas) y 13 RPC nuevas en `neighborhood.lua`: construir (`build_apply`:
+  precio del mismo catalog.json, nivel, obra con la hora del servidor,
+  experiencia), deshacer/rehacer (100 pasos, devuelve lo exacto), acelerar
+  obras y currículos, empleos, turnos (reglas x10), pago al entrar (turno a
+  medias + días sin jugar, tope 3) y "sigo jugando".
+- Dinero en la **billetera de Nakama**; casa, progreso, empleo e historial en
+  storage que solo escribe el servidor, todo guardado junto (`multi_update`).
+- Transición 4A → 4B: las cuentas importadas en la 4A re-sincronizan UNA vez
+  casa, experiencia, descubierto y empleo (el dinero queda en $3000).
+- Cliente: `Economy` en "modo servidor" (un pedido por vez, sin dobles
+  toques), `UndoHistory` remoto, `HouseBuilder` espera al servidor, el
+  personaje anota y cobra sus turnos en el servidor, panel de empleos, HUD.
+  **Sin conexión: Construir apagado** con el aviso "Sin conexión al
+  servidor"; se sigue viviendo. La economía local queda como "modo de prueba".
+- Pruebas: 53 casa + 34 personaje + 66 economía + **78 servidor** (sin red)
+  + **80 de reglas en Lua**, todas OK. Contra un Nakama 3.41.0 de verdad (en
+  la nube, con PostgreSQL 16): `server_demo` 24/24, **`economy_server_demo`
+  39/39** (nueva: incluye un turno hecho por el personaje dentro del juego),
+  `login_demo` 17/17 (con ventana: construir, deshacer y rehacer con el
+  servidor; sin conexión no deja construir; al volver la conexión con el
+  juego abierto, carga la partida del servidor y deja construir). Demos locales (economía,
+  personaje, visual) OK. Re-sincronización 4A → 4B probada a mano.
+- Versión del juego 0.5.0. Docs: `docs/servidor.md`, README, DECISIONES.
+
+### Falta para cerrar la Fase 4 (en la PC del dueño)
+Lo que la nube NO pudo probar: el Docker del dueño (imagen
+`heroiclabs/nakama:3.41.0` + `postgres:18`), su cuenta real de la 4A, el APK y
+el teléfono. Qué verificar, en orden:
+1. [Dueño] Bajar la rama `fase-4b` y reiniciar Nakama
+   (`docker compose restart nakama`). En los logs tiene que decir
+   `Catálogo del juego leído: 32 piezas, 3 empleos, 6 niveles` y ningún
+   `"level":"error"`.
+2. [Dueño] Pruebas: las 4 automáticas y las demos `server_demo`,
+   `economy_server_demo` y `login_demo` (checklist del chat).
+3. [Dueño] Exportar el APK 0.5.0 e instalarlo. Probar en la red de casa: al
+   entrar, la casa de las pruebas de la 4A sigue ahí (re-sincronización) y el
+   dinero es $3000; construir cobra; deshacer devuelve; acelerar; currículum;
+   un turno; con el wifi apagado "Construir" queda apagado y se puede vivir;
+   al volver el wifi, todo anda de nuevo.
+4. [Dueño] En la consola (127.0.0.1:7351): la billetera de su cuenta y su
+   "Wallet Ledger" muestran cada cobro.
+5. [Claude] Corregir lo que salga; commit "Fase 4 cerrada".
+
+### Fase 5 — próximo paso exacto
+Cuando la Fase 4 esté probada: en una conversación nueva (**Opus, esfuerzo
+alto**): "Leé CLAUDE.md, PROGRESO.md, DECISIONES.md y VISION.md y hacé la
+Fase 5". Antes hace falta la respuesta a la pregunta abierta de VISION.md
+(¿la pareja usa Android o iPhone?).
 
 ### Fase 4A — hecho (2026-11-03)
 - Servidor en `server/` (Docker): `neighborhood-nakama` (Nakama 3.41.0) y
@@ -25,24 +77,13 @@
   exportado (con permiso INTERNET).
 
 ### Falta para cerrar la 4A
-1. [Dueño] Instalar el APK 0.4.0 y probar en el teléfono, en la red de casa
-   (checklist del chat): crear cuenta, ver "Conectado", cerrar y abrir (entra
-   solo), y con el wifi apagado ("Jugar sin conexión").
-2. [Claude] Corregir lo que salga.
-
-### Fase 4B — próximo paso exacto
-En una conversación nueva (Opus, esfuerzo alto): "Leé CLAUDE.md, PROGRESO.md,
-DECISIONES.md y VISION.md y hacé la Fase 4B". Primero: re-sincronizar una vez
-casa/experiencia/descubierto de las cuentas importadas en la 4A (ver
-DECISIONES, "Transición 4A → 4B"). Después: RPC en Lua para construir (precio,
-nivel, obra), deshacer/rehacer, acelerar, empleos y turnos, pago offline;
-wallet de Nakama. Sin conexión: Construir deshabilitado. Pruebas del servidor.
+1. [Dueño] Instalar el APK y probar en el teléfono, en la red de casa:
+   crear cuenta, ver "Conectado", cerrar y abrir (entra solo), y con el wifi
+   apagado ("Jugar sin conexión"). Se puede probar junto con la 4B (arriba).
 
 ### Fase 4 — plan original (2026-11-03)
 - **4A — servidor y cuentas**: hecha (arriba).
-- **4B — servidor autoritativo**: RPC en Lua para construir (precio, nivel,
-  obra), deshacer/rehacer, acelerar, empleos y turnos, pago offline; wallet de
-  Nakama. Sin conexión: Construir deshabilitado. Pruebas del servidor.
+- **4B — servidor autoritativo**: hecha (arriba).
 
 ### Fase 3 (estado anterior)
 
@@ -128,6 +169,13 @@ Todo en un solo tramo (1A + 1B + 1C):
   (como AdGuard); si pasa, un servicio que espere la IP (pregunta al dueño).
 - Servidor: respaldo de `server/db-data` (volcado `pg_dump` en el respaldo)
   antes de jugar en serio. "Recuperar contraseña" no existe todavía.
+- Servidor (4B): las reglas de apoyo de la casa (pisos, paredes "en el aire")
+  siguen solo en el teléfono; pasan al servidor en la Fase 5 (edición entre dos).
+- Servidor (4B): si la sesión se invalida con el juego abierto (por ejemplo,
+  se borra la cuenta desde la consola), el juego no vuelve solo a la pantalla
+  de entrada: cada pedido avisa "Hace falta entrar con una cuenta".
+- Servidor (4B): sin conexión el personaje no sale a trabajar (el servidor
+  tiene que anotar el turno); esos días se pagan al volver (tope 3).
 - Android 16+ podría pedir permiso de "red local" para hablar con la PC: si el
   teléfono no conecta en casa, es lo primero a revisar.
 
@@ -138,5 +186,4 @@ Todo en un solo tramo (1A + 1B + 1C):
 - ¿Tu pareja usa Android o iPhone? (VISION.md)
 
 ## Fases siguientes
-- Fase 4B — Servidor autoritativo (**Opus, esfuerzo alto**).
 - Fase 5 — Pareja y casa compartida (**Opus, esfuerzo alto**).

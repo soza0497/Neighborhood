@@ -9,13 +9,26 @@ extends Node
 ##     trabajo se cobra aunque el juego se cierre a mitad.
 ##   - Los aceleradores solo sirven para saltarse esperas propias.
 ##
-## Más adelante (Fase 4) el servidor será la autoridad del dinero; por eso
-## todo cambio de dinero pasa por add_money() y todo precio sale del catálogo.
+## Dos modos:
+##   - Con cuenta (Fase 4B, el juego normal): el SERVIDOR manda. Cada cambio
+##     de dinero se le pide con request() / request_*(), de a uno por vez
+##     (`busy`), y lo que responde (dinero, experiencia, empleo) se copia aquí
+##     con apply_server_state(). Sin conexión no se construye ni se cobra.
+##   - Sin cuenta ("modo de prueba", solo para las pruebas automáticas y las
+##     demos): todo se calcula aquí mismo, como en la Fase 3.
+## Los precios se calculan igual en los dos (para mostrarlos); el servidor
+## los vuelve a calcular con el mismo catalog.json y es el que decide.
 
 ## Piezas que tienen tiempo de construcción.
 const TIMED_LAYERS := ["objects", "roofs"]
 ## Máximo de días del juego sin conectarse que se pagan de trabajo.
 const MAX_OFFLINE_SHIFTS := 3
+## Avisos del modo servidor.
+const OFFLINE_TEXT := "Sin conexión al servidor"
+const BUSY_TEXT := "Esperando al servidor…"
+## Lo mismo que rules.DAY_AT_FASTEST en el servidor: un día del juego a x10
+## (como mucho un turno cada 144 s reales).
+const SERVER_SHIFT_GAP := 144
 
 var money := SaveMigrations.STARTING_MONEY
 var xp := 0
@@ -30,7 +43,29 @@ var resume_ready_at := 0
 var last_work_day := 0
 var pending_pay := false
 
+# --- Modo servidor (Fase 4B) ---
+## true = el servidor manda (juego con cuenta). false = modo de prueba.
+var server_mode := false
+## true mientras se espera una respuesta del servidor (no se aceptan otros
+## pedidos: evita los dobles toques).
+var busy := false
+## Diferencia entre la hora del servidor y la del teléfono (segundos).
+var server_offset := 0
+## Hora real del último turno empezado (el servidor deja uno cada 144 s).
+var last_shift_unix := 0
+## Lo que el servidor permite deshacer y rehacer (su historial manda).
+var server_can_undo := false
+var server_can_redo := false
+## true mientras el personaje está en el trabajo (su turno se cobra al volver).
+var working_now := false
+## Ya se cobró lo pendiente al entrar (work_settle).
+var settled := false
+
 var _timer := 0.0
+## Hora en que se vuelve a preguntar por el currículum o por el turno sin cobrar.
+var _resume_check_at := 0
+var _pay_retry_at := 0
+var _settling := false
 
 
 func _ready() -> void:
@@ -44,11 +79,14 @@ func _process(delta: float) -> void:
 	if _timer <= 0.0:
 		_timer = 1.0
 		_check_resume()
+		if server_mode:
+			_retry_pending_pay()
 
 
-## Hora real en segundos (para obras y currículos).
+## Hora real en segundos (para obras y currículos). Con servidor, la hora
+## del servidor (el reloj del teléfono puede estar corrido).
 func now() -> int:
-	return int(Time.get_unix_time_from_system())
+	return int(Time.get_unix_time_from_system()) + server_offset
 
 
 # --- Dinero ---
@@ -89,8 +127,13 @@ func xp_progress() -> Vector2i:
 
 
 func add_xp(amount: int) -> void:
+	_set_xp(xp + amount)
+
+
+## Cambia la experiencia y, si sube de nivel, avisa qué se desbloqueó.
+func _set_xp(new_xp: int) -> void:
 	var before := level()
-	xp += amount
+	xp = new_xp
 	var after := level()
 	if after > before:
 		var unlocked: Array = []
@@ -229,6 +272,13 @@ func quit_job() -> void:
 
 
 func _check_resume() -> void:
+	if server_mode:
+		# Con servidor, la respuesta la da el servidor (cuando ya es la hora).
+		if applied_job != "" and now() >= resume_ready_at and now() >= _resume_check_at \
+				and GameServer.online and not busy:
+			_resume_check_at = now() + 10
+			request("job_status")
+		return
 	if applied_job != "" and now() >= resume_ready_at:
 		var job: Dictionary = Catalog.jobs[applied_job]
 		job_id = applied_job
@@ -243,6 +293,10 @@ func _check_resume() -> void:
 func shift_due() -> bool:
 	var job := current_job()
 	if job.is_empty() or last_work_day >= GameClock.day():
+		return false
+	# Con servidor: hace falta conexión, no tener un turno sin cobrar y que
+	# haya pasado el mínimo entre turnos.
+	if server_mode and (not GameServer.online or pending_pay or now() < last_shift_unix + SERVER_SHIFT_GAP):
 		return false
 	return int(GameClock.minutes) % 1440 >= int(job.get("start_hour", 9)) * 60
 
@@ -299,6 +353,7 @@ func to_dict() -> Dictionary:
 			"resume_ready_at": resume_ready_at,
 			"last_work_day": last_work_day,
 			"pending_pay": pending_pay,
+			"last_shift_unix": last_shift_unix,
 		},
 	}
 
@@ -315,7 +370,198 @@ func from_dict(data: Dictionary) -> void:
 	resume_ready_at = int(job.get("resume_ready_at", 0))
 	last_work_day = int(job.get("last_work_day", 0))
 	pending_pay = job.get("pending_pay", false)
+	last_shift_unix = int(job.get("last_shift_unix", 0))
 	_emit_changed()
+
+
+# --- Servidor (Fase 4B) ---
+
+## Activa (o apaga) el modo servidor. Lo llama la pantalla de entrada.
+func use_server(enabled: bool) -> void:
+	server_mode = enabled
+	busy = false
+	settled = false
+	working_now = false
+	_resume_check_at = 0
+	_pay_retry_at = 0
+	if not enabled:
+		server_offset = 0
+
+
+## Pide algo al servidor y espera la respuesta. De a un pedido por vez.
+## Devuelve {"ok", "error" (texto para el jugador), "data" (la respuesta),
+## "offline", "busy"}. Si la respuesta trae el estado, se copia aquí.
+func request(rpc_id: String, payload := {}) -> Dictionary:
+	if busy:
+		return {"ok": false, "error": BUSY_TEXT, "data": {}, "offline": false, "busy": true}
+	_set_busy(true)
+	var result: Dictionary = await GameServer.call_rpc(rpc_id, payload)
+	_set_busy(false)
+	result["busy"] = false
+	if not result["ok"]:
+		if result.get("offline", false):
+			result["error"] = OFFLINE_TEXT
+		return result
+	var data: Dictionary = result["data"]
+	if data.get("state") is Dictionary:
+		apply_server_state(data["state"])
+	if not data.get("ok", false):
+		result["ok"] = false
+		result["error"] = str(data.get("error", "El servidor no aceptó el cambio."))
+	return result
+
+
+## Copia lo que dice el servidor (dinero, experiencia, empleo...). Avisa si
+## subió de nivel o si llegó la respuesta del currículum.
+func apply_server_state(state: Dictionary) -> void:
+	if state.has("server_unix"):
+		server_offset = int(state["server_unix"]) - int(Time.get_unix_time_from_system())
+	var economy := CloudSync.economy_from_server(state, to_dict())
+	var job: Dictionary = economy["job"]
+	var was_applied := applied_job
+	money = economy["money"]
+	discovered.clear()
+	for item_id in economy["discovered"]:
+		discovered[item_id] = true
+	job_id = job["job_id"]
+	applied_job = job["applied_job"]
+	resume_ready_at = job["resume_ready_at"]
+	pending_pay = job["pending_pay"]
+	last_shift_unix = job["last_shift_unix"]
+	server_can_undo = bool(state.get("can_undo", false))
+	server_can_redo = bool(state.get("can_redo", false))
+	_set_xp(economy["xp"])
+	_emit_changed()
+	if was_applied != "" and applied_job == "" and job_id == was_applied:
+		_announce_hired()
+	EventBus.jobs_changed.emit()
+
+
+func _announce_hired() -> void:
+	var job := current_job()
+	# El primer turno es al día siguiente, para no apurar a nadie.
+	last_work_day = GameClock.day()
+	EventBus.toast.emit("¡Te contrataron de %s! Primer turno mañana a las %02d:00." % [job.get("name", ""), int(job.get("start_hour", 9))])
+
+
+func _set_busy(value: bool) -> void:
+	busy = value
+	EventBus.server_busy_changed.emit(busy)
+
+
+## ¿Se puede pedir algo al servidor ahora? (con servidor: conexión y nadie
+## esperando). Si no, avisa por qué y devuelve false.
+func can_request() -> bool:
+	if not server_mode:
+		return true
+	if not GameServer.online:
+		EventBus.toast.emit(OFFLINE_TEXT)
+		return false
+	if busy:
+		EventBus.toast.emit(BUSY_TEXT)
+		return false
+	return true
+
+
+# --- Pedidos que sirven en los dos modos (servidor o prueba) ---
+
+## Manda el currículum. Devuelve true si se mandó.
+func request_apply(id: String) -> bool:
+	if not server_mode:
+		return apply_for_job(id)
+	var result := await request("job_apply", {"job_id": id})
+	if not result["ok"]:
+		EventBus.toast.emit(result["error"])
+		return false
+	var job: Dictionary = Catalog.jobs.get(id, {})
+	EventBus.toast.emit("Currículum enviado: %s. Responden en %d min." % [job.get("name", ""), int(job.get("resume_minutes", 5))])
+	return true
+
+
+## Paga para que respondan ya al currículum.
+func request_accelerate_resume() -> bool:
+	if not server_mode:
+		return accelerate_resume()
+	var result := await request("job_accelerate")
+	if not result["ok"]:
+		EventBus.toast.emit(result["error"])
+	return result["ok"]
+
+
+func request_quit() -> bool:
+	if not server_mode:
+		quit_job()
+		return true
+	var result := await request("job_quit")
+	if result["ok"]:
+		EventBus.toast.emit("Dejaste tu empleo.")
+	else:
+		EventBus.toast.emit(result["error"])
+	return result["ok"]
+
+
+## El personaje llegó a la acera: empieza el turno. Devuelve false si el
+## servidor no lo dejó (por ejemplo, sin conexión); ese día ya no lo intenta.
+func request_shift_start() -> bool:
+	if not server_mode:
+		start_shift()
+		return true
+	last_work_day = GameClock.day()
+	var result := await request("shift_start")
+	if not result["ok"]:
+		EventBus.toast.emit("Hoy no pudo ir a trabajar: " + result["error"])
+	return result["ok"]
+
+
+## Terminó el turno: lo cobra. Devuelve lo cobrado (0 si no se pudo; con
+## servidor se reintenta solo más tarde y avisa al cobrarlo).
+func request_shift_pay() -> int:
+	if not server_mode:
+		return complete_shift()
+	var result := await request("shift_complete")
+	if result["ok"]:
+		return int(result["data"].get("pay", 0))
+	_pay_retry_at = now() + maxi(5, int(result["data"].get("seconds_left", 15)))
+	return 0
+
+
+## Al entrar al juego: cobra el turno que quedó a medias y los días sin
+## jugar (tope 3). `away_minutes` solo se usa en el modo de prueba: con
+## servidor, el servidor mide el tiempo con su propia hora.
+func request_settle(away_minutes: float) -> void:
+	if not server_mode:
+		settle_pending_shift()
+		simulate_offline(away_minutes)
+		return
+	if not GameServer.online or _settling:
+		return  # Se cobra al reconectar.
+	_settling = true
+	while busy:
+		await get_tree().process_frame
+	var result := await request("work_settle")
+	_settling = false
+	if not result["ok"]:
+		return
+	settled = true
+	GameServer.heartbeat_enabled = true
+	var data: Dictionary = result["data"]
+	if int(data.get("pending_pay", 0)) > 0:
+		EventBus.toast.emit("Cobraste el turno que quedó a medias: $%d" % int(data["pending_pay"]))
+	if int(data.get("offline_shifts", 0)) > 0:
+		EventBus.toast.emit("Mientras no estabas, trabajaste %d turno(s): $%d" % [int(data["offline_shifts"]), int(data["offline_pay"])])
+	if data.has("pending_seconds_left"):
+		_pay_retry_at = now() + int(data["pending_seconds_left"])
+
+
+## Un turno que el servidor todavía no pagó (se cortó la conexión, o se
+## cerró el juego en medio): se vuelve a intentar cobrarlo.
+func _retry_pending_pay() -> void:
+	if not pending_pay or working_now or busy or not GameServer.online or now() < _pay_retry_at:
+		return
+	_pay_retry_at = now() + 15
+	var pay := await request_shift_pay()
+	if pay > 0:
+		EventBus.toast.emit("Cobraste el turno que quedó pendiente: $%d" % pay)
 
 
 ## Para las demos y pruebas: todo desbloqueado y con dinero de sobra.

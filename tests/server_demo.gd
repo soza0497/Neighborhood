@@ -62,9 +62,12 @@ func _run() -> void:
 	result = await GameServer.load_game(local)
 	var data: Dictionary = result["data"]
 	_check(result["ok"] and data.get("imported", false), "game_load + game_import")
-	# (Se compara como texto: al leer JSON, los números vuelven como decimales.)
-	_check(JSON.stringify(JSON.parse_string(data["house"])) == JSON.stringify(JSON.parse_string(JSON.stringify(local["house"]))),
-		"la casa llegó idéntica (con la capa vacía)")
+	# Desde la 4B el servidor revisa la casa y la completa (los dos pisos, con
+	# todas sus capas): lo construido llega igual.
+	var house: Dictionary = JSON.parse_string(data["house"])
+	_check(house["levels"].size() == 2 and house["levels"][0]["foundation"].has("1,1")
+		and house["levels"][0]["walls"].is_empty() and int(house["next_id"]) == 4,
+		"la casa llegó con lo construido (y las capas vacías como diccionarios)")
 	_check(int(data["money"]) == 3000, "el dinero empieza en $3000 (no en el del teléfono)")
 	_check(int(data["xp"]) == 150 and data["discovered"] == ["foundation_basic"], "experiencia importada; piezas que no existen, descartadas")
 	local["economy"]["xp"] = 999

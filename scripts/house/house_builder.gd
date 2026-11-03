@@ -203,9 +203,10 @@ func rotate_object() -> void:
 func delete_selected() -> void:
 	if selected_key == "":
 		return
-	if _apply([HouseData.write(level, "objects", selected_key, null)]):
-		EventBus.build_hint.emit("Quitaste el mueble.")
+	var key := selected_key
 	select_object("")
+	if await _apply([HouseData.write(level, "objects", key, null)]):
+		EventBus.build_hint.emit("Quitaste el mueble.")
 
 
 ## Botón "Confirmar": aplica la selección que estaba esperando.
@@ -219,6 +220,8 @@ func confirm_pending() -> void:
 	if not Economy.can_change(money_change):
 		EventBus.build_hint.emit("Te faltan $%d. Achicá la selección o cancelá." % (-money_change - Economy.money))
 		return
+	if not Economy.can_request():
+		return  # Sin conexión o esperando: la selección se conserva.
 	_cancel_gesture()
 	_commit(ok, blocked)
 
@@ -390,20 +393,24 @@ func _on_second_finger() -> void:
 
 ## Aplica las escrituras como un paso de deshacer y avisa qué pasó.
 func _commit(ok: Array, blocked: Array) -> void:
-	var applied := _apply(ok)
+	var applied: bool = await _apply(ok)
 	if not applied:
-		return  # _apply ya explicó por qué (no alcanza el dinero).
+		return  # _apply ya explicó por qué (no alcanza el dinero, sin conexión...).
 	if not blocked.is_empty():
 		EventBus.build_hint.emit(_blocked_hint())
-	elif not ok.is_empty():
+	elif not ok.is_empty() and not Economy.server_mode:
 		_show_tool_hint()
 
 
 ## Cobra (o devuelve) el dinero, aplica las escrituras como UN paso de
-## deshacer y anota lo construido. Devuelve false si no alcanza el dinero.
+## deshacer y anota lo construido. Devuelve false si no se pudo.
+## Con servidor (Fase 4B) se le pide a él y se espera su respuesta: él cobra,
+## pone la hora de las obras y guarda el paso de deshacer.
 func _apply(writes: Array) -> bool:
 	if writes.is_empty():
 		return true
+	if not Economy.can_request():
+		return false
 	# Lo nuevo recibe su id definitivo ahora.
 	for w in writes:
 		if w["key"] == NEW_KEY:
@@ -413,13 +420,33 @@ func _apply(writes: Array) -> bool:
 	if not Economy.can_change(money_change):
 		EventBus.build_hint.emit("Te faltan $%d para construir esto." % (-money_change - Economy.money))
 		return false
+	if Economy.server_mode:
+		return await _apply_on_server(writes)
 	history.commit(quote["writes"], money_change)
 	Economy.record_build(quote["writes"])
+	_show_money_hint(money_change)
+	return true
+
+
+## Manda el cambio al servidor y aplica lo que él aceptó.
+func _apply_on_server(writes: Array) -> bool:
+	EventBus.build_hint.emit(Economy.BUSY_TEXT)
+	var result: Dictionary = await Economy.request("build_apply", {"writes": writes})
+	if not result["ok"]:
+		EventBus.build_hint.emit(result["error"])
+		return false
+	history.apply_remote(CloudSync.writes_from_server(result["data"].get("writes", [])))
+	_show_money_hint(int(result["data"].get("money_change", 0)))
+	return true
+
+
+func _show_money_hint(money_change: int) -> void:
 	if money_change < 0:
 		EventBus.build_hint.emit("Pagaste $%d." % -money_change)
 	elif money_change > 0:
 		EventBus.build_hint.emit("Te devolvieron $%d." % money_change)
-	return true
+	else:
+		_show_tool_hint()
 
 
 ## Mouse moviéndose sin apretar (solo en la PC): muestra dónde caería.

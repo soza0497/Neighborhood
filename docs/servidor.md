@@ -17,12 +17,37 @@ Todo está en la carpeta `server/` del proyecto:
 |---|---|
 | `docker-compose.yml` | La "receta" de los dos contenedores (puertos, carpetas) |
 | `nakama/config.yml` | Configuración de Nakama (sin secretos) |
-| `nakama/modules/neighborhood.lua` | El código del servidor (lo que hace `game_load`, `game_import`…) |
+| `nakama/modules/neighborhood.lua` | El código del servidor: las funciones que llama el juego (`game_load`, `build_apply`…), y dónde guarda cada cosa |
+| `nakama/modules/neighborhood_rules.lua` | Las **reglas** que decide el servidor (precios, obras, deshacer, empleos, turnos) |
+| `tests/test_rules.lua` | Pruebas de esas reglas (sin Nakama, ver "Probar el servidor") |
 | `.env` | **Secretos** (contraseñas y llaves). No va a Git. No lo compartas |
 | `db-data/` | Los datos de la base (las cuentas y partidas). No va a Git |
 
-El servidor lee el **mismo** `data/catalog.json` del juego (solo lectura):
-los precios están en un solo lugar.
+El servidor lee el **mismo** `data/catalog.json` del juego (solo lectura),
+y también `progression.json` (niveles) y `jobs.json` (empleos): los precios
+están en un solo lugar.
+
+## Qué decide el servidor (Fase 4B)
+
+Desde la Fase 4B el servidor **manda en el dinero y la propiedad**. El
+teléfono pide y espera la respuesta; si el servidor dice que no, no pasa nada
+(y el juego muestra por qué). Si cambiás algo de `data/` (un precio, un
+empleo), reiniciá Nakama para que lo lea.
+
+| Lo que pide el juego | Qué hace el servidor |
+|---|---|
+| Construir, quitar, mover, pintar (`build_apply`) | Revisa que las piezas existan y estén desbloqueadas por nivel, cobra (o devuelve el 50 %), pone la hora de fin de obra con **su** reloj, da la experiencia de lo nuevo y guarda el paso de deshacer |
+| Deshacer / rehacer (`build_undo`, `build_redo`) | Guarda hasta 100 pasos y devuelve **exactamente** lo cobrado |
+| Acelerar obras (`build_accelerate`) | Cobra 6 monedas por minuto que falta y termina todas |
+| Empleos (`job_apply`, `job_status`, `job_accelerate`, `job_quit`) | Currículum con espera en hora real; acelerar la respuesta cuesta igual que una obra |
+| Turnos (`shift_start`, `shift_complete`) | Un turno se cobra si pasó al menos su duración a velocidad x10, y se empieza como mucho uno cada 144 s |
+| Al entrar (`work_settle`) | Cobra el turno que quedó a medias y un turno por cada día del juego sin entrar (tope 3) |
+| "Sigo jugando" (`game_heartbeat`) | Anota la hora, para no pagar como "días sin jugar" el tiempo que se jugó |
+
+**Sin conexión** (fuera de casa) se puede **Vivir**, pero **no Construir**:
+el botón queda apagado y avisa "Sin conexión al servidor". El personaje
+tampoco sale a trabajar; al volver a casa, el servidor paga los días que
+faltaron (tope 3).
 
 > Todos los comandos de abajo se escriben en la terminal (fish), **dentro de
 > la carpeta `server/`**. Para entrar a esa carpeta:
@@ -62,7 +87,7 @@ Muestra lo que va diciendo Nakama, en vivo (`-f` = "seguir"). Para salir:
 un JSON; las importantes dicen `"level":"error"`. Cuando alguien importa su
 partida aparece `Partida importada`.
 
-## Reiniciar (por ejemplo, después de cambiar el código .lua)
+## Reiniciar (por ejemplo, después de cambiar el código .lua o algo de `data/`)
 
 ```bash
 docker compose restart nakama
@@ -85,8 +110,11 @@ billeteras. Solo se abre desde esta PC.
 
 Qué mirar:
 - **Accounts** (cuentas): cada jugador. Al abrir una se ve su **Wallet**
-  (dinero) y su **Storage**: `game/house` (la casa), `game/progress`
-  (experiencia), `cloud/character` (personaje) y `cloud/settings` (opciones).
+  (dinero; la pestaña **Wallet Ledger** muestra cada movimiento con su motivo:
+  `build_apply`, `shift_complete`…) y su **Storage**: `game/house` (la casa),
+  `game/progress` (experiencia), `game/work` (empleo y turnos), `game/history`
+  (pasos de deshacer), `cloud/character` (personaje) y `cloud/settings`
+  (opciones). Los `game/*` solo los escribe el servidor.
 - Desde la cuenta se puede **borrar** (por ejemplo, las cuentas `demo_…` que
   crea `tests/server_demo.tscn` si quedara alguna).
 
@@ -154,8 +182,34 @@ godot --headless --path . res://tests/server_demo.tscn
 
 Crea una cuenta `demo_…`, entra, importa una partida de ejemplo, sube un
 personaje, renueva la sesión y simula quedarse sin conexión. Tiene que terminar
-con `DEMO SERVIDOR: N pasaron, 0 fallaron`. La cuenta demo queda en el
-servidor: se puede borrar desde la consola.
+con `DEMO SERVIDOR: N pasaron, 0 fallaron`.
+
+```bash
+godot --headless --path . res://tests/economy_server_demo.tscn
+```
+
+La de la Fase 4B (tarda menos de un minuto): construye y compara el precio
+del servidor con el del teléfono, prueba el bloqueo por nivel, la falta de
+dinero, deshacer y rehacer, acelerar, mandar un currículum, un turno completo
+hecho por el personaje (espera ~25 s), dos pedidos a la vez y que el teléfono
+no pueda hacer trampa. Tiene que terminar con
+`DEMO ECONOMÍA EN EL SERVIDOR: N pasaron, 0 fallaron`.
+
+Las cuentas demo quedan en el servidor: se pueden borrar desde la consola.
+
+**Pruebas de las reglas sin servidor** (opcional): necesitan Lua 5.1, que no
+viene instalado (en CachyOS es el paquete `lua51` de pacman; anotarlo en la
+bitácora si se instala):
+
+```bash
+lua5.1 server/tests/test_rules.lua
+```
+
+Tiene que terminar con `PRUEBAS LUA: N pasaron, 0 fallaron`.
+
+**Probar contra otro servidor sin tocar `data/server.json`**: la variable de
+entorno `NEIGHBORHOOD_SERVER` cambia la dirección solo para ese comando (en
+fish: `env NEIGHBORHOOD_SERVER=http://127.0.0.1:7350 godot --headless --path . res://tests/server_demo.tscn`).
 
 ## Si algo falla
 
@@ -164,4 +218,6 @@ servidor: se puede borrar desde la consola.
 | El juego dice "Sin conexión" en casa | `docker compose ps`; si no está `Up`, `docker compose up -d`. Si está `Up`, revisá la IP (arriba) |
 | `docker compose ps` muestra `Restarting` | `docker compose logs nakama` y buscá `"level":"error"` |
 | "Ese usuario ya existe" | Elegí otro nombre, o usá "Entrar" si la cuenta es tuya |
+| El juego dice "Esperando al servidor…" y no avanza | Espera como mucho 8 s (`timeout_seconds` en `data/server.json`); si pasa siempre, mirá los logs |
+| Un cambio en el juego "rebota" con un aviso raro | `docker compose logs nakama` y buscá `"level":"error"` (los `version check failed` sueltos son normales: dos pedidos a la vez, el servidor reintenta solo) |
 | Olvidaste la contraseña de una cuenta | Por ahora no hay "recuperar contraseña". No borres la cuenta (se pierde su partida del servidor): pedile a Claude que la cambie desde el servidor |

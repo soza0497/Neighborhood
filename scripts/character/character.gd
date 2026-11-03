@@ -341,14 +341,23 @@ func _go_to_work() -> void:
 
 
 ## Llegó a la acera: desaparece (está en el trabajo) hasta que termina el turno.
+## Con servidor, el turno lo anota el servidor; si no responde, vuelve.
 func _start_work() -> void:
 	place_at(0, WORK_CELL)
-	Economy.start_shift()
+	if not Economy.server_mode:
+		Economy.start_shift()
 	state = State.WORKING
 	_work_minutes = 0.0
 	data.add_journal("Se fue a trabajar (%s)" % Economy.current_job().get("name", ""))
 	_animator.play("idle")
 	_mark_intention()
+	if Economy.server_mode:
+		Economy.working_now = true
+		var started: bool = await Economy.request_shift_start()
+		if not started and state == State.WORKING:
+			Economy.working_now = false
+			data.add_journal("Hoy no pudo ir a trabajar")
+			_set_idle()
 
 
 func _work(minutes: float) -> void:
@@ -358,11 +367,28 @@ func _work(minutes: float) -> void:
 		_work_minutes += minutes
 		if _work_minutes < float(job.get("shift_hours", 4)) * 60.0:
 			return
+		if Economy.server_mode:
+			Economy.working_now = false
+			place_at(0, WORK_CELL)
+			_set_idle()
+			_collect_pay()
+			return
 		var pay := Economy.complete_shift()
 		data.add_journal("Terminó el turno y cobró $%d" % pay)
 		EventBus.toast.emit("%s cobró $%d del trabajo." % [data.name, pay])
+	Economy.working_now = false
 	place_at(0, WORK_CELL)
 	_set_idle()
+
+
+## Con servidor: pide el sueldo del turno (lo decide el servidor).
+func _collect_pay() -> void:
+	var pay: int = await Economy.request_shift_pay()
+	if pay > 0:
+		data.add_journal("Terminó el turno y cobró $%d" % pay)
+		EventBus.toast.emit("%s cobró $%d del trabajo." % [data.name, pay])
+	else:
+		data.add_journal("Terminó el turno (se cobra cuando responda el servidor)")
 
 
 # --- Burbuja, diario e intención ---

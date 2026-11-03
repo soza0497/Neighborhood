@@ -1,6 +1,8 @@
 extends Control
 ## Panel de empleos: ofertas, currículo enviado (con cuenta regresiva) y
 ## empleo actual. Habla directo con Economy (el panel solo muestra y pide).
+## Con servidor (Fase 4B) cada botón espera la respuesta del servidor; sin
+## conexión los botones quedan apagados.
 ##
 ## La lista de ofertas se arma al abrir y cuando algo cambia; el texto de
 ## estado y el botón de acelerar se actualizan cada segundo (así los botones
@@ -23,6 +25,8 @@ func _ready() -> void:
 	EventBus.jobs_requested.connect(open)
 	EventBus.jobs_changed.connect(_on_changed)
 	EventBus.level_up.connect(func(_level, _names): _on_changed())
+	EventBus.server_status_changed.connect(func(_online, _user): _on_changed())
+	EventBus.server_busy_changed.connect(func(_busy): _on_changed())
 
 
 func open() -> void:
@@ -47,14 +51,24 @@ func _on_changed() -> void:
 
 
 func _on_accelerate() -> void:
-	if not Economy.accelerate_resume():
+	if not Economy.can_request():
+		return
+	var accelerated: bool = await Economy.request_accelerate_resume()
+	if not accelerated and not Economy.server_mode:
 		EventBus.toast.emit("No alcanza el dinero para acelerar.")
 	_on_changed()
 
 
 func _on_quit() -> void:
-	Economy.quit_job()
+	if not Economy.can_request():
+		return
+	await Economy.request_quit()
 	_on_changed()
+
+
+## Con servidor: ¿se puede pedir algo ahora? (conexión y nadie esperando)
+func _can_use() -> bool:
+	return not Economy.server_mode or (GameServer.online and not Economy.busy)
 
 
 ## Texto de arriba, cuenta regresiva y botones de acelerar / renunciar.
@@ -62,7 +76,10 @@ func _refresh_status() -> void:
 	var job := Economy.current_job()
 	_accelerate_button.visible = false
 	_quit_button.visible = false
-	if not job.is_empty():
+	_quit_button.disabled = not _can_use()
+	if Economy.server_mode and not GameServer.online:
+		_status_label.text = Economy.OFFLINE_TEXT + ": los empleos esperan a reconectar."
+	elif not job.is_empty():
 		_status_label.text = "Trabajás de %s: turno de %d h desde las %02d:00, $%d por turno." % [
 			job["name"], int(job["shift_hours"]), int(job["start_hour"]), Economy.shift_pay(job)]
 		_quit_button.visible = true
@@ -73,7 +90,7 @@ func _refresh_status() -> void:
 		var cost := Economy.accelerate_cost(left)
 		_accelerate_button.visible = true
 		_accelerate_button.text = "Acelerar ($%d)" % cost
-		_accelerate_button.disabled = not Economy.can_change(-cost)
+		_accelerate_button.disabled = not Economy.can_change(-cost) or not _can_use()
 	else:
 		_status_label.text = "Sin empleo. Elegí una oferta y mandá tu currículum."
 
@@ -114,11 +131,14 @@ func _make_offer(job: Dictionary) -> Control:
 		button.disabled = true
 	else:
 		button.text = "Mandar currículum"
+		button.disabled = not _can_use()
 		button.pressed.connect(_on_apply.bind(job["id"]))
 	row.add_child(button)
 	return row
 
 
 func _on_apply(job_id: String) -> void:
-	Economy.apply_for_job(job_id)
+	if not Economy.can_request():
+		return
+	await Economy.request_apply(job_id)
 	_on_changed()

@@ -9,6 +9,8 @@ extends Control
 ##
 ## Al entrar se carga la partida de la cuenta (game_load; si es nueva, se
 ## importa la del teléfono), se une con la local (CloudSync) y se abre el juego.
+## Desde la Fase 4B, con cuenta el servidor manda en el dinero y la casa
+## (Economy.use_server): sin conexión se puede vivir pero no construir.
 
 const MAIN_SCENE := "res://scenes/main.tscn"
 
@@ -93,8 +95,11 @@ func _load_and_enter() -> void:
 	if not result["ok"]:
 		_show_failure(result)
 		return
+	GameServer.game_loaded = true
 	GameState.from_dict(CloudSync.merge(local, result["data"], user_id, GameServer.username()))
 	Economy.from_dict(GameState.economy)
+	Economy.use_server(true)
+	Economy.apply_server_state(result["data"])
 	SaveSystem.save_game()
 	_enter_game()
 
@@ -109,7 +114,9 @@ func _local_state_for(user_id: String) -> Dictionary:
 	return SaveSystem.load_account_stash(user_id)
 
 
+## Abre el juego. Con cuenta (aunque sea sin conexión) manda el servidor.
 func _enter_game() -> void:
+	Economy.use_server(GameServer.has_session())
 	get_tree().change_scene_to_file(MAIN_SCENE)
 
 

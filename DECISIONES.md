@@ -255,7 +255,7 @@ Lo marcado **(pregunta)** necesita tu visto bueno antes de cambiarse.
   al servidor; por eso todo cambio de dinero pasa por `Economy.add_money()`
   y todo precio sale del catálogo, listo para validarse allá.
 
-## Cuentas y servidor (Fase 4) — decidido el 2026-11-03; 4A hecha, 4B pendiente
+## Cuentas y servidor (Fase 4) — decidido el 2026-11-03; 4A y 4B hechas
 
 Decisiones del dueño:
 - **Sin servidor (fuera de casa): se puede Vivir, no Construir.** Construir,
@@ -302,7 +302,7 @@ Decisiones técnicas (de Claude, cambiables):
 - **Reglas de apoyo (pisos, paredes…)** siguen en el teléfono por ahora: no
   tocan dinero. Pasarlas al servidor queda para cuando se edite la casa entre
   dos (Fase 5).
-- Las 153 pruebas locales siguen valiendo: la economía local queda como
+- Las pruebas locales siguen valiendo: la economía local queda como
   "modo de prueba" (sin cuenta), no se ofrece en la interfaz.
 
 ### Fase 4A — decisiones de la implementación (2026-11-03)
@@ -357,3 +357,77 @@ Decisiones técnicas (de Claude, cambiables):
   servicio que espere la IP (como `adguard-arranque`), que es un cambio del
   sistema aparte.
 
+
+### Fase 4B — decisiones de la implementación (2026-11-03)
+
+- **Reglas en un archivo Lua aparte** (`neighborhood_rules.lua`), sin nada de
+  Nakama: se prueban solas con `lua5.1` y el módulo `neighborhood.lua` solo
+  lee, guarda y registra las RPC. Las cuentas son copia exacta de las de
+  `economy.gd` (el teléfono las usa para MOSTRAR precios; si se cambia una
+  regla, se cambia en los dos). La demo `economy_server_demo` compara los dos.
+- **Guardado atómico**: cada pedido lee el estado (casa, progreso, empleo,
+  historial y billetera) y guarda todo junto con `nk.multi_update` (storage +
+  wallet en una sola transacción, con su historial `ledger`). Cada objeto se
+  escribe "solo si nadie lo cambió desde que lo leí" (versión); si dos
+  pedidos del mismo jugador chocan, el servidor reintenta solo (hasta 4).
+- **Objetos nuevos**: `game/work` (empleo, currículum, turno en marcha, último
+  turno, última vez visto) y `game/history` (pasos de deshacer, como texto
+  JSON porque guardan "quitar" = null).
+- **Historial**: hasta 100 pasos **y** como mucho ~400 KB (si un paso es enorme,
+  por ejemplo cimientos en toda la parcela, se olvidan antes los más viejos).
+  Acelerar no es un paso (no se "des-acelera"), igual que en la Fase 3.
+- **El teléfono nunca pone la hora de una obra**: el `ready_at` que manda se
+  descarta. Mover o pintar una obra conserva la suya; una pieza nueva (o de
+  otro tipo) empieza la suya con la hora del servidor. El teléfono ajusta su
+  reloj a la diferencia con el del servidor (`Economy.server_offset`).
+- **Validación** (sin las reglas de apoyo, que siguen en el teléfono hasta la
+  Fase 5): piezas que existen en el catálogo y del tipo correcto para su capa,
+  claves y posiciones dentro de la parcela, cimientos solo abajo, colores
+  `#hex`, campos desconocidos descartados, máximo 3000 escrituras por pedido,
+  nivel de desbloqueo para lo que es NUEVO (lo ya puesto se puede pintar o
+  mover aunque esté bloqueado). Quitar algo que no existe no devuelve nada.
+- **Ids de objetos ("o12")** los sigue eligiendo el teléfono; el servidor
+  revisa la forma y sube su contador (`next_id`) para que nunca se repitan.
+- **Respuestas**: una regla que dice que no responde `{ok: false, error}`
+  con el texto para el jugador (no un error HTTP) y el estado actual; así el
+  teléfono siempre queda igual al servidor.
+- **Un pedido por vez en el teléfono** (`Economy.busy`): mientras espera, los
+  botones de deshacer, rehacer, confirmar y acelerar se apagan y otro toque
+  avisa "Esperando al servidor…". El "sigo jugando" va por fuera (el
+  servidor reintenta si choca).
+- **Turnos (reglas x10)**: un turno se cobra si pasó su duración a x10 (un
+  turno de 4 h = 24 s reales) con **2 s de margen** por la demora de la red, y
+  se empieza como mucho uno cada 144 s. Si al cobrar todavía es temprano o no
+  hay conexión, el teléfono reintenta solo y avisa cuando cobra.
+- **Pago offline con la hora del servidor**: el servidor anota "última vez
+  visto" (al entrar, en cada turno y con un "sigo jugando" cada 5 min y al
+  pasar a segundo plano). Al entrar (`work_settle`) paga un turno por cada día
+  del juego a x1 (1440 s) desde entonces, tope 3. Si se corta la conexión con
+  el juego abierto, al volver se cobra igual (antes del siguiente "sigo
+  jugando").
+- **Sin conexión, el personaje no sale a trabajar** (el servidor tiene que
+  anotar el turno). Esos días se pagan al volver, como días sin jugar.
+- **Al entrar con conexión manda el servidor** (casa, dinero, experiencia,
+  descubierto, empleo). Del teléfono solo queda el día del juego del último
+  turno (el reloj del juego es del teléfono). Con "Jugar sin conexión" se usa
+  la última copia guardada en el teléfono; cuando vuelve la conexión con el
+  juego abierto, se carga la partida del servidor como al entrar (con la
+  re-sincronización 4A → 4B si todavía no se hizo) y recién ahí se puede
+  construir.
+- **Transición 4A → 4B hecha así**: `game_load` dice `house_source`; si es
+  `"import"`, el teléfono vuelve a mandar su partida y `game_import` copia UNA
+  vez más casa, experiencia, descubierto y empleo (si le alcanza el nivel),
+  sin tocar el dinero, y marca la casa `"server"`. Probado con una cuenta "de
+  la 4A" armada a mano en la base.
+- **Importar** ahora también trae el empleo (si existe y alcanza el nivel) y
+  limpia de la casa las piezas que no existen en el catálogo. Las cuentas
+  nuevas empiezan con `source = "server"`.
+- **Variable `NEIGHBORHOOD_SERVER`** (opcional): cambia la dirección del
+  servidor sin tocar `data/server.json`, para probar en otra PC. En el
+  teléfono no existe, así que no cambia nada.
+- **Pruebas que cambiaron**: 3 comprobaciones de `test_server.gd` decían "con
+  casa en el teléfono, manda el teléfono (4A)"; ahora dicen lo contrario
+  (manda el servidor), que es lo que decidió el dueño para la 4B. Y la demo
+  del servidor ya no espera la casa "idéntica" (el servidor la revisa y la
+  completa con el segundo piso vacío).
+- **Versión 0.5.0** del juego.

@@ -7,8 +7,11 @@ extends Node
 ##   - Recordar la sesión en user://session.json ("acceso único"): la próxima
 ##     vez entra solo. La contraseña NUNCA se guarda.
 ##   - Saber si hay conexión (EventBus.server_status_changed).
-##   - Llamar funciones del servidor (RPC): game_load, game_import.
+##   - Llamar funciones del servidor (RPC): game_load, game_import, y desde la
+##     Fase 4B las de construir, empleos y turnos (las pide Economy).
 ##   - Subir el personaje y las opciones a la nube después de guardar.
+##   - Avisar "sigo jugando" cada tanto (game_heartbeat): así el servidor no
+##     paga como "días sin jugar" el tiempo que se estuvo jugando.
 ##
 ## No hace nada hasta que la pantalla de entrada llama a start(): así las
 ## pruebas y demos que no lo usan no hablan con el servidor.
@@ -27,7 +30,12 @@ const USERNAME_PATTERN := "^[a-z0-9_]{3,20}$"
 ## Cada cuánto se revisa la conexión, y cada cuánto como mucho se sube a la nube.
 const HEALTH_INTERVAL := 20.0
 const UPLOAD_INTERVAL := 15.0
+## Cada cuánto se avisa al servidor "sigo jugando".
+const HEARTBEAT_INTERVAL := 300.0
 const OFFLINE_TEXT := "No se pudo conectar con el servidor. ¿Estás en la red de casa?"
+## Para probar en otra PC sin tocar data/server.json: si esta variable de
+## entorno tiene una dirección (por ejemplo http://127.0.0.1:7350), se usa esa.
+const ADDRESS_ENV := "NEIGHBORHOOD_SERVER"
 
 ## Dónde se recuerda la sesión (las demos usan otro archivo).
 var session_path := "user://session.json"
@@ -39,8 +47,15 @@ var timeout_seconds := 8.0
 var session: ServerSession = null
 var online := false
 var active := false
+## Lo prende Economy cuando ya cobró lo pendiente al entrar (si se avisara
+## "sigo jugando" antes, se perderían los días sin jugar).
+var heartbeat_enabled := false
+## true cuando en esta sesión ya se cargó la partida del servidor (al entrar
+## con conexión). Si se entró "sin conexión", es false hasta que vuelva.
+var game_loaded := false
 
 var _health_timer := 0.0
+var _heartbeat_timer := HEARTBEAT_INTERVAL
 var _upload_pending := false
 var _uploading := false
 var _last_upload_msec := -1000000
@@ -69,6 +84,10 @@ func _process(delta: float) -> void:
 	if _health_timer <= 0.0:
 		_health_timer = HEALTH_INTERVAL
 		check_connection()
+	_heartbeat_timer -= delta
+	if _heartbeat_timer <= 0.0:
+		_heartbeat_timer = HEARTBEAT_INTERVAL
+		heartbeat()
 	if _upload_pending and online and not _uploading \
 			and Time.get_ticks_msec() - _last_upload_msec >= UPLOAD_INTERVAL * 1000.0:
 		upload_cloud()
@@ -76,8 +95,10 @@ func _process(delta: float) -> void:
 
 func _notification(what: int) -> void:
 	# Al pasar a segundo plano (SaveSystem ya guardó): subir lo que falte.
-	if what == NOTIFICATION_APPLICATION_PAUSED and active and online and _upload_pending:
-		upload_cloud()
+	if what == NOTIFICATION_APPLICATION_PAUSED and active and online:
+		heartbeat()
+		if _upload_pending:
+			upload_cloud()
 
 
 # --- Cuenta ---
@@ -144,6 +165,8 @@ func resume() -> Dictionary:
 ## Cierra la sesión: el teléfono olvida la cuenta (la partida queda guardada).
 func logout() -> void:
 	session = null
+	heartbeat_enabled = false
+	game_loaded = false
 	_uploaded_values.clear()
 	_upload_pending = false
 	if FileAccess.file_exists(session_path):
@@ -155,11 +178,20 @@ func logout() -> void:
 
 ## Carga la partida de la cuenta. Si la cuenta es nueva, primero importa
 ## `local_state` (como GameState.to_dict()). Devuelve lo de game_load.
+## Transición 4A → 4B: si la cuenta se importó en la 4A (house_source =
+## "import"), se re-sincroniza UNA vez más la casa del teléfono (game_import
+## lo hace y la marca como del servidor).
 func load_game(local_state: Dictionary) -> Dictionary:
 	var result := await call_rpc("game_load", {})
-	if result["ok"] and not result["data"].get("imported", false):
+	if result["ok"] and (not result["data"].get("imported", false) or result["data"].get("house_source", "") == "import"):
 		result = await call_rpc("game_import", CloudSync.import_payload(local_state))
 	return result
+
+
+## "Sigo jugando": el servidor anota la hora (para el pago de días sin jugar).
+func heartbeat() -> void:
+	if heartbeat_enabled and has_session() and online:
+		await call_rpc("game_heartbeat", {})
 
 
 ## Llama una función del servidor. `data` del resultado = lo que devolvió.
@@ -277,6 +309,8 @@ func _load_config() -> void:
 		data = {}
 	var scheme := "https" if data.get("use_ssl", false) else "http"
 	base_url = "%s://%s:%d" % [scheme, data.get("host", "127.0.0.1"), int(data.get("port", 7350))]
+	if OS.get_environment(ADDRESS_ENV) != "":
+		base_url = OS.get_environment(ADDRESS_ENV)
 	server_key = data.get("server_key", "")
 	timeout_seconds = float(data.get("timeout_seconds", 8))
 

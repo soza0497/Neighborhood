@@ -6,6 +6,8 @@ extends Node3D
 ## - El personaje ($House/Character) camina por `nav` y vive con su IA.
 ## - La interfaz no toca nada directo: pide cosas por EventBus y aquí se hacen.
 ## - Cada cambio en la casa se guarda solo, un segundo después.
+## - Con cuenta (Fase 4B) el servidor manda en el dinero y la casa: sin
+##   conexión no se puede Construir (se sigue viviendo).
 
 ## Segundos de espera después de un cambio antes de guardar.
 const AUTOSAVE_DELAY := 1.0
@@ -27,6 +29,8 @@ var character_data: CharacterData
 var mode := ""
 
 var _autosave_timer: Timer
+## Para saber cuándo VUELVE la conexión.
+var _was_online := false
 
 
 func _ready() -> void:
@@ -37,6 +41,7 @@ func _ready() -> void:
 		house.from_dict(GameState.house)
 
 	history = UndoHistory.new(house)
+	history.remote = Economy.server_mode
 	nav = HouseNav.new(house)
 	_house_view.setup(house)
 	_builder.setup(house, history, _house_view, _camera_rig)
@@ -69,11 +74,13 @@ func _ready() -> void:
 	EventBus.journal_requested.connect(_on_journal_requested)
 	EventBus.construction_accelerate_requested.connect(_on_accelerate_requested)
 	EventBus.logout_requested.connect(_on_logout_requested)
+	EventBus.server_status_changed.connect(_on_server_status_changed)
+	_was_online = GameServer.online
 
 	set_mode("live")
 	EventBus.view_mode_changed.emit(_house_view.view_mode)
 	_set_level(_character.level)  # Se empieza viendo el piso del personaje.
-	EventBus.history_changed.emit(false, false)
+	history.refresh()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -96,9 +103,13 @@ func _redo() -> void:
 	history.redo()
 
 
-## Cambia entre construir y vivir.
+## Cambia entre construir y vivir. Con cuenta y sin conexión no se puede
+## construir (decisión del dueño): se avisa y se sigue viviendo.
 func set_mode(new_mode: String) -> void:
 	if new_mode == mode:
+		return
+	if new_mode == "build" and Economy.server_mode and not GameServer.online:
+		EventBus.toast.emit(Economy.OFFLINE_TEXT + ": por ahora no se puede construir.")
 		return
 	mode = new_mode
 	_builder.set_active(mode == "build")
@@ -152,9 +163,11 @@ func _load_character() -> void:
 		# A velocidad x1, 1 segundo real = 1 minuto del juego.
 		var away_minutes := clampf(away_seconds, 0.0, MAX_OFFLINE_MINUTES)
 		character_data.decay(away_minutes, CharacterData.OFFLINE_FLOOR)
-		# El trabajo no se pierde por desconectarse.
-		Economy.settle_pending_shift()
-		Economy.simulate_offline(away_minutes)
+		# El trabajo no se pierde por desconectarse (con servidor, él mide
+		# el tiempo con su propia hora).
+		Economy.request_settle(away_minutes)
+	elif Economy.server_mode:
+		Economy.request_settle(0.0)
 	GameClock.minutes = float(GameState.clock.get("minutes", GameClock.minutes))
 	_character.setup(character_data, house, nav, _house_view)
 
@@ -166,7 +179,15 @@ func _on_character_editor_requested() -> void:
 ## Paga para terminar todas las obras en marcha de una vez.
 func _on_accelerate_requested() -> void:
 	var pending := house.pending_construction()
-	if pending.is_empty():
+	if pending.is_empty() or not Economy.can_request():
+		return
+	if Economy.server_mode:
+		var result: Dictionary = await Economy.request("build_accelerate")
+		if not result["ok"]:
+			EventBus.toast.emit(result["error"])
+			return
+		house.apply(CloudSync.writes_from_server(result["data"].get("writes", [])))
+		_finish_acceleration(-int(result["data"].get("money_change", 0)))
 		return
 	var now := Economy.now()
 	var seconds := 0
@@ -183,9 +204,62 @@ func _on_accelerate_requested() -> void:
 		value.erase("ready_at")
 		writes.append(HouseData.write(p[0], p[1], p[2], value))
 	house.apply(writes)  # Directo, sin historial: no se "des-acelera".
+	_finish_acceleration(cost)
+
+
+func _finish_acceleration(cost: int) -> void:
 	_house_view.check_construction()
 	EventBus.toast.emit("Obras terminadas (-$%d)" % cost)
 	_autosave_timer.start()
+
+
+## Con cuenta: si se corta la conexión en modo Construir, se vuelve a Vivir.
+func _on_server_status_changed(online: bool, _username: String) -> void:
+	if not Economy.server_mode:
+		return
+	if not online and mode == "build":
+		_builder.cancel_pending()
+		set_mode("live")
+		EventBus.toast.emit(Economy.OFFLINE_TEXT + ": volviste a Vivir.")
+	if online and not _was_online:
+		_on_reconnected()
+	_was_online = online
+
+
+## Volvió la conexión (por ejemplo, al llegar a casa con el juego abierto).
+## Si se había entrado "sin conexión", primero se carga la partida del
+## servidor (como al entrar). Después se cobran los días sin conexión, ANTES
+## de volver a avisar "sigo jugando" (si no, el servidor no los contaría).
+func _on_reconnected() -> void:
+	GameServer.heartbeat_enabled = false
+	if not GameServer.game_loaded:
+		await _load_from_server()
+	Economy.request_settle(0.0)
+
+
+func _load_from_server() -> void:
+	SaveSystem.save_game()  # GameState al día con lo de esta pantalla.
+	var result: Dictionary = await GameServer.load_game(GameState.to_dict())
+	if not result["ok"]:
+		return  # Se intenta de nuevo la próxima vez que vuelva la conexión.
+	GameServer.game_loaded = true
+	var merged := CloudSync.merge(GameState.to_dict(), result["data"], GameServer.user_id(), GameServer.username())
+	if not _same_house(merged["house"], house.to_dict()):
+		_builder.cancel_pending()
+		house.from_dict(merged["house"])
+		_character.reset_after_build()  # Por si quedó parado donde ahora hay algo.
+	Economy.apply_server_state(result["data"])
+	history.refresh()
+	EventBus.toast.emit("Volvió la conexión: tu partida está al día.")
+	_autosave_timer.start()
+
+
+## ¿Dos casas (como diccionarios) son iguales? Se comparan como texto, después
+## de pasar las dos por JSON (así los números quedan del mismo tipo).
+static func _same_house(a: Dictionary, b: Dictionary) -> bool:
+	var levels_a: Variant = JSON.parse_string(JSON.stringify(a.get("levels", [])))
+	var levels_b: Variant = JSON.parse_string(JSON.stringify(b.get("levels", [])))
+	return JSON.stringify(levels_a, "", true) == JSON.stringify(levels_b, "", true)
 
 
 ## Cierra la sesión: guarda, sube lo que falte a la nube y vuelve a la
@@ -195,6 +269,7 @@ func _on_logout_requested() -> void:
 	if GameServer.online:
 		await GameServer.upload_cloud()
 	GameServer.logout()
+	Economy.use_server(false)
 	get_tree().change_scene_to_file(LOGIN_SCENE)
 
 

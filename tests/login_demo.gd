@@ -1,7 +1,9 @@
 extends Node
 ## Demostración con ventana de la pantalla de entrada, contra el servidor de
-## verdad: crear cuenta → juego con el indicador "Conectado" → abrir de nuevo
-## (entra solo, sin contraseña) → sin servidor ("Jugar sin conexión").
+## verdad: crear cuenta → juego con el indicador "Conectado" → construir,
+## deshacer y rehacer con el servidor (Fase 4B) → abrir de nuevo (entra solo,
+## sin contraseña, con la casa del servidor) → sin servidor ("Jugar sin
+## conexión": se vive pero no se construye).
 ##
 ##   SHOT_DIR=/carpeta godot --path . res://tests/login_demo.tscn
 ##
@@ -53,13 +55,19 @@ func _run() -> void:
 		_check(_server_text(main).begins_with("● Conectado: " + user), "indicador: \"%s\"" % _server_text(main))
 		_check(GameState.account.get("username", "") == user, "la partida quedó marcada con la cuenta")
 		await _shot("login_2_juego_conectado.png")
+		await _build_with_server(main)
 
 	print("2) Abrir otra vez: entra solo")
+	var built: Dictionary = main.house.to_dict()["levels"][0]["foundation"] if main != null else {}
+	GameState.house = {}  # Como si el teléfono hubiera perdido la casa.
 	login = await _open_login()
 	await _frames(2)
 	await _shot("login_3_entrando.png")
 	main = await _wait_for_main()
 	_check(main != null and GameServer.username() == user, "entró sin pedir la contraseña")
+	if main != null:
+		_check(not built.is_empty() and main.house.get_layer(0, "foundation").size() == built.size(),
+			"la casa vino del servidor (%d cimientos)" % built.size())
 
 	print("3) Sin servidor")
 	var real_url := GameServer.base_url
@@ -73,8 +81,21 @@ func _run() -> void:
 	if main != null:
 		await _frames(30)
 		_check(_server_text(main).begins_with("● Sin conexión"), "indicador: \"%s\"" % _server_text(main))
+		EventBus.game_mode_change_requested.emit("build")
+		await _frames(5)
+		_check(main.mode == "live" and _toast_text(main).begins_with("Sin conexión al servidor"),
+			"Construir no se puede: \"%s\"" % _toast_text(main))
 		await _shot("login_5_juego_sin_conexion.png")
 	GameServer.base_url = real_url
+	if main != null:
+		print("4) Vuelve la conexión con el juego abierto")
+		await GameServer.check_connection()
+		_check(await _wait_until(func() -> bool: return GameServer.game_loaded and Economy.settled),
+			"cargó la partida del servidor y cobró lo pendiente")
+		EventBus.game_mode_change_requested.emit("build")
+		await _frames(3)
+		_check(main.mode == "build", "ya se puede construir")
+		EventBus.game_mode_change_requested.emit("live")
 
 	GameServer.logout()
 	_restore_saves()
@@ -109,6 +130,53 @@ func _wait_until(condition: Callable, seconds := 15.0) -> bool:
 			return true
 		await get_tree().process_frame
 	return false
+
+
+## Fase 4B: arma cimientos en modo Construir (como si arrastrara el dedo) y
+## comprueba que cobra el servidor; después deshace y rehace.
+func _build_with_server(main: Node) -> void:
+	print("1b) Construir con el servidor")
+	var builder: HouseBuilder = main.get_node("House/Builder")
+	var camera := get_viewport().get_camera_3d()
+	var to_screen := func(cell: Vector2) -> Vector2:
+		return camera.unproject_position(main.get_node("House").to_global(Vector3(cell.x, 0.3, cell.y)))
+	_check(Economy.server_mode, "con cuenta, manda el servidor")
+	EventBus.game_mode_change_requested.emit("build")
+	await _frames(3)
+	_check(main.mode == "build", "con conexión se puede construir")
+	# Un rincón de la parcela (lejos de la casa de las otras demos). Se cuentan
+	# las celdas que estaban libres: esas son las que se cobran.
+	var free := 0
+	for x in range(24, 28):
+		for z in range(2, 5):
+			if not main.house.has_piece(0, "foundation", "%d,%d" % [x, z]):
+				free += 1
+	var before: int = main.house.get_layer(0, "foundation").size()
+	var money := Economy.money
+	EventBus.build_item_selected.emit("foundation_basic")
+	builder._begin(to_screen.call(Vector2(24.5, 2.5)))
+	builder._update(to_screen.call(Vector2(27.5, 4.5)))
+	builder._release()
+	builder.confirm_pending()
+	_check(free == 0 or Economy.busy, "esperando la respuesta del servidor (botones apagados)")
+	await _wait_until(func() -> bool: return not Economy.busy)
+	var added: int = main.house.get_layer(0, "foundation").size() - before
+	_check(free > 0 and added == free and Economy.money == money - free * 5,
+		"%d cimientos: el servidor cobró $%d" % [added, money - Economy.money])
+	await _frames(5)
+	await _shot("login_2b_construir.png")
+	EventBus.undo_requested.emit()
+	await _wait_until(func() -> bool: return not Economy.busy)
+	_check(main.house.get_layer(0, "foundation").size() == before and Economy.money == money, "deshacer: devuelve los $%d" % (free * 5))
+	EventBus.redo_requested.emit()
+	await _wait_until(func() -> bool: return not Economy.busy)
+	_check(main.house.get_layer(0, "foundation").size() == before + free and Economy.money == money - free * 5, "rehacer: vuelve a cobrar")
+	EventBus.game_mode_change_requested.emit("live")
+	SaveSystem.save_game()
+
+
+func _toast_text(main: Node) -> String:
+	return main.get_node("HUD").get_node("%ToastLabel").text
 
 
 func _server_text(main: Node) -> String:

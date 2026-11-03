@@ -105,3 +105,6 @@ signal jobs_changed
 signal server_status_changed(online: bool, username: String)
 ## La interfaz pide cerrar la sesión de la cuenta.
 signal logout_requested
+## Se está esperando (o se dejó de esperar) una respuesta del servidor
+## (Fase 4B): mientras tanto, los botones que cambian dinero no responden.
+signal server_busy_changed(busy: bool)
