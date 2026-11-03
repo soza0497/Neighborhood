@@ -28,6 +28,8 @@ const CATEGORY_BUTTON_SIZE := Vector2(150, 52)
 @onready var _bottom_bar: Control = %BottomBar
 @onready var _categories_box: HBoxContainer = %Categories
 @onready var _items_box: HBoxContainer = %Items
+@onready var _confirm_button: Button = %ConfirmButton
+@onready var _cancel_button: Button = %CancelButton
 @onready var _rotate_button: Button = %RotateButton
 @onready var _delete_button: Button = %DeleteButton
 @onready var _erase_button: Button = %EraseButton
@@ -51,6 +53,8 @@ func _ready() -> void:
 	_mode_button.pressed.connect(_on_mode_button_pressed)
 	_level_up_button.pressed.connect(EventBus.build_level_change_requested.emit.bind(1))
 	_level_down_button.pressed.connect(EventBus.build_level_change_requested.emit.bind(-1))
+	_confirm_button.pressed.connect(EventBus.build_confirm_requested.emit)
+	_cancel_button.pressed.connect(EventBus.build_cancel_requested.emit)
 	_rotate_button.pressed.connect(EventBus.build_rotate_requested.emit)
 	_delete_button.pressed.connect(EventBus.build_delete_requested.emit)
 	_erase_button.toggled.connect(EventBus.build_erase_toggled.emit)
@@ -60,6 +64,7 @@ func _ready() -> void:
 	EventBus.build_hint.connect(_hint_label.set_text)
 	EventBus.build_level_changed.connect(_on_level_changed)
 	EventBus.build_selection_changed.connect(_on_selection_changed)
+	EventBus.build_pending_changed.connect(_on_pending_changed)
 	EventBus.view_mode_changed.connect(_on_view_mode_changed)
 	EventBus.history_changed.connect(_on_history_changed)
 
@@ -68,6 +73,7 @@ func _ready() -> void:
 	_update_info()
 	_create_category_buttons()
 	_update_object_buttons()
+	_on_pending_changed(false)
 
 
 func _process(_delta: float) -> void:
@@ -177,6 +183,11 @@ func _on_level_changed(level: int) -> void:
 	_level_label.text = LEVEL_NAMES[level] if level < LEVEL_NAMES.size() else "Piso %d" % level
 	_level_down_button.disabled = level <= 0
 	_level_up_button.disabled = level >= HouseGrid.MAX_LEVELS - 1
+
+
+func _on_pending_changed(has_pending: bool) -> void:
+	_confirm_button.visible = has_pending
+	_cancel_button.visible = has_pending
 
 
 func _on_selection_changed(has_selection: bool) -> void:

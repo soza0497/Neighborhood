@@ -48,6 +48,7 @@ func _run() -> void:
 	await _set_view(HouseView.ViewMode.CUTAWAY)
 	await _drag("door_basic", Vector2(4.5, 9), Vector2(4.5, 9))
 	await _drag("window_basic", Vector2(2.5, 9), Vector2(2.5, 9))
+	await _drag("window_basic", Vector2(3.5, 9), Vector2(3.5, 9))
 	await _drag("window_tall", Vector2(7.5, 9), Vector2(7.5, 9))
 	await _drag("window_basic", Vector2(10, 4.5), Vector2(10, 4.5))
 	await _shot("1_cortada.png")
@@ -65,6 +66,12 @@ func _run() -> void:
 	await _drag("roof_blue", Vector2(2.5, 2.5), Vector2(5.5, 8.5))
 	EventBus.build_item_selected.emit("")
 	await _shot("3_completa.png")
+
+	# Primer plano del frente: puerta, ventanas unidas y techo.
+	EventBus.game_mode_change_requested.emit("live")
+	_main.get_node("CameraRig").set_state({"x": -1.0, "z": 3.0, "yaw": 0.0, "distance": 13.0})
+	await _shot("6_frente.png")
+	EventBus.game_mode_change_requested.emit("build")
 
 	# Modo vivir, desde otro ángulo.
 	EventBus.game_mode_change_requested.emit("live")
@@ -85,9 +92,32 @@ func _run() -> void:
 	_push_mouse_button(_to_screen(Vector2(0.5, 0.5)), true)
 	_push_mouse_motion(_to_screen(Vector2(1.5, 1.5)))
 	_push_mouse_button(_to_screen(Vector2(1.5, 1.5)), false)
+	EventBus.build_confirm_requested.emit()
 	await _frames(2)
 	var added: int = _main.house.get_layer(0, "foundation").size() - before
 	print("Mouse real: %d cimientos nuevos (se esperaban 4) -> %s" % [added, "OK" if added == 4 else "FALLÓ"])
+
+	# Tocar fuera del lote no construye (mueve la cámara).
+	before = _main.house.get_layer(0, "foundation").size()
+	_builder._begin(_to_screen(Vector2(-3, -3)))
+	var takeover: bool = _main.get_node("CameraRig").single_finger_pan
+	_builder._release()
+	var outside_ok: bool = takeover and not _builder._awaiting_confirm
+	print("Fuera del lote: %s" % ("OK" if outside_ok else "FALLÓ"))
+
+	# Manijas: tocar una celda, arrastrar la manija y confirmar.
+	_builder._begin(_to_screen(Vector2(0.5, 10.5)))
+	_builder._release()
+	var waiting: bool = _builder._awaiting_confirm
+	_builder._begin(_to_screen(Vector2(0.5, 10.5)))
+	_builder._update(_to_screen(Vector2(3.5, 11.5)))
+	_builder._release()
+	await _shot("7_manijas.png")
+	EventBus.build_confirm_requested.emit()
+	await _frames(2)
+	added = _main.house.get_layer(0, "foundation").size() - before
+	print("Manijas: esperaba confirmar=%s, %d cimientos (se esperaban 8) -> %s" % [
+		waiting, added, "OK" if waiting and added == 8 else "FALLÓ"])
 
 	# Rendimiento con la casa quieta.
 	EventBus.build_item_selected.emit("")
@@ -110,7 +140,9 @@ func _drag(item_id: String, from: Vector2, to: Vector2) -> void:
 	_builder._begin(start)
 	for i in range(1, 5):
 		_builder._update(start.lerp(end, i / 4.0))
-	_builder._finish()
+	_builder._release()
+	# Las herramientas de arrastre esperan "Confirmar".
+	_builder.confirm_pending()
 	await _frames(2)
 
 

@@ -86,13 +86,20 @@ Lo marcado **(pregunta)** necesita tu visto bueno antes de cambiarse.
   esquinas se tapan solas con una columna en cada vértice que toca una pared.
 - **Cimientos obligatorios**: la planta baja va 30 cm sobre el pasto, y
   pisos y paredes de abajo se apoyan en cimientos. Así todas las alturas son
-  fijas y simples. Arriba, piso sobre piso y pared sobre piso o pared.
+  fijas y simples. Arriba, el piso va sobre piso **o junto a una pared de
+  abajo** (pedido del dueño: poner el piso primero; también permite balcones
+  de una celda), y la pared sobre piso o pared.
 - **Puertas y ventanas son parte de la pared** (campo `opening`), no piezas
   aparte: una pared tiene a lo sumo una. Si se borra la pared, se va con ella.
+  La puerta llena todo el hueco (marco + hoja).
+- **Ventanas iguales seguidas se unen solas** (la columna entre ellas se abre
+  y el vidrio sigue). Para que queden separadas, se usa otra ventana o se
+  deja una pared lisa en medio. Si hace falta un interruptor, se agrega.
 - **Escalera = objeto de 1 × 3** que se pone abajo y abre el hueco en el piso
   de arriba (quita esas baldosas en el mismo paso de deshacer).
 - **Techo a dos aguas sobre un rectángulo** que dibuja el jugador (no
-  automático). Un techo automático "inteligente" para formas en L es mucho
+  automático), con grosor y paredes de remate triangulares en las puntas
+  (color de la pared de abajo) para que no quede hueco entre pared y techo. Un techo automático "inteligente" para formas en L es mucho
   trabajo; se puede agregar después si hace falta.
 - **Datos = escrituras clave → valor** (`HouseData.apply`). Cada acción es una
   lista de escrituras y devuelve la lista inversa: con eso funciona deshacer, y
@@ -106,13 +113,33 @@ Lo marcado **(pregunta)** necesita tu visto bueno antes de cambiarse.
 - **Pintura**: una pared se pinta entera (las dos caras del mismo color). Pintar
   cada cara por separado complica datos e interfaz; se agrega si se pide.
 - **Gestos**: con una pieza elegida, 1 dedo construye y 2 dedos mueven la
-  cámara. Sin pieza (o con la mano en el vacío), 1 dedo mueve la cámara. Se
-  aplica al **soltar**, con vista previa verde/roja mientras se arrastra.
+  cámara. Sin pieza, con la mano en el vacío, o **empezando fuera del lote**,
+  1 dedo mueve la cámara. Vista previa verde/roja mientras se arrastra.
+- **Confirmar con botón** para las herramientas de arrastre (cimientos, piso,
+  pared, cuarto, techo): al soltar queda una selección con dos manijas que se
+  ajustan, y se aplica con Confirmar. Pedido del dueño: el dedo tapa lo que
+  se construye. Muebles, puertas, ventanas y pintura siguen aplicándose al
+  soltar (son un solo toque).
 - **Guardado automático** 1 segundo después de cada cambio (además de al
   salir): Android puede cerrar la app sin aviso.
 - **Se muestran precios** en la barra, pero todavía **no se cobra**: la
   moneda llega en la Fase 3.
-- **Rendimiento (a medir)**: cada pieza es una caja aparte. Una casa de
-  ejemplo (2 cuartos, primer piso, muebles) da ~390 llamadas de dibujo. Si en
-  el teléfono baja de 30 FPS, el arreglo es juntar pisos y paredes de cada
-  nivel en una sola malla (cambio interno de `HouseView`, no toca datos).
+- **Rendimiento**: cada pieza es una caja aparte (~400 llamadas de dibujo en
+  una casa de ejemplo). Medido en el teléfono del dueño con una casa de dos
+  pisos: **60 FPS fijos** (2026-11-03). Si más adelante baja, el arreglo es
+  juntar pisos y paredes de cada nivel en una sola malla (cambio interno de
+  `HouseView`, no toca datos).
+
+## Riesgo legal frente a EA (ver `docs/riesgos-legales-ea.md`)
+
+- **Mecánicas libres, expresión propia.** Se puede hacer un simulador de vida;
+  no se copia nada de cómo se ve, suena o se llama The Sims.
+- **Nombres prohibidos:** "Sim/Sims", "Simlish", "-ville", "WooHoo", "Life".
+  Nada de rombo/cristal sobre la cabeza. No mencionar The Sims en la tienda.
+- **Editor de personaje (Fase 2): deslizadores y opciones**, no tocar y
+  arrastrar partes del cuerpo: EA tiene una patente activa (US 10,275,947,
+  hasta ~2035) sobre eso.
+- **Arte con IA (Fase 7):** referencias propias, nunca material de EA; guardar
+  referencias y pedidos como prueba de creación independiente.
+- **(pregunta)** Antes de publicar al público o cobrar: abogado de propiedad
+  intelectual y búsqueda de marca del nombre definitivo.

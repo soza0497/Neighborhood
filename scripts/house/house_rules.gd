@@ -7,7 +7,8 @@ class_name HouseRules
 ## Reglas de "apoyo" (algo tiene que sostener cada pieza):
 ##   - Cimientos: solo en la planta baja, dentro del lote.
 ##   - Piso en planta baja: sobre cimientos.
-##   - Piso en un nivel de arriba: sobre otro piso, y no encima de una escalera.
+##   - Piso en un nivel de arriba: sobre otro piso o junto a una pared de
+##     abajo (así sirve para hacer un balcón), y no encima de una escalera.
 ##   - Pared en planta baja: junto a cimientos.
 ##   - Pared arriba: junto a un piso de ese nivel, o encima de otra pared.
 ##   - Objeto: todas sus celdas con piso, sin otro objeto y sin paredes
@@ -26,7 +27,15 @@ static func is_supported(house: HouseData, level: int, layer: String, key: Strin
 				return false
 			if level == 0:
 				return house.has_piece(0, "foundation", key)
-			return house.has_piece(level - 1, "floors", key) and not is_stairs_cell(house, level - 1, cell)
+			if is_stairs_cell(house, level - 1, cell):
+				return false
+			if house.has_piece(level - 1, "floors", key):
+				return true
+			# También sirve una pared de abajo en cualquiera de sus 4 lados.
+			for edge in HouseGrid.cell_edges(cell):
+				if house.has_piece(level - 1, "walls", edge):
+					return true
+			return false
 		"walls":
 			if not HouseGrid.is_edge_in_lot(key):
 				return false
@@ -71,6 +80,8 @@ static func dependents(house: HouseData, level: int, layer: String, key: String)
 				result.append([level, "walls", edge])
 		"walls":
 			result.append([level + 1, "walls", key])
+			for cell in HouseGrid.edge_cells(key):
+				result.append([level + 1, "floors", HouseGrid.cell_key(cell)])
 	return result
 
 

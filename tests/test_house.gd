@@ -64,7 +64,8 @@ func _test_apply_and_undo() -> void:
 	history.commit([HouseData.write(0, "foundation", "1,1", null)])
 	history.undo()
 	_check(house.has_piece(0, "foundation", "1,1"), "deshacer un borrado lo restaura")
-	_check(not history.can_redo() == false, "se puede rehacer después de deshacer")
+	history.undo()
+	_check(history.can_redo(), "se puede rehacer después de deshacer")
 
 
 func _test_support_rules() -> void:
@@ -77,7 +78,15 @@ func _test_support_rules() -> void:
 	_check(HouseRules.is_supported(house, 0, "floors", "2,2", floor_value), "piso sobre cimientos: SÍ")
 	_check(HouseRules.is_supported(house, 0, "walls", "h:2,2", wall_value), "pared en el borde de cimientos: SÍ")
 	_check(not HouseRules.is_supported(house, 0, "walls", "h:2,1", wall_value), "pared lejos de cimientos: NO")
-	_check(not HouseRules.is_supported(house, 1, "floors", "2,2", floor_value), "piso arriba sin piso abajo: NO")
+	_check(not HouseRules.is_supported(house, 1, "floors", "2,2", floor_value), "piso arriba sin piso ni pared abajo: NO")
+	house.apply([HouseData.write(0, "walls", "v:5,2", wall_value)])
+	_check(HouseRules.is_supported(house, 1, "floors", "5,2", floor_value), "piso arriba junto a una pared de abajo (balcón): SÍ")
+	_check(HouseRules.check_removal(house, [HouseData.write(0, "walls", "v:5,2", null)])["blocked"].is_empty(),
+		"pared sin nada arriba: se borra")
+	house.apply([HouseData.write(1, "floors", "5,2", floor_value)])
+	_check(not HouseRules.check_removal(house, [HouseData.write(0, "walls", "v:5,2", null)])["blocked"].is_empty(),
+		"pared que sostiene un balcón: no se borra")
+	house.apply([HouseData.write(1, "floors", "5,2", null), HouseData.write(0, "walls", "v:5,2", null)])
 	_floor(house, 0, Vector2i(2, 2), Vector2i(4, 4))
 	_check(HouseRules.is_supported(house, 1, "floors", "2,2", floor_value), "piso arriba sobre piso: SÍ")
 	_check(not HouseRules.is_supported(house, 1, "walls", "h:2,2", wall_value), "pared arriba sin piso ni pared abajo: NO")

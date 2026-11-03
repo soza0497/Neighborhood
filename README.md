@@ -28,18 +28,24 @@ Hecho con **Godot 4.7.2** (GDScript).
 
 1. Abajo elegí una **categoría** y una **pieza**. Arriba aparece qué hacer.
 2. Arrastrá sobre el lote: se ve en **verde** lo que se puede poner y en
-   **rojo** lo que no. Al soltar se aplica.
-3. Orden lógico: **Cimientos** → **Cuarto** (o Piso + Pared) → **Puertas y
+   **rojo** lo que no. Muebles, puertas, ventanas y pintura se aplican al
+   soltar. Cimientos, pisos, paredes, cuartos y techos quedan **esperando**:
+   aparecen dos círculos (manijas) que podés arrastrar para ajustar, y se
+   aplican con **Confirmar** (en la PC, Enter; Cancelar o Escape descarta).
+3. Tocar **fuera del lote** siempre mueve la cámara, aunque haya una pieza elegida.
+4. Orden lógico: **Cimientos** → **Cuarto** (o Piso + Pared) → **Puertas y
    ventanas** → **Muebles** → **Pintura** → **Techo**.
-4. **Subir / Bajar** (izquierda) cambia de piso. Para el primer piso hace
-   falta piso abajo; la **Escalera** se pone en la planta baja.
-5. **Borrar** (abajo a la derecha): la pieza elegida pasa a quitar en vez de poner.
-6. Muebles: **Mover (mano)** toca un mueble para elegirlo, arrastralo para
+5. **Subir / Bajar** (izquierda) cambia de piso. Arriba, el piso va sobre
+   otro piso o junto a una pared de abajo (sirve para balcones). La
+   **Escalera** se pone en la planta baja.
+6. Dos ventanas iguales una al lado de la otra se unen solas en una ventana larga.
+7. **Borrar** (abajo a la derecha): la pieza elegida pasa a quitar en vez de poner.
+8. Muebles: **Mover (mano)** toca un mueble para elegirlo, arrastralo para
    moverlo; **Girar** y **Quitar** actúan sobre el elegido.
-7. **Deshacer / Rehacer** arriba (en la PC también Ctrl+Z / Ctrl+Y).
-8. **Vista** cambia entre: completa (con techo), sin techo, paredes bajas.
-9. Tocar otra vez la pieza elegida la suelta (vuelve el dedo a mover la cámara).
-10. **Vivir** oculta las herramientas (en la Fase 2 ahí vive el personaje).
+9. **Deshacer / Rehacer** arriba (en la PC también Ctrl+Z / Ctrl+Y).
+10. **Vista** cambia entre: completa (con techo), sin techo, paredes bajas.
+11. Tocar otra vez la pieza elegida la suelta (vuelve el dedo a mover la cámara).
+12. **Vivir** oculta las herramientas (en la Fase 2 ahí vive el personaje).
 
 ## Pruebas automáticas
 

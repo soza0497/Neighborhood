@@ -11,6 +11,10 @@ const ROOF_OVERHANG := 0.3
 const ROOF_SLOPE := 0.7
 ## Cuánto se levanta el techo sobre las paredes (para que no asomen).
 const ROOF_LIFT := 0.1
+## Grosor del techo.
+const ROOF_THICKNESS := 0.12
+## Ancho del marco de las puertas.
+const DOOR_FRAME := 0.07
 ## Cuántos escalones tiene una escalera.
 const STAIR_STEPS := 12
 
@@ -111,7 +115,7 @@ static func build_wall(key: String, value: Dictionary, visible_height: float, fu
 	if not opening_item.is_empty():
 		var hole: Array = opening_item.get("opening", [0.0, 2.1])
 		solid = [[0.0, float(hole[0])], [float(hole[1]), HouseGrid.WALL_HEIGHT]]
-		_add_opening_fill(node, opening_item, float(hole[0]), minf(float(hole[1]), visible_height), length)
+		_add_opening_fill(node, opening_item, float(hole[0]), minf(float(hole[1]), visible_height), float(hole[1]), length)
 
 	for part in solid:
 		var bottom: float = part[0]
@@ -121,29 +125,72 @@ static func build_wall(key: String, value: Dictionary, visible_height: float, fu
 	return node
 
 
-## Lo que va dentro del hueco: la hoja de la puerta o el vidrio.
-static func _add_opening_fill(node: Node3D, item: Dictionary, bottom: float, top: float, length: float) -> void:
+## Lo que va dentro del hueco: marco + hoja de la puerta, o vidrio + marco.
+## `top` puede venir recortado (vista de paredes bajas); `hole_top` es el real.
+static func _add_opening_fill(node: Node3D, item: Dictionary, bottom: float, top: float, hole_top: float, length: float) -> void:
 	if top - bottom <= 0.01:
 		return
 	var color := Color.from_string(item.get("color", "#ffffff"), Color.WHITE)
-	var center := Vector3(0, (bottom + top) / 2.0, 0)
+	var height := top - bottom
+	var depth := HouseGrid.WALL_THICKNESS + 0.02
+	var show_head := top >= hole_top - 0.001
 	if item.get("kind", "") == "door":
-		add_box(node, center, Vector3(length * 0.85, top - bottom - 0.02, 0.06), material(color))
+		# Marco a los lados y arriba; la hoja llena el resto del hueco.
+		var frame_mat := material(color.darkened(0.35))
+		for side in [-1, 1]:
+			add_box(node, Vector3(side * (length - DOOR_FRAME) / 2.0, bottom + height / 2.0, 0),
+				Vector3(DOOR_FRAME, height, depth), frame_mat)
+		var leaf_height := height
+		if show_head:
+			add_box(node, Vector3(0, top - DOOR_FRAME / 2.0, 0), Vector3(length, DOOR_FRAME, depth), frame_mat)
+			leaf_height -= DOOR_FRAME
+		add_box(node, Vector3(0, bottom + leaf_height / 2.0, 0), Vector3(length - DOOR_FRAME * 2.0, leaf_height, 0.06), material(color))
 		# Manija.
-		add_box(node, Vector3(length * 0.28, bottom + 1.0, 0), Vector3(0.08, 0.04, 0.12), material(color.darkened(0.5)))
+		if bottom + 1.0 < top:
+			add_box(node, Vector3(length / 2.0 - DOOR_FRAME - 0.1, bottom + 1.0, 0), Vector3(0.08, 0.04, 0.12), material(color.darkened(0.5)))
 	else:
-		color.a = 0.45
-		add_box(node, center, Vector3(length, top - bottom, 0.03), transparent_material(color))
-		# Marco de abajo y de arriba.
-		var frame_mat := material(Color.WHITE)
-		add_box(node, Vector3(0, bottom + 0.03, 0), Vector3(length, 0.06, HouseGrid.WALL_THICKNESS + 0.04), frame_mat)
+		_add_window_glass(node, item, Vector3.ZERO, Vector3(length, 0, 0.03), bottom, top, show_head, Vector3(length, 0, depth + 0.02))
+
+
+## Vidrio de ventana con repisa abajo (y marco arriba si se ve).
+## `glass_size` y `frame_size` traen el alto en 0: se completa aquí.
+static func _add_window_glass(node: Node3D, item: Dictionary, base: Vector3, glass_size: Vector3,
+		bottom: float, top: float, show_head: bool, frame_size: Vector3) -> void:
+	var color := Color.from_string(item.get("color", "#ffffff"), Color.WHITE)
+	color.a = 0.45
+	glass_size.y = top - bottom
+	add_box(node, base + Vector3(0, (bottom + top) / 2.0, 0), glass_size, transparent_material(color))
+	var frame_mat := material(Color.WHITE)
+	frame_size.y = 0.06
+	add_box(node, base + Vector3(0, bottom + 0.03, 0), frame_size, frame_mat)
+	if show_head:
+		add_box(node, base + Vector3(0, top - 0.03, 0), frame_size, frame_mat)
 
 
 ## Columna que tapa la esquina donde se juntan paredes.
-static func build_post(vertex: Vector2i, color: Color, visible_height: float) -> Node3D:
+## Si está entre dos ventanas iguales en línea (`window_item`), la columna se
+## abre y el vidrio sigue de largo: las ventanas quedan unidas.
+static func build_post(vertex: Vector2i, color: Color, visible_height: float,
+		window_item: Dictionary = {}, horizontal := true) -> Node3D:
 	var node := Node3D.new()
 	var t := HouseGrid.WALL_THICKNESS
-	add_box(node, Vector3(vertex.x, visible_height / 2.0, vertex.y), Vector3(t, visible_height, t), material(color))
+	var center := Vector3(vertex.x, 0, vertex.y)
+	var parts: Array = [[0.0, HouseGrid.WALL_HEIGHT]]
+	if not window_item.is_empty():
+		var hole: Array = window_item.get("opening", [0.9, 2.0])
+		var bottom := float(hole[0])
+		var top := float(hole[1])
+		parts = [[0.0, bottom], [top, HouseGrid.WALL_HEIGHT]]
+		var glass_top := minf(top, visible_height)
+		if glass_top - bottom > 0.01:
+			var glass := Vector3(t, 0, 0.03) if horizontal else Vector3(0.03, 0, t)
+			var frame := Vector3(t, 0, t + 0.04) if horizontal else Vector3(t + 0.04, 0, t)
+			_add_window_glass(node, window_item, center, glass, bottom, glass_top, glass_top >= top, frame)
+	for part in parts:
+		var bottom: float = part[0]
+		var top: float = minf(part[1], visible_height)
+		if top - bottom > 0.01:
+			add_box(node, center + Vector3(0, (bottom + top) / 2.0, 0), Vector3(t, top - bottom, t), material(color))
 	return node
 
 
@@ -210,44 +257,67 @@ static func _build_stairs(node: Node3D, w: float, d: float, mat: Material, side_
 
 
 ## Techo a dos aguas sobre un rectángulo de celdas. Va encima de las paredes.
-static func build_roof(value: Dictionary) -> Node3D:
+## Tiene grosor, y en cada punta una pared triangular de remate (del color de
+## las paredes, `gable_color`) para que no quede un hueco bajo el techo.
+static func build_roof(value: Dictionary, gable_color: Color) -> Node3D:
 	var rect := HouseData.roof_rect(value)
-	var node := MeshInstance3D.new()
-	node.position.y = HouseGrid.WALL_HEIGHT + ROOF_LIFT
-	node.material_override = material(piece_color(value))
 
-	# Se arma con la cumbrera (la parte más alta) a lo largo del lado largo.
+	# Se arma con la cumbrera (la parte más alta) a lo largo del lado largo,
+	# en un sistema "a lo largo" (x) y "a lo ancho" (z), centrado.
 	var along_x := rect.size.x >= rect.size.y
-	var length := float(rect.size.x if along_x else rect.size.y) + ROOF_OVERHANG * 2.0
+	var inner_length := float(rect.size.x if along_x else rect.size.y)
+	var length := inner_length + ROOF_OVERHANG * 2.0
 	var half := float(rect.size.y if along_x else rect.size.x) / 2.0
 	var ridge := half * ROOF_SLOPE
 	var eave := -ROOF_OVERHANG * ROOF_SLOPE
 	var o := half + ROOF_OVERHANG
+	var down := Vector3(0, -ROOF_THICKNESS, 0)
 
-	# Puntos en un sistema "a lo largo" (u) y "a lo ancho" (v), centrados.
-	var u0 := -length / 2.0
-	var u1 := length / 2.0
-	var a := Vector3(u0, eave, -o)
-	var b := Vector3(u1, eave, -o)
-	var c := Vector3(u1, ridge, 0)
-	var dd := Vector3(u0, ridge, 0)
-	var e := Vector3(u0, eave, o)
-	var f := Vector3(u1, eave, o)
+	var a := Vector3(-length / 2.0, eave, -o)
+	var b := Vector3(length / 2.0, eave, -o)
+	var c := Vector3(length / 2.0, ridge, 0)
+	var d := Vector3(-length / 2.0, ridge, 0)
+	var e := Vector3(-length / 2.0, eave, o)
+	var f := Vector3(length / 2.0, eave, o)
+	var n_back := Vector3(0, o, -(ridge - eave)).normalized()
+	var n_front := Vector3(0, o, ridge - eave).normalized()
 
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var n_back := Vector3(0, o, -(ridge - eave)).normalized()
-	var n_front := Vector3(0, o, ridge - eave).normalized()
-	_add_quad(st, a, b, c, dd, n_back)
-	_add_quad(st, e, f, c, dd, n_front)
-	_add_tri(st, a, dd, e, Vector3.LEFT)
-	_add_tri(st, b, c, f, Vector3.RIGHT)
-	# Cara de abajo (se ve desde un nivel de abajo con la vista cortada).
-	_add_quad(st, a, b, f, e, Vector3.DOWN)
-	node.mesh = st.commit()
+	# Las dos caídas, por arriba y por abajo.
+	_add_quad(st, a, b, c, d, n_back)
+	_add_quad(st, e, f, c, d, n_front)
+	_add_quad(st, a + down, b + down, c + down, d + down, -n_back)
+	_add_quad(st, e + down, f + down, c + down, d + down, -n_front)
+	# Cantos: aleros (frente y fondo) y puntas.
+	_add_quad(st, a, b, b + down, a + down, Vector3(0, 0, -1))
+	_add_quad(st, e, f, f + down, e + down, Vector3(0, 0, 1))
+	_add_quad(st, a, d, d + down, a + down, Vector3.LEFT)
+	_add_quad(st, d, e, e + down, d + down, Vector3.LEFT)
+	_add_quad(st, b, c, c + down, b + down, Vector3.RIGHT)
+	_add_quad(st, c, f, f + down, c + down, Vector3.RIGHT)
+	var mesh := st.commit()
+	mesh.surface_set_material(0, material(piece_color(value)))
 
-	node.position.x = rect.position.x + rect.size.x / 2.0
-	node.position.z = rect.position.y + rect.size.y / 2.0
+	# Paredes de remate: triángulos sobre las paredes de las puntas, con el
+	# mismo grosor que una pared. Sus bordes quedan escondidos dentro del techo.
+	var gable := SurfaceTool.new()
+	gable.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var wall_top := -ROOF_LIFT
+	var apex := ridge - ROOF_THICKNESS * 0.5
+	var spread := half + HouseGrid.WALL_THICKNESS / 2.0
+	for side in [-1.0, 1.0]:
+		for face in [-1.0, 1.0]:
+			var x: float = side * inner_length / 2.0 + face * HouseGrid.WALL_THICKNESS / 2.0
+			_add_tri(gable, Vector3(x, wall_top, -spread), Vector3(x, apex, 0), Vector3(x, wall_top, spread),
+				Vector3(face, 0, 0))
+	mesh = gable.commit(mesh)
+	mesh.surface_set_material(1, material(gable_color))
+
+	var node := MeshInstance3D.new()
+	node.mesh = mesh
+	node.position = Vector3(rect.position.x + rect.size.x / 2.0, HouseGrid.WALL_HEIGHT + ROOF_LIFT,
+		rect.position.y + rect.size.y / 2.0)
 	if not along_x:
 		node.rotation.y = PI / 2.0
 	return node

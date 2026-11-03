@@ -48,8 +48,10 @@ func _ready() -> void:
 	EventBus.build_delete_requested.connect(_builder.delete_selected)
 	EventBus.build_level_change_requested.connect(_on_level_change_requested)
 	EventBus.view_mode_cycle_requested.connect(_on_view_mode_cycle_requested)
-	EventBus.undo_requested.connect(history.undo)
-	EventBus.redo_requested.connect(history.redo)
+	EventBus.build_confirm_requested.connect(_builder.confirm_pending)
+	EventBus.build_cancel_requested.connect(_builder.cancel_pending)
+	EventBus.undo_requested.connect(_undo)
+	EventBus.redo_requested.connect(_redo)
 
 	set_mode("build")
 	EventBus.view_mode_changed.emit(_house_view.view_mode)
@@ -60,9 +62,21 @@ func _ready() -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	# Atajos de teclado para probar en la PC: Ctrl+Z deshace, Ctrl+Y rehace.
 	if event.is_action_pressed("ui_undo"):
-		history.undo()
+		_undo()
 	elif event.is_action_pressed("ui_redo"):
-		history.redo()
+		_redo()
+
+
+# Antes de deshacer o rehacer se descarta una selección sin confirmar
+# (se calculó con la casa de antes).
+func _undo() -> void:
+	_builder.cancel_pending()
+	history.undo()
+
+
+func _redo() -> void:
+	_builder.cancel_pending()
+	history.redo()
 
 
 ## Cambia entre construir y vivir.

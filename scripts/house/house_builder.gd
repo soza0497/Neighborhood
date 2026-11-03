@@ -46,6 +46,13 @@ const HINTS := {
 	Tool.MOVE: "Tocá un mueble para elegirlo; arrastralo para moverlo.",
 }
 
+## Herramientas de arrastre (rectángulo o línea). Al soltar NO se aplican:
+## queda una selección con dos manijas (círculos) que se pueden mover, y se
+## aplica con el botón Confirmar. Así el dedo no tapa lo que se construye.
+const HANDLE_TOOLS := [Tool.FOUNDATION, Tool.FLOOR, Tool.WALL, Tool.ROOM, Tool.ROOF]
+## A cuántos píxeles de una manija cuenta como tocarla.
+const HANDLE_PICK_DISTANCE := 70.0
+
 ## Herramientas donde todo el gesto se aplica entero o nada.
 const ALL_OR_NOTHING := [Tool.ROOF, Tool.OPENING, Tool.OBJECT, Tool.MOVE]
 
@@ -73,8 +80,17 @@ var _pressing := false
 ## Dedos apoyados ahora (número de dedo → true), y el que empezó el gesto.
 var _touches: Dictionary = {}
 var _stroke_index := -1
+## Esquinas del rectángulo (celdas) o puntas de la línea (vértices).
 var _start_cell := Vector2i.ZERO
 var _start_vertex := Vector2i.ZERO
+var _end_cell := Vector2i.ZERO
+var _end_vertex := Vector2i.ZERO
+## Hay una selección esperando Confirmar.
+var _awaiting_confirm := false
+## Manija que se está arrastrando: 0 = inicio, 1 = fin, -1 = ninguna.
+var _drag_handle := -1
+## El dedo empezó fuera del lote: ese dedo mueve la cámara.
+var _camera_takeover := false
 var _last_screen_pos := Vector2.ZERO
 ## Mueble que se está arrastrando con la mano, y dónde se agarró.
 var _moving_key := ""
@@ -90,6 +106,7 @@ var _grid: MeshInstance3D
 var _cursor: MeshInstance3D
 var _ghost: Node3D
 var _selection_marker: MeshInstance3D
+var _handles: Array[MeshInstance3D] = []
 ## Piezas reales escondidas mientras se ve el fantasma que las reemplaza.
 var _hidden_nodes: Array[Node3D] = []
 
@@ -181,6 +198,23 @@ func delete_selected() -> void:
 	select_object("")
 
 
+## Botón "Confirmar": aplica la selección que estaba esperando.
+func confirm_pending() -> void:
+	if not _awaiting_confirm:
+		return
+	var ok := _pending_ok
+	var blocked := _pending_blocked
+	_cancel_gesture()
+	_commit(ok, blocked)
+
+
+## Botón "Cancelar": descarta la selección que estaba esperando.
+func cancel_pending() -> void:
+	if _awaiting_confirm:
+		_cancel_gesture()
+		_show_tool_hint()
+
+
 ## Marca un mueble como elegido ("" = ninguno).
 func select_object(key: String) -> void:
 	selected_key = key
@@ -201,11 +235,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				_stroke_index = event.index
 				_begin(event.position)
 			else:
-				_cancel_gesture()  # Segundo dedo: es un gesto de cámara.
+				_on_second_finger()  # Es un gesto de cámara.
 		else:
 			_touches.erase(event.index)
-			if _pressing and event.index == _stroke_index:
-				_finish()
+			if event.index == _stroke_index:
+				_release()
 	elif event is InputEventScreenDrag:
 		# Solo cuenta el dedo que empezó el gesto.
 		if _pressing and event.index == _stroke_index:
@@ -217,8 +251,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
 				_begin(event.position)
-			elif _pressing:
-				_finish()
+			else:
+				_release()
 		elif event is InputEventMouseMotion:
 			if _pressing:
 				_update(event.position)
@@ -226,10 +260,37 @@ func _unhandled_input(event: InputEvent) -> void:
 				_hover(event.position)
 
 
+func _unhandled_key_input(event: InputEvent) -> void:
+	# En la PC: Enter confirma la selección y Escape la cancela.
+	if not active or not _awaiting_confirm:
+		return
+	if event.is_action_pressed("ui_accept"):
+		confirm_pending()
+	elif event.is_action_pressed("ui_cancel"):
+		cancel_pending()
+
+
 ## Empieza un gesto.
 func _begin(screen_pos: Vector2) -> void:
 	_cursor.visible = false
 	_paint_targets.clear()
+
+	# ¿Agarró una manija de la selección que espera confirmación?
+	if _awaiting_confirm:
+		var handle := _handle_at(screen_pos)
+		if handle >= 0:
+			_drag_handle = handle
+			_pressing = true
+			return
+
+	if tool != Tool.MOVE and not _is_on_lot(screen_pos):
+		# Fuera del lote, el dedo mueve la cámara (la selección se conserva).
+		_camera_takeover = true
+		_update_camera_pan()
+		return
+
+	if _awaiting_confirm:
+		_cancel_gesture()  # Tocó otra parte del lote: selección nueva.
 
 	if tool == Tool.MOVE:
 		var key := _pick_object(screen_pos)
@@ -246,12 +307,23 @@ func _begin(screen_pos: Vector2) -> void:
 	_pressing = true
 	_start_cell = _cell_at(screen_pos, true)
 	_start_vertex = _vertex_at(screen_pos)
+	_end_cell = _start_cell
+	_end_vertex = _start_vertex
+	_drag_handle = 1
 	_update(screen_pos)
 
 
 ## El dedo o el mouse se movió durante el gesto.
 func _update(screen_pos: Vector2) -> void:
 	_last_screen_pos = screen_pos
+	if tool in HANDLE_TOOLS and _pressing:
+		if _drag_handle == 0:
+			_start_cell = _cell_at(screen_pos, true)
+			_start_vertex = _vertex_at(screen_pos)
+		else:
+			_end_cell = _cell_at(screen_pos, true)
+			_end_vertex = _vertex_at(screen_pos)
+		_update_handles()
 	var writes := _erase_writes(screen_pos) if erase_mode else _place_writes(screen_pos)
 	var check := _check(writes)
 	_pending_ok = check["ok"]
@@ -259,12 +331,48 @@ func _update(screen_pos: Vector2) -> void:
 	_show_preview()
 
 
-## Termina el gesto: aplica lo que se podía.
+## Se levantó el dedo (o el botón del mouse).
+func _release() -> void:
+	if _camera_takeover:
+		_camera_takeover = false
+		_update_camera_pan()
+	if _pressing:
+		_finish()
+
+
+## Termina el gesto: aplica lo que se podía, o deja la selección esperando.
 func _finish() -> void:
+	if tool in HANDLE_TOOLS:
+		_pressing = false
+		_drag_handle = -1
+		if not _awaiting_confirm:
+			_awaiting_confirm = true
+			EventBus.build_pending_changed.emit(true)
+		_update_handles()
+		if _pending_blocked.is_empty():
+			EventBus.build_hint.emit("Mové los círculos para ajustar y tocá «Confirmar».")
+		else:
+			EventBus.build_hint.emit(_blocked_hint() + " Lo rojo no se va a poner.")
+		return
+
 	var ok := _pending_ok
 	var blocked := _pending_blocked
 	_cancel_gesture()
+	_commit(ok, blocked)
 
+
+## Un segundo dedo: deja de construir (la cámara toma el gesto), pero una
+## selección que espera Confirmar se conserva.
+func _on_second_finger() -> void:
+	if _awaiting_confirm:
+		_pressing = false
+		_drag_handle = -1
+	else:
+		_cancel_gesture()
+
+
+## Aplica las escrituras como un paso de deshacer y avisa qué pasó.
+func _commit(ok: Array, blocked: Array) -> void:
 	# Lo nuevo recibe su id definitivo ahora.
 	for w in ok:
 		if w["key"] == NEW_KEY:
@@ -272,18 +380,15 @@ func _finish() -> void:
 	history.commit(ok)
 
 	if not blocked.is_empty():
-		if erase_mode:
-			EventBus.build_hint.emit("Hay piezas que no se pueden borrar: tienen algo encima.")
-		elif tool == Tool.OPENING:
-			EventBus.build_hint.emit("Las puertas y ventanas van sobre una pared.")
-		else:
-			EventBus.build_hint.emit("No se puede ahí: falta apoyo (cimientos, piso o pared) o hay algo en el camino.")
+		EventBus.build_hint.emit(_blocked_hint())
 	elif not ok.is_empty():
 		_show_tool_hint()
 
 
 ## Mouse moviéndose sin apretar (solo en la PC): muestra dónde caería.
 func _hover(screen_pos: Vector2) -> void:
+	if _awaiting_confirm:
+		return
 	match tool:
 		Tool.OBJECT, Tool.OPENING:
 			if not erase_mode:
@@ -309,11 +414,16 @@ func _hover(screen_pos: Vector2) -> void:
 
 func _cancel_gesture() -> void:
 	_pressing = false
+	_drag_handle = -1
+	if _awaiting_confirm:
+		_awaiting_confirm = false
+		EventBus.build_pending_changed.emit(false)
 	_paint_targets.clear()
 	_pending_ok = []
 	_pending_blocked = []
 	_moving_key = ""
 	_clear_preview()
+	_update_handles()
 	_update_camera_pan()
 
 
@@ -322,7 +432,7 @@ func _cancel_gesture() -> void:
 ## Escrituras para PONER según la herramienta y dónde está el dedo.
 func _place_writes(screen_pos: Vector2) -> Array:
 	var writes: Array = []
-	var cell := _cell_at(screen_pos, true)
+	var cell := _end_cell
 	match tool:
 		Tool.FOUNDATION:
 			for c in HouseGrid.cells_in_rect(_start_cell, cell):
@@ -331,7 +441,7 @@ func _place_writes(screen_pos: Vector2) -> Array:
 			for c in HouseGrid.cells_in_rect(_start_cell, cell):
 				_add_if_new(writes, level, "floors", HouseGrid.cell_key(c), {"item": item["id"]})
 		Tool.WALL:
-			for edge in HouseGrid.edges_in_line(_start_vertex, _vertex_at(screen_pos)):
+			for edge in HouseGrid.edges_in_line(_start_vertex, _end_vertex):
 				_add_wall(writes, edge, item["id"])
 		Tool.ROOM:
 			# Primero el piso y después las paredes (las de arriba se apoyan en él).
@@ -376,7 +486,7 @@ func _place_writes(screen_pos: Vector2) -> Array:
 ## Escrituras para QUITAR según la herramienta y dónde está el dedo.
 func _erase_writes(screen_pos: Vector2) -> Array:
 	var writes: Array = []
-	var cell := _cell_at(screen_pos, true)
+	var cell := _end_cell
 	match tool:
 		Tool.FOUNDATION:
 			for c in HouseGrid.cells_in_rect(_start_cell, cell):
@@ -385,7 +495,7 @@ func _erase_writes(screen_pos: Vector2) -> Array:
 			for c in HouseGrid.cells_in_rect(_start_cell, cell):
 				_add_removal(writes, level, "floors", HouseGrid.cell_key(c))
 		Tool.WALL:
-			for edge in HouseGrid.edges_in_line(_start_vertex, _vertex_at(screen_pos)):
+			for edge in HouseGrid.edges_in_line(_start_vertex, _end_vertex):
 				_add_removal(writes, level, "walls", edge)
 		Tool.ROOM:
 			for edge in HouseGrid.edges_around_rect(_start_cell, cell):
@@ -592,6 +702,46 @@ func _cell_at(screen_pos: Vector2, clamp_to_lot: bool) -> Vector2i:
 	return cell
 
 
+## ¿El punto de la pantalla cae sobre el lote (con medio metro de margen)?
+func _is_on_lot(screen_pos: Vector2) -> bool:
+	var point: Variant = _point_on_level(screen_pos)
+	if point == null:
+		return false
+	return point.x > -0.5 and point.z > -0.5 \
+		and point.x < HouseGrid.LOT_SIZE.x + 0.5 and point.z < HouseGrid.LOT_SIZE.y + 0.5
+
+
+## Manija bajo la pantalla: 0 = inicio, 1 = fin, -1 = ninguna.
+func _handle_at(screen_pos: Vector2) -> int:
+	var cam := get_viewport().get_camera_3d()
+	var best := -1
+	var best_dist := HANDLE_PICK_DISTANCE
+	for i in _handles.size():
+		if not _handles[i].visible:
+			continue
+		var dist := cam.unproject_position(_handles[i].global_position).distance_to(screen_pos)
+		if dist < best_dist:
+			best_dist = dist
+			best = i
+	return best
+
+
+## Pone las manijas en las esquinas (o puntas) de la selección.
+func _update_handles() -> void:
+	var shown := tool in HANDLE_TOOLS and (_pressing or _awaiting_confirm)
+	var y := HouseGrid.level_y(level) + 0.12
+	for i in _handles.size():
+		_handles[i].visible = shown
+		if not shown:
+			continue
+		if tool == Tool.WALL:
+			var v := _start_vertex if i == 0 else _end_vertex
+			_handles[i].position = Vector3(v.x, y, v.y)
+		else:
+			var c := _start_cell if i == 0 else _end_cell
+			_handles[i].position = HouseGrid.cell_center(c) + Vector3(0, y, 0)
+
+
 ## Esquina de la cuadrícula más cercana a la pantalla.
 func _vertex_at(screen_pos: Vector2) -> Vector2i:
 	var point: Variant = _point_on_level(screen_pos)
@@ -658,7 +808,35 @@ func _pick_object(screen_pos: Vector2) -> String:
 func _update_camera_pan() -> void:
 	if camera == null:
 		return
-	camera.single_finger_pan = not active or tool == Tool.NONE or (tool == Tool.MOVE and _moving_key == "")
+	camera.single_finger_pan = _camera_takeover or not active or tool == Tool.NONE \
+		or (tool == Tool.MOVE and _moving_key == "")
+
+
+## Explica por qué algo salió en rojo, según la herramienta y el piso.
+func _blocked_hint() -> String:
+	if erase_mode:
+		return "Hay piezas que no se pueden borrar: tienen algo encima."
+	var upstairs := level > 0
+	match tool:
+		Tool.FOUNDATION:
+			return "Los cimientos van solo en la planta baja."
+		Tool.FLOOR:
+			if upstairs:
+				return "Arriba, el piso necesita piso o una pared justo debajo."
+			return "En la planta baja, el piso va sobre cimientos."
+		Tool.WALL, Tool.ROOM:
+			if upstairs:
+				return "Arriba, las paredes van sobre piso o sobre otra pared."
+			return "En la planta baja, las paredes van junto a cimientos."
+		Tool.OPENING:
+			return "Las puertas y ventanas van sobre una pared."
+		Tool.ROOF:
+			return "El techo tiene que quedar dentro del lote."
+		Tool.OBJECT, Tool.MOVE:
+			if item.get("kind", "") == "stairs":
+				return "La escalera va en la planta baja, sobre piso y sin paredes en el medio."
+			return "No entra: necesita piso libre y sin paredes en el medio."
+	return "No se puede ahí."
 
 
 func _show_tool_hint() -> void:
@@ -700,6 +878,25 @@ func _create_helpers() -> void:
 	_ghost = Node3D.new()
 	_ghost.name = "Ghost"
 	add_child(_ghost)
+
+	# Manijas de la selección: se ven siempre, aunque haya paredes delante.
+	var disc := CylinderMesh.new()
+	disc.top_radius = 0.4
+	disc.bottom_radius = 0.4
+	disc.height = 0.05
+	for color in [Color(1, 1, 1), Color(1, 0.8, 0.1)]:
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = color
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.no_depth_test = true
+		mat.render_priority = 10
+		var handle := MeshInstance3D.new()
+		handle.mesh = disc
+		handle.material_override = mat
+		handle.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		handle.visible = false
+		add_child(handle)
+		_handles.append(handle)
 
 
 func _make_flat_marker(marker_name: String, mesh: Mesh, color: Color) -> MeshInstance3D:

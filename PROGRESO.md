@@ -1,6 +1,6 @@
 # Progreso
 
-## Fase actual: 1 — Constructor de casas (código listo; falta probar en el teléfono)
+## Fase actual: 1 — Constructor de casas (ajustes de la prueba listos; falta probarlos)
 
 ### Fase 0 — cerrada (2026-11-03)
 Base del proyecto, cámara, guardado, exportación a Android. APK probado en el
@@ -25,18 +25,32 @@ Todo en un solo tramo (1A + 1B + 1C):
 - Catálogo: 29 piezas en 4 categorías.
 - Pruebas: `tests/test_house.tscn` (41 pruebas, todas pasan) y
   `tests/visual_demo.tscn` (arma una casa, capturas, mouse real: OK).
-- APK de depuración exportado sin errores (versión 0.1.0).
+- APK de depuración exportado sin errores (versión 0.1.0)### Prueba en el teléfono (2026-11-03)
+- 60 FPS fijos con una casa de dos pisos. Le gustó ("se siente entretenido").
+- Ajustes pedidos, ya hechos:
+  1. Piso de arriba se puede poner primero (se apoya en paredes de abajo) +
+     avisos que explican por qué algo sale rojo.
+  2. La puerta llena todo su hueco (marco + hoja).
+  3. Ventanas iguales seguidas se unen solas.
+  4. Techo con grosor y paredes de remate en las puntas.
+  5. Tocar fuera del lote mueve la cámara (no busca la celda más cercana).
+  6. Cimientos/piso/pared/cuarto/techo: selección con manijas + Confirmar.
+- Pruebas: 44 automáticas OK; demo: mouse real, fuera del lote y manijas OK.
 
 ### Falta para cerrar la Fase 1
-1. [Dueño] Instalar el APK nuevo y probar con el dedo (checklist del chat).
-2. [Dueño] Contar los FPS con una casa de dos pisos amueblada (meta: 30).
-3. [Claude] Corregir lo que salga; si los FPS no llegan, juntar mallas
-   (ver DECISIONES, "Rendimiento").
+1. [Dueño] Instalar el APK nuevo y probar los 6 ajustes.
+2. [Claude] Corregir lo que salga; commit "Fase 1 cerrada".
 
 ### Próximo paso exacto
-Con el teléfono conectado: exportar con
-`godot --headless --path . --export-debug "Android" build/neighborhood.apk`
-e instalar con `~/Android/Sdk/platform-tools/adb install -r build/neighborhood.apk`.
+Instalar con `~/Android/Sdk/platform-tools/adb install -r build/neighborhood.apk`
+(el APK ya está exportado) y probar.
+
+### Pendientes anotados para más adelante
+- Tutorial de primeros pasos (el dueño no adivinó "cuarto antes que piso").
+- Mueble que se arrastra queda tapado por el dedo (podría ir más arriba).
+- Interruptor para no unir ventanas, si hace falta.
+
+.
 
 ### Preguntas abiertas para el dueño
 - ¿Horizontal te parece bien? (ver DECISIONES.md, "Orientación").

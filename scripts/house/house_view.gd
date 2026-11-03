@@ -106,7 +106,7 @@ func make_piece(level: int, layer: String, key: String, value: Dictionary, previ
 			return HousePieces.build_object(value)
 		"roofs":
 			if view_mode == ViewMode.FULL or preview:
-				return HousePieces.build_roof(value)
+				return HousePieces.build_roof(value, _gable_color(level, value))
 	return null
 
 
@@ -115,6 +115,9 @@ func _on_piece_changed(level: int, layer: String, key: String) -> void:
 	if layer == "walls":
 		for vertex in HouseGrid.edge_vertices(key):
 			_refresh_post(level, vertex)
+		# Los remates del techo copian el color de las paredes.
+		for roof_key in house.get_layer(level, "roofs"):
+			_refresh_piece(level, "roofs", roof_key)
 
 
 ## Quita el 3D viejo de una pieza y pone el nuevo (si la pieza existe).
@@ -138,13 +141,54 @@ func _refresh_post(level: int, vertex: Vector2i) -> void:
 	if _posts.has(id):
 		_posts[id].queue_free()
 		_posts.erase(id)
+	var walls: Array = []
 	for edge in HouseGrid.vertex_edges(vertex):
+		if house.has_piece(level, "walls", edge):
+			walls.append(edge)
+	if walls.is_empty():
+		return
+	var first: Dictionary = house.get_piece(level, "walls", walls[0])
+	var window := _shared_window(level, walls)
+	var post := HousePieces.build_post(vertex, HousePieces.piece_color(first), wall_height(),
+		window, HouseGrid.is_edge_horizontal(walls[0]))
+	_levels[level].add_child(post)
+	_posts[id] = post
+
+
+## Si en una esquina se juntan justo dos paredes en línea recta con la misma
+## ventana, devuelve esa ventana (del catálogo) para unirlas. Si no, {}.
+func _shared_window(level: int, walls: Array) -> Dictionary:
+	if walls.size() != 2:
+		return {}
+	if HouseGrid.is_edge_horizontal(walls[0]) != HouseGrid.is_edge_horizontal(walls[1]):
+		return {}
+	var opening_a: String = house.get_piece(level, "walls", walls[0]).get("opening", "")
+	var opening_b: String = house.get_piece(level, "walls", walls[1]).get("opening", "")
+	if opening_a == "" or opening_a != opening_b:
+		return {}
+	var item := Catalog.get_item(opening_a)
+	return item if item.get("kind", "") == "window" else {}
+
+
+## Color para los remates de un techo: el de una pared que esté debajo de
+## una de sus puntas, o si no hay, el de cualquier pared del contorno.
+func _gable_color(level: int, roof: Dictionary) -> Color:
+	var rect := HouseData.roof_rect(roof)
+	var lo := rect.position
+	var hi := rect.end - Vector2i.ONE
+	var candidates: Array[String] = []
+	if rect.size.x >= rect.size.y:
+		candidates.append_array(HouseGrid.edges_in_line(Vector2i(lo.x, lo.y), Vector2i(lo.x, hi.y + 1)))
+		candidates.append_array(HouseGrid.edges_in_line(Vector2i(hi.x + 1, lo.y), Vector2i(hi.x + 1, hi.y + 1)))
+	else:
+		candidates.append_array(HouseGrid.edges_in_line(Vector2i(lo.x, lo.y), Vector2i(hi.x + 1, lo.y)))
+		candidates.append_array(HouseGrid.edges_in_line(Vector2i(lo.x, hi.y + 1), Vector2i(hi.x + 1, hi.y + 1)))
+	candidates.append_array(HouseGrid.edges_around_rect(lo, hi))
+	for edge in candidates:
 		var wall: Variant = house.get_piece(level, "walls", edge)
 		if wall != null:
-			var post := HousePieces.build_post(vertex, HousePieces.piece_color(wall), wall_height())
-			_levels[level].add_child(post)
-			_posts[id] = post
-			return
+			return HousePieces.piece_color(wall)
+	return HousePieces.piece_color({"item": "wall_basic"})
 
 
 func _node_id(level: int, layer: String, key: String) -> String:

@@ -24,6 +24,13 @@ content_margin_top = 6.0
 content_margin_right = 14.0
 content_margin_bottom = 6.0
 
+[sub_resource type="StyleBoxFlat" id="Style_confirm"]
+bg_color = Color(0.2, 0.62, 0.32, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hud")
 
@@ -173,6 +180,23 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
+
+[node name="ConfirmButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+theme_override_styles/normal = SubResource("Style_confirm")
+theme_override_styles/hover = SubResource("Style_confirm")
+theme_override_styles/pressed = SubResource("Style_confirm")
+text = "Confirmar"
+
+[node name="CancelButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Cancelar"
 
 [node name="RotateButton" type="Button" parent="Root/Layout/BottomBar/Rows/CategoryRow"]
 unique_name_in_owner = true

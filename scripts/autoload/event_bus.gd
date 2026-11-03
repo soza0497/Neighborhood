@@ -43,6 +43,8 @@ signal build_delete_requested
 signal build_level_change_requested(delta: int)
 ## Pasar a la siguiente vista de paredes (completa → sin techo → bajas).
 signal view_mode_cycle_requested
+signal build_confirm_requested
+signal build_cancel_requested
 signal undo_requested
 signal redo_requested
 
@@ -50,6 +52,8 @@ signal redo_requested
 ## Texto de ayuda para mostrar arriba.
 signal build_hint(text: String)
 signal build_level_changed(level: int)
+## Hay (o no) una selección esperando Confirmar.
+signal build_pending_changed(has_pending: bool)
 ## Hay (o no) un mueble elegido con la mano.
 signal build_selection_changed(has_selection: bool)
 ## Cambió la vista de paredes (ver HouseView.ViewMode).
