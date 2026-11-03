@@ -18,11 +18,18 @@ El "estado" de un jugador es una tabla:
   history  { undo = {pasos}, redo = {pasos} }  (deshacer / rehacer)
   work     { job_id, applied_job, resume_ready_at, shift_job,
              shift_started_unix, last_shift_unix, last_seen_unix }
+Desde la Fase 5 (casa compartida), además:
+  actor    id del jugador que hace el cambio (su dinero es `money`)
+  fund     caja de la casa común (nil = no comparte casa)
+  others   { [id] = dinero } de otros jugadores que este cambio toca (por
+           ejemplo, al deshacer lo que hizo la pareja se le devuelve a ella)
+  check_support  true = revisar las reglas de apoyo (neighborhood_house.lua)
 Cada función cambia el estado EN EL LUGAR. Si algo no se puede, llama a
 rules.refuse("texto para el jugador") y el módulo no guarda nada.
 ]]
 
 local rules = {}
+local house_rules = require("neighborhood_house")
 
 -- Medidas de la casa: las mismas que scripts/house/house_grid.gd.
 rules.LOT_SIZE = 32
@@ -103,6 +110,115 @@ rules.copy = copy
 
 local function count(list)
   return list and #list or 0
+end
+
+
+-- --- Dinero: billetera propia y caja de la casa (Fase 5) ---
+
+-- Dinero de un jugador: el del que hace el cambio, o el de otro (`others`).
+local function money_of(state, user_id)
+  if user_id == nil or user_id == state.actor then
+    return state.money
+  end
+  return (state.others or {})[user_id] or 0
+end
+
+local function set_money(state, user_id, value)
+  if user_id == nil or user_id == state.actor then
+    state.money = value
+  else
+    state.others[user_id] = value
+  end
+end
+
+-- Cómo se reparte un cambio NUEVO de dinero (negativo = se paga): en la
+-- casa compartida se paga primero con la caja y lo que falta con la
+-- billetera; lo que se devuelve (vender) va a la caja. Sin casa compartida,
+-- todo es de la billetera. Devuelve (cambio de la caja, cambio de la billetera).
+function rules.split_for(state, change)
+  if state.fund == nil then
+    return 0, change
+  end
+  if change >= 0 then
+    return change, 0
+  end
+  local from_fund = math.min(state.fund, -change)
+  return -from_fund, change + from_fund
+end
+
+-- Aplica un cambio de dinero a la caja y a la billetera de `user_id` (nil =
+-- el que hace el cambio). Si la caja no alcanza, lo que falta sale de la
+-- billetera; si tampoco alcanza, refuse(`text`). Devuelve lo que cambió de
+-- verdad cada una (caja, billetera).
+function rules.apply_split(state, fund_change, own_change, user_id, text)
+  if state.fund == nil then
+    own_change = own_change + fund_change
+    fund_change = 0
+  elseif state.fund + fund_change < 0 then
+    own_change = own_change + state.fund + fund_change
+    fund_change = -state.fund
+  end
+  local money = money_of(state, user_id)
+  if money + own_change < 0 then
+    refuse(text or string.format("Te faltan $%d.", -own_change - money), { reason = "money" })
+  end
+  if state.fund ~= nil then
+    state.fund = state.fund + fund_change
+  end
+  set_money(state, user_id, money + own_change)
+  return fund_change, own_change
+end
+
+-- Lo que se pagó en un paso viejo (antes de la Fase 5 solo había `money`).
+local function step_split(step)
+  if step.money_fund == nil and step.money_own == nil then
+    return 0, step.money or 0
+  end
+  return step.money_fund or 0, step.money_own or 0
+end
+rules.step_split = step_split
+
+-- ¿Dos piezas son la misma? (la hora de fin de obra no cuenta: acelerar no
+-- cambia la pieza)
+local function same_value(a, b)
+  if type(a) ~= "table" or type(b) ~= "table" then
+    return a == b
+  end
+  for k, v in pairs(a) do
+    if k ~= "ready_at" and not same_value(v, b[k]) then
+      return false
+    end
+  end
+  for k, v in pairs(b) do
+    if k ~= "ready_at" and a[k] == nil and v ~= nil then
+      return false
+    end
+  end
+  return true
+end
+rules.same_value = same_value
+
+-- ¿La casa sigue como la dejaron estas escrituras? (si alguien las cambió
+-- después, no se pueden deshacer sin pisar lo que hizo el otro)
+function rules.writes_match(house, writes)
+  for _, w in ipairs(writes) do
+    local current = house.levels[w.level + 1][w.layer][w.key]
+    if not same_value(current, w.value) then
+      return false
+    end
+  end
+  return true
+end
+
+-- Revisa las reglas de apoyo (si el estado lo pide).
+local function check_support(data, state, writes, text, house)
+  if not state.check_support then
+    return
+  end
+  local ok = house_rules.check_batch(data, house or state.house, writes)
+  if not ok then
+    refuse(text or "Eso no tiene dónde apoyarse, o dejaría algo en el aire.", { reason = "support" })
+  end
 end
 
 
@@ -381,22 +497,37 @@ local function push_step(history, step, encode)
   history.redo = {}
 end
 
--- Construir: cobra, pone obras, da experiencia por lo nuevo y guarda el paso
--- de deshacer. `encode` (opcional) mide el tamaño del historial.
--- Devuelve {writes = escrituras aplicadas, money_change, xp_gained}.
-function rules.build(data, state, writes, now, encode)
+-- Revisa y limpia todas las escrituras que mandó el teléfono (rechaza el
+-- cambio entero si alguna no sirve).
+function rules.clean_writes(data, writes)
   if type(writes) ~= "table" or count(writes) == 0 then
     refuse("No hay nada que construir.")
   end
   if count(writes) > rules.MAX_WRITES then
     refuse("Es demasiado de una vez: hacelo por partes.")
   end
+  local clean = {}
+  for _, raw in ipairs(writes) do
+    table.insert(clean, clean_write(data, raw))
+  end
+  return clean
+end
+
+-- Construir: cobra, pone obras, da experiencia por lo nuevo y guarda el paso
+-- de deshacer. `encode` (opcional) mide el tamaño del historial.
+-- En la casa compartida se paga primero con la caja (ver split_for).
+-- Devuelve {writes = escrituras aplicadas, money_change, money_fund,
+-- money_own, xp_gained}.
+function rules.build(data, state, writes, now, encode)
+  local clean = rules.clean_writes(data, writes)
+  -- Las reglas de apoyo se revisan al final (con la casa de antes), para
+  -- que primero se avise lo más útil: nivel y dinero.
+  local original = state.check_support and copy(state.house) or nil
   local level = rules.level_for_xp(data, state.xp)
   local house = state.house
   local applied, inverse = {}, {}
   local money_change, xp_gained = 0, 0
-  for _, raw in ipairs(writes) do
-    local w = clean_write(data, raw)
+  for _, w in ipairs(clean) do
     local old = get_piece(house, w)
     if w.value ~= nil then
       for _, field in ipairs({ "item", "opening" }) do
@@ -426,46 +557,79 @@ function rules.build(data, state, writes, now, encode)
       end
     end
   end
-  if state.money + money_change < 0 then
-    refuse(string.format("Te faltan $%d para construir esto.", -money_change - state.money),
+  local available = state.money + (state.fund or 0)
+  if available + money_change < 0 then
+    local where = state.fund ~= nil and " (entre la caja de la casa y tu billetera)" or ""
+    refuse(string.format("Te faltan $%d para construir esto%s.", -money_change - available, where),
       { reason = "money" })
   end
-  state.money = state.money + money_change
+  check_support(data, state, clean, nil, original)
+  local fund_change, own_change = rules.split_for(state, money_change)
+  rules.apply_split(state, fund_change, own_change)
   state.xp = state.xp + xp_gained
-  push_step(state.history, { writes = applied, inverse = inverse, money = money_change }, encode)
-  return { writes = applied, money_change = money_change, xp_gained = xp_gained }
+  push_step(state.history, { writes = applied, inverse = inverse, money = money_change,
+    money_fund = fund_change, money_own = own_change }, encode)
+  return { writes = applied, money_change = money_change, money_fund = fund_change, money_own = own_change,
+    xp_gained = xp_gained }
 end
 
--- Deshacer el último paso: devuelve EXACTAMENTE lo que se cobró.
-function rules.undo(state)
+-- Deshacer el último paso: devuelve EXACTAMENTE lo que se cobró (a la caja
+-- lo que salió de la caja, a la billetera lo de la billetera).
+-- Con dos personas editando: si alguien cambió después esas piezas, no se
+-- deshace (pisaría lo del otro). `data` (opcional) para las reglas de apoyo.
+function rules.undo(state, data)
   local step = state.history.undo[#state.history.undo]
   if step == nil then
     refuse("No hay nada para deshacer.")
   end
-  if state.money - step.money < 0 then
-    refuse("No alcanza el dinero para deshacer esto.", { reason = "money" })
+  if not rules.writes_match(state.house, step.writes) then
+    -- Alguien (la pareja) cambió esas piezas después: deshacer pisaría lo
+    -- suyo. El paso se descarta (si no, trabaría los anteriores).
+    table.remove(state.history.undo)
+    return { writes = {}, money_change = 0, skipped = true,
+      message = "Eso ya lo cambiaron después: se quitó de deshacer." }
   end
+  if data ~= nil then
+    check_support(data, state, step.inverse, "No se puede deshacer: algo quedaría en el aire.")
+  end
+  local mf, mo = step_split(step)
+  local fund_change, own_change = rules.apply_split(state, -mf, -mo, nil, "No alcanza el dinero para deshacer esto.")
   table.remove(state.history.undo)
   rules.apply_writes(state.house, step.inverse)
-  state.money = state.money - step.money
+  -- Rehacer revierte exactamente lo que hizo este deshacer.
+  step.money_fund, step.money_own, step.money = -fund_change, -own_change, -(fund_change + own_change)
   table.insert(state.history.redo, step)
-  return { writes = step.inverse, money_change = -step.money }
+  return { writes = step.inverse, money_change = fund_change + own_change, money_fund = fund_change,
+    money_own = own_change }
 end
 
 -- Rehacer: vuelve a cobrar lo mismo.
-function rules.redo(state)
+function rules.redo(state, data)
   local step = state.history.redo[#state.history.redo]
   if step == nil then
     refuse("No hay nada para rehacer.")
   end
-  if state.money + step.money < 0 then
-    refuse(string.format("Te faltan $%d para rehacerlo.", -step.money - state.money), { reason = "money" })
+  if not rules.writes_match(state.house, step.inverse) then
+    table.remove(state.history.redo)
+    return { writes = {}, money_change = 0, skipped = true,
+      message = "Eso ya lo cambiaron después: se quitó de rehacer." }
   end
+  if data ~= nil then
+    check_support(data, state, step.writes, "No se puede rehacer: algo quedaría en el aire.")
+  end
+  local mf, mo = step_split(step)
+  local total = mf + mo
+  local available = state.money + (state.fund or 0)
+  if total < 0 and available + total < 0 then
+    refuse(string.format("Te faltan $%d para rehacerlo.", -total - available), { reason = "money" })
+  end
+  local fund_change, own_change = rules.apply_split(state, mf, mo)
   table.remove(state.history.redo)
   rules.apply_writes(state.house, step.writes)
-  state.money = state.money + step.money
+  step.money_fund, step.money_own, step.money = fund_change, own_change, fund_change + own_change
   table.insert(state.history.undo, step)
-  return { writes = step.writes, money_change = step.money }
+  return { writes = step.writes, money_change = fund_change + own_change, money_fund = fund_change,
+    money_own = own_change }
 end
 
 -- Obras en marcha: lista de {level, layer, key, ready_at}.
@@ -496,8 +660,9 @@ function rules.accelerate_builds(data, state, now)
     seconds = seconds + p.ready_at - now
   end
   local cost = rules.accelerate_cost(data, seconds)
-  if state.money < cost then
-    refuse(string.format("Te faltan $%d para acelerar.", cost - state.money), { reason = "money" })
+  local available = state.money + (state.fund or 0)
+  if available < cost then
+    refuse(string.format("Te faltan $%d para acelerar.", cost - available), { reason = "money" })
   end
   local writes = {}
   for _, p in ipairs(pending) do
@@ -506,8 +671,9 @@ function rules.accelerate_builds(data, state, now)
     table.insert(writes, { level = p.level, layer = p.layer, key = p.key, value = value })
   end
   rules.apply_writes(state.house, writes)
-  state.money = state.money - cost
-  return { writes = writes, money_change = -cost }
+  local fund_change, own_change = rules.split_for(state, -cost)
+  rules.apply_split(state, fund_change, own_change)
+  return { writes = writes, money_change = -cost, money_fund = fund_change, money_own = own_change }
 end
 
 
@@ -573,6 +739,18 @@ function rules.job_quit(state)
   return {}
 end
 
+-- Cobra un sueldo: va a la billetera, o a la caja de la casa si el jugador
+-- eligió "unir ingresos" (y vive en una casa compartida). Devuelve true si
+-- fue a la caja.
+function rules.add_income(state, amount)
+  if state.pool_income and state.fund ~= nil then
+    state.fund = state.fund + amount
+    return true
+  end
+  state.money = state.money + amount
+  return false
+end
+
 function rules.shift_pay(job)
   return math.floor(num(job.pay_per_hour) or 0) * math.floor(num(job.shift_hours) or 0)
 end
@@ -615,11 +793,11 @@ local function pay_shift(data, state, now)
   end
   local pay = rules.shift_pay(job)
   local xp = math.floor(num(job.xp_per_shift) or 0)
-  state.money = state.money + pay
+  local to_fund = rules.add_income(state, pay)
   state.xp = state.xp + xp
   work.shift_started_unix = 0
   work.shift_job = ""
-  return { pay = pay, xp_gained = xp, money_change = pay }
+  return { pay = pay, xp_gained = xp, money_change = to_fund and 0 or pay, to_fund = to_fund }
 end
 
 function rules.shift_complete(data, state, now)
@@ -647,7 +825,8 @@ function rules.settle(data, state, now)
   local paid, left = pay_shift(data, state, now)
   if paid ~= nil then
     result.pending_pay = paid.pay
-    result.money_change = paid.pay
+    result.money_change = paid.money_change
+    result.to_fund = paid.to_fund
     result.xp_gained = paid.xp_gained
   elseif left ~= nil then
     result.pending_seconds_left = math.ceil(left)
@@ -659,17 +838,171 @@ function rules.settle(data, state, now)
     if shifts > 0 then
       local pay = rules.shift_pay(job) * shifts
       local xp = math.floor(num(job.xp_per_shift) or 0) * shifts
-      state.money = state.money + pay
-      state.xp = state.xp + xp
+      result.to_fund = rules.add_income(state, pay) or result.to_fund
       result.offline_shifts = shifts
       result.offline_pay = pay
-      result.money_change = result.money_change + pay
+      state.xp = state.xp + xp
+      result.money_change = result.money_change + (result.to_fund and 0 or pay)
       result.xp_gained = result.xp_gained + xp
     end
   end
   work.last_seen_unix = now
   return result
 end
+
+-- --- Casa compartida (Fase 5): historial, pedidos y caja ---
+
+-- El "hogar" vive junto a la casa (storage game/home del dueño):
+--   rev       número que sube con cada cambio (para que los teléfonos sepan
+--             si están al día)
+--   fund      caja de la casa común (dinero)
+--   members   ids de quienes viven ahí
+--   log       historial: {id, rev, by, by_name, at, kind, text, writes?,
+--             inverse?, money_fund, money_own, reverted}
+--             kind: "build" (casa de uno solo), "minor" (cambio menor en la
+--             casa compartida: se puede deshacer por el otro), "approved",
+--             "undo", "redo", "revert", "accelerate", "fund", "request",
+--             "rejected", "move_in", "move_out"
+--   requests  cambios estructurales esperando aprobación:
+--             {id, by, by_name, at, writes, text, cost}
+rules.MAX_LOG = 40
+-- Un cambio menor con más escrituras que esto no guarda sus piezas en el
+-- historial (no se podrá deshacer desde ahí; sí con el Deshacer propio).
+rules.MAX_LOG_WRITES = 300
+rules.MAX_REQUESTS = 10
+
+function rules.empty_home(owner_id)
+  return { rev = 0, fund = 0, members = { owner_id }, log = {}, requests = {}, next_id = 1 }
+end
+
+-- Completa un hogar leído (le pueden faltar campos).
+function rules.normalize_home(home, owner_id)
+  local result = rules.empty_home(owner_id)
+  if type(home) == "table" then
+    for k, default in pairs(result) do
+      if type(home[k]) == type(default) then
+        result[k] = home[k]
+      end
+    end
+  end
+  result.rev = math.floor(num(result.rev) or 0)
+  result.fund = math.max(0, math.floor(num(result.fund) or 0))
+  result.next_id = math.floor(num(result.next_id) or 1)
+  -- Listas: Lua no distingue {} vacío de lista vacía.
+  for _, list in ipairs({ "log", "requests", "members" }) do
+    local clean = {}
+    for _, v in ipairs(result[list]) do
+      table.insert(clean, v)
+    end
+    result[list] = clean
+  end
+  if #result.members == 0 then
+    result.members = { owner_id }
+  end
+  return result
+end
+
+-- Anota algo en el historial (sube rev). Devuelve la entrada.
+function rules.log_entry(home, entry)
+  entry.id = home.next_id
+  home.next_id = home.next_id + 1
+  home.rev = home.rev + 1
+  entry.rev = home.rev
+  entry.money_fund = entry.money_fund or 0
+  entry.money_own = entry.money_own or 0
+  entry.reverted = false
+  if entry.writes ~= nil and count(entry.writes) > rules.MAX_LOG_WRITES then
+    entry.writes, entry.inverse = nil, nil
+  end
+  table.insert(home.log, entry)
+  while #home.log > rules.MAX_LOG do
+    table.remove(home.log, 1)
+  end
+  return entry
+end
+
+function rules.find_entry(home, id)
+  for _, entry in ipairs(home.log) do
+    if entry.id == id then
+      return entry
+    end
+  end
+  return nil
+end
+
+-- ¿Esta entrada del historial se puede deshacer todavía?
+function rules.can_revert(state, entry)
+  return entry.kind == "minor" and not entry.reverted and entry.writes ~= nil and entry.inverse ~= nil
+    and rules.writes_match(state.house, entry.writes)
+end
+
+-- Deshacer un cambio menor del historial (normalmente, uno de la pareja).
+-- El dinero vuelve a quien lo pagó (su billetera y la caja), nunca al que
+-- deshace. Si alguien cambió esas piezas después, ya no se puede.
+function rules.revert(data, state, home, entry_id)
+  local entry = rules.find_entry(home, entry_id)
+  if entry == nil or entry.kind ~= "minor" or entry.writes == nil or entry.inverse == nil then
+    refuse("Eso no se puede deshacer desde el historial.")
+  elseif entry.reverted then
+    refuse("Eso ya se deshizo.")
+  elseif not rules.writes_match(state.house, entry.writes) then
+    refuse("Ya no se puede deshacer: alguien lo cambió después.", { reason = "changed" })
+  end
+  check_support(data, state, entry.inverse, "No se puede deshacer: algo quedaría en el aire.")
+  local fund_change, own_change = rules.apply_split(state, -entry.money_fund, -entry.money_own, entry.by,
+    "No alcanza el dinero para deshacerlo.")
+  rules.apply_writes(state.house, entry.inverse)
+  entry.reverted = true
+  return { writes = entry.inverse, money_fund = fund_change, money_own = own_change, entry = entry }
+end
+
+-- Guarda un pedido de cambio estructural (ya revisado). Devuelve el pedido.
+function rules.add_request(home, request)
+  if #home.requests >= rules.MAX_REQUESTS then
+    refuse("Hay demasiados pedidos esperando: que tu pareja responda los que hay.")
+  end
+  request.id = home.next_id
+  home.next_id = home.next_id + 1
+  home.rev = home.rev + 1
+  table.insert(home.requests, request)
+  return request
+end
+
+-- Saca un pedido de la lista. Devuelve el pedido (o refuse si no existe).
+function rules.take_request(home, id)
+  for i, request in ipairs(home.requests) do
+    if request.id == id then
+      table.remove(home.requests, i)
+      home.rev = home.rev + 1
+      return request
+    end
+  end
+  refuse("Ese pedido ya no existe.")
+end
+
+-- Aportar dinero de la billetera propia a la caja de la casa.
+rules.MAX_CONTRIBUTION = 1000000
+function rules.contribute(state, amount)
+  amount = num(amount)
+  if state.fund == nil then
+    refuse("La caja es para cuando viven juntos.")
+  elseif amount == nil or not is_int(amount) or amount <= 0 or amount > rules.MAX_CONTRIBUTION then
+    refuse("Monto inválido.")
+  elseif state.money < amount then
+    refuse(string.format("No tenés tanto: tu billetera tiene $%d.", state.money), { reason = "money" })
+  end
+  state.money = state.money - amount
+  state.fund = state.fund + amount
+  return { money_change = -amount, fund = state.fund }
+end
+
+-- Al separarse, la caja se reparte en dos (la moneda que sobra, al dueño
+-- de la casa). Devuelve (para el dueño, para el otro).
+function rules.split_fund(fund)
+  local half = math.floor(fund / 2)
+  return fund - half, half
+end
+
 
 -- Un trabajo vacío (cuenta nueva).
 function rules.empty_work()

@@ -70,8 +70,10 @@ func _run() -> void:
 	var writes := [
 		HouseData.write(0, "floors", "2,2", {"item": "floor_basic"}),
 		HouseData.write(0, "floors", "3,2", {"item": "floor_basic"}),
+		HouseData.write(0, "floors", "4,2", {"item": "floor_basic"}),
 		HouseData.write(0, "walls", "h:2,2", {"item": "wall_basic", "opening": "door_basic"}),
-		HouseData.write(0, "objects", house.new_id(), {"item": "bed_basic", "cell": [4, 4], "rot": 0, "ready_at": 0}),
+		# Fase 5: el servidor revisa el apoyo; la cama (girada) va sobre los dos pisos.
+		HouseData.write(0, "objects", house.new_id(), {"item": "bed_basic", "cell": [2, 2], "rot": 1, "ready_at": 0}),
 	]
 	var quote := Economy.quote(house, writes)
 	result = await _build(writes)
@@ -103,10 +105,10 @@ func _run() -> void:
 	_check(history.can_redo(), "se puede rehacer")
 	await history.redo()
 	_check(Economy.money == money and house.has_piece(0, "objects", "o1"), "rehacer volvió a cobrar: $%d" % Economy.money)
-	result = await _build([HouseData.write(0, "floors", "3,2", null)])
+	result = await _build([HouseData.write(0, "floors", "4,2", null)])
 	_check(result["ok"] and int(result["data"]["money_change"]) == 5, "borrar un piso devuelve el 50 % ($5)")
 	await history.undo()
-	_check(Economy.money == money and house.has_piece(0, "floors", "3,2"), "deshacer el borrado cobra los $5")
+	_check(Economy.money == money and house.has_piece(0, "floors", "4,2"), "deshacer el borrado cobra los $5")
 
 	print("\n4) Acelerar las obras")
 	var left := int(house.get_piece(0, "objects", "o1")["ready_at"]) - Economy.now()
