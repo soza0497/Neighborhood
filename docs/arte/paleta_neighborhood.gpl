@@ -1,0 +1,30 @@
+GIMP Palette
+Name: Neighborhood (data/palette.json)
+Columns: 4
+#
+201 143  90 wood
+143  95  58 wood_dark
+230 184 131 wood_light
+232 100  90 cloth_red
+111 183 255 cloth_blue
+127 209 139 cloth_green
+255 217 102 cloth_yellow
+255 157 181 cloth_pink
+180 140 255 cloth_purple
+242 242 242 cloth_white
+174 182 194 metal
+ 93 100 112 metal_dark
+191 230 255 glass
+244 241 234 ceramic
+246 246 246 plastic_white
+154 160 168 stone
+247 242 232 paint_white
+ 88 184  90 leaf
+122  90  62 soil
+245 201 166 skin
+ 90  58  34 hair
+ 43  34  51 eye
+196  88  79 mouth
+111 183 255 shirt
+ 59  74  94 pants
+ 58  42  32 shoe
