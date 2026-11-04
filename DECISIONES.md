@@ -1192,3 +1192,27 @@ Decisiones menores tomadas por el desarrollador (el dueño no las pidió una por
 - **Medido** (`polish3c_demo`, 4 ángulos): píxeles oscuros en la juntura de dos tramos **22 → 0**; pasadas de
   contorno de la casa de prueba **260 → 194** (menos llamadas de dibujo, no más). En la nube no hay GPU: el
   cuadro sin y con contorno se compara pero **los 30 FPS siguen por medir en el teléfono del dueño**.
+
+
+## Fase 8A/8B — Barrio (versión 0.11.0)
+
+- **Mapa en datos** (`data/neighborhood.json`): coordenadas del MUNDO (origen = centro de tu parcela de 96×96, la
+  calle principal por el eje X al frente). 24 lotes de 24×36 m: tu parcela, 5+5 a los lados en tu fila, 12 enfrente y
+  una plazoleta (2 lotes). Para agregar lotes basta sumar filas. Solo se dibuja con la parcela de 96 (las pruebas con
+  la parcela chica de 32 no ven el barrio: `NeighborhoodMap.enabled()`).
+- **Vecinos = generados, no jugadores.** Todo sale de la semilla + el id del lote (`String.hash()` → `RandomNumberGenerator`),
+  así es igual en todos los teléfonos sin guardar ni sincronizar nada. Apellido distinto por casa (30 apellidos
+  genéricos hispanos, barajados con la semilla). Más adelante, un lote ocupado por un jugador real reemplaza al generado.
+- **Casa vecina** = `HouseData` armada con piezas del catálogo (cimientos, piso, paredes con puerta y ventanas, techo,
+  4–9 muebles sin encimarse). De lejos se dibuja la **silueta** (cajas + techo; barato) y recién al visitarla se arma
+  el interior con `HouseView` (techo fuera, paredes bajas). Así 23 casas no cuestan 23 casas completas.
+- **La casa detrás de la valla** = la del lote vecino de verdad; las dos casas pegadas a tu parcela se arriman a 3 m
+  de su borde. El bosque de decoración no planta árboles dentro de los lotes. Los autos/gente viejos de `WorldLife`
+  se apagan (cars/pedestrians = 0) cuando hay barrio: los reemplaza la vida del barrio (8C).
+- **Modo «visit»** en `main.gd` (reusa `set_mode`): ni constructor ni personaje controlable, interfaz normal escondida,
+  una barrita con «Volver / Vista aérea / Casas». La cámara es la MISMA (`CameraRig`), solo con límites más amplios
+  (`enter_neighborhood_view`) y un viaje suave (`fly_to`). Esc también vuelve. La niebla se amplía mientras se está en el barrio.
+- **Privacidad:** `house_visitable` (apagado por defecto) en `GameState.settings`; hoy nadie puede entrar a tu casa,
+  queda listo para cuando haya visitantes reales. Las casas generadas siempre se pueden ver (solo ver).
+- **Calles:** una sola calle principal (la de `world.json`) con 2 aceras. Una calle transversal queda para después.
+- Paleta/estilo (`style.json`) NO se tocó (es de la Fase 7): los colores propios del barrio están en `neighborhood.json`.

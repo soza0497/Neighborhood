@@ -1,5 +1,26 @@
 # Progreso
 
+## ▶ Fase 8 — Barrio (versión 0.11.0) — en la nube, rama `fase-8` (sale de `pulido-3`)
+
+**No se mergea a `main`, no se exporta APK.** Otra sesión hace la Fase 7 (arte) en `fase-7`: acá no se tocó el
+catálogo ni el cargador de modelos; todo lo nuevo está en `scripts/neighborhood/`, `data/neighborhood.json`,
+`ui/neighborhood_panel.*`, `tests/*neighborhood*` y (8D) un módulo Lua nuevo.
+
+**ATENCIÓN — nada de esto se pudo correr:** el entorno de la nube de esta sesión NO tiene Godot ni Lua y el
+brief prohíbe descargar binarios. Todo el código de la Fase 8 está escrito **sin ejecutarlo**: puede tener errores
+de sintaxis o de lógica. Lo primero que hay que hacer en la PC es correr las pruebas (lista abajo) y arreglar lo que salga.
+
+- **8A barrio y calles: escrito (sin correr)** — `data/neighborhood.json` (24 lotes: tu parcela, 10 casas en tu fila,
+  12 enfrente y una plazoleta), casas de vecinos deterministas con piezas del catálogo, acera de enfrente, farolas,
+  árboles de acera. La casa detrás de la valla ES la del lote vecino del mapa (reemplaza la «casa al azar» del Pulido 3A).
+- **8B vista aérea y visitas: escrito (sin correr)** — menú ☰ → «Barrio»: vista aérea (misma cámara; pellizcar y
+  girar), lista «¿Qué casa querés visitar?» (solo ver, por dentro), botón «Volver a mi casa», interruptor
+  «Mi casa se puede visitar» (apagado por defecto, se guarda en `GameState.settings["house_visitable"]`).
+- 8C vida: pendiente. 8D metas del barrio: pendiente.
+
+**Próximo paso:** (1) en la PC: `godot --headless --path . res://tests/test_neighborhood.tscn` y arreglar errores;
+(2) correr `tests/neighborhood_demo.tscn` con ventana y mirar las capturas `docs/capturas/n8*.png`.
+
 ## ▶ Pulido 3 (versión 0.10.0) — en la nube, rama `pulido-3` (sale de `pulido-2`)
 
 Brief completo en `docs/pulido-3.md`. Tres sub-fases, un push a `pulido-3` al terminar cada una.
