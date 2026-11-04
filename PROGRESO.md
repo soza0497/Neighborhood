@@ -2,6 +2,12 @@
 
 ## Fase actual: 6 — Primer negocio: restaurante (hecha y probada en la nube; falta probarla en la PC y en el teléfono)
 
+**Fase 6 verificada en la PC (2026-11-04).** Rama `fase-6` unida a `main`.
+Nakama reiniciado sin errores (45 piezas, 5 módulos). Sin red 369/369, Lua
+273/273, demos: servidor 24, economía 39, entrada 17, pareja 78, pareja en
+pantalla 12, interfaz 40, restaurante 32/32 (capturas revisadas). Partida del
+dueño intacta. APK 0.8.0 en `build/neighborhood.apk`.
+
 **Próximo paso:** [Claude, cuando lo pidas] traer la rama `fase-6`, reiniciar
 Nakama y correr las pruebas en la PC; después el dueño prueba el
 restaurante en el teléfono (checklist de abajo). Siguen pendientes las
