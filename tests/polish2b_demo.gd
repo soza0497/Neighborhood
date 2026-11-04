@@ -157,6 +157,9 @@ func _test_model_hook() -> void:
 	packed.pack(root)
 	ResourceSaver.save(packed, "user://p2b_model.tscn")
 	var item: Dictionary = Catalog.get_item("chair_basic")
+	# Fase 7: la silla ya trae su modelo de ejemplo; se guarda para devolverlo al final.
+	var original_model: String = str(item.get("model", ""))
+	item.erase("model")
 	var value := {"item": "chair_basic", "cell": [3, 3], "rot": 0}
 	var fallback := HousePieces.build_object(value)
 	_check(fallback.get_child_count() > 0 and fallback.find_child("Model", true, false) == null, "sin campo model: figuras simples")
@@ -170,8 +173,11 @@ func _test_model_hook() -> void:
 	var cube: MeshInstance3D = with_model.find_child("Cubo", true, false)
 	_check(cube != null and cube.get_surface_override_material(0) is ShaderMaterial, "y se pasa solo al estilo toon con contorno")
 	_check(with_model.find_children("*", "MeshInstance3D", true, false).size() == 1, "reemplaza las figuras (no se suman)")
-	item.erase("model")
 	item.erase("model_scale")
+	if original_model != "":
+		item["model"] = original_model
+	else:
+		item.erase("model")
 
 
 func _test_work_visuals() -> void:

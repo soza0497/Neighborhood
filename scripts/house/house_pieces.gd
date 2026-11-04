@@ -166,29 +166,15 @@ static func build_delivery_box(value: Dictionary) -> Node3D:
 ## no hay campo o el archivo no existe: entonces se usan las figuras de siempre.
 ## Ver docs/estilo.md (convenciones de importación).
 static func load_model(item: Dictionary) -> Node3D:
-	var path: String = str(item.get("model", ""))
-	if path == "" or not ResourceLoader.exists(path):
-		return null
-	var scene: Variant = load(path)
-	if not scene is PackedScene:
-		return null
-	var instance: Variant = (scene as PackedScene).instantiate()
-	if not instance is Node3D:
-		return null
-	var holder := Node3D.new()
-	holder.name = "Model"
-	holder.add_child(instance)
-	var model_scale: Variant = item.get("model_scale", 1.0)
-	if model_scale is Array:
-		holder.scale = Vector3(model_scale[0], model_scale[1], model_scale[2])
-	else:
-		holder.scale = Vector3.ONE * float(model_scale)
-	var offset: Array = item.get("model_offset", [0, 0, 0])
-	holder.position = Vector3(offset[0], offset[1], offset[2])
-	holder.rotation.y = deg_to_rad(float(item.get("model_rotation", 0)))
-	if not item.get("model_keep_materials", false):
-		Style.toonify(holder)
-	return holder
+	# Fase 7: todo el trabajo (caja de celdas, paleta, respaldo) está en ModelLoader.
+	return ModelLoader.load_for_item(item, model_box(item))
+
+
+## Caja de celdas de un objeto del catálogo: ancho, alto y fondo en metros.
+static func model_box(item: Dictionary, rise := 0.0) -> Vector3:
+	var footprint := HouseData.item_footprint(item)
+	var height := rise if rise > 0.0 else float(item.get("height", 1.0))
+	return Vector3(footprint.x, height, footprint.y)
 
 
 # --- Piezas ---
@@ -274,6 +260,13 @@ static func _add_door(node: Node3D, item: Dictionary, bottom: float, top: float,
 	var color := Color.from_string(item.get("color", "#ffffff"), Color.WHITE)
 	var height := top - bottom
 	var depth := HouseGrid.WALL_THICKNESS + 0.02
+	# Fase 7: con modelo (.glb) en el catálogo, reemplaza marco y hoja. Su caja
+	# es el hueco: ancho de la pared x alto de la puerta x grosor de la pared.
+	var door_model := ModelLoader.load_for_item(item, Vector3(length, height, depth))
+	if door_model != null:
+		door_model.position += Vector3(0, bottom, 0)
+		node.add_child(door_model)
+		return
 	var frame_mat := material(color.darkened(0.35))
 	for side in [-1, 1]:
 		add_box(node, Vector3(side * (length - DOOR_FRAME) / 2.0, bottom + height / 2.0, 0),
@@ -311,6 +304,13 @@ static func _add_window(node: Node3D, item: Dictionary, bottom: float, top: floa
 	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	node.add_child(glass)
 
+	# Fase 7: con modelo, el marco sale del .glb (el vidrio sigue siendo el plano
+	# de arriba). Caja del modelo = hueco de la ventana.
+	var window_model := ModelLoader.load_for_item(item, Vector3(width, top - bottom, HouseGrid.WALL_THICKNESS + 0.04))
+	if window_model != null:
+		window_model.position += Vector3(center_x, bottom, 0)
+		node.add_child(window_model)
+		return
 	var frame_mat := material(Color.WHITE)
 	var frame_size := Vector3(width, 0.06, HouseGrid.WALL_THICKNESS + 0.04)
 	add_box(node, Vector3(center_x, bottom + 0.03, 0), frame_size, frame_mat)
@@ -354,7 +354,19 @@ static func build_object(value: Dictionary, ground_drop := 0.0) -> Node3D:
 
 	# Pulido 2B: si el catálogo trae un modelo (.glb o escena) que existe, se
 	# usa; si no, las figuras simples de abajo (el arte se cambia sin tocar código).
-	if item.get("kind", "") != "stairs":
+	if item.get("kind", "") == "stairs":
+		# Fase 7: las escaleras también pueden traer modelo; se estira al alto
+		# real (model_fit "stretch" en el catálogo; si no, solo se achica).
+		var stairs_model := ModelLoader.load_for_item(item, model_box(item, HouseGrid.WALL_HEIGHT + ground_drop))
+		if stairs_model != null:
+			node.add_child(stairs_model)
+			return node
+	elif item.get("kind", "") == "pillar":
+		var pillar_model := ModelLoader.load_for_item(item, Vector3(0.5, HouseGrid.WALL_HEIGHT + ground_drop, 0.5))
+		if pillar_model != null:
+			node.add_child(pillar_model)
+			return node
+	else:
 		var model := load_model(item)
 		if model != null:
 			node.add_child(model)

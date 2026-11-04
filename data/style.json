@@ -1,10 +1,9 @@
 {
-	"_ayuda": "Estilo visual del juego (Pulido 2B). TODO se puede cambiar acá sin tocar código: el contorno, los tonos de las sombras, los colores del mundo y la luz. 'tones' = cuánta luz recibe la sombra, el tono medio y la luz (de 0 a 1). 'thresholds' = dónde cambia de tono. 'outline.width_px' = grosor del contorno en píxeles. Los colores van como #rrggbb. El contorno también se puede apagar en Menú → Info (calidad).",
-	"outline": { "enabled": true, "width_px": 2.2, "color": "#2b2233" },
-	"toon": { "tones": [0.5, 0.78, 1.0], "thresholds": [0.28, 0.7] },
-	"light": {
-		"sun_color": "#fff4dc", "sun_energy": 0.45, "ambient_color": "#e4ecff", "ambient_energy": 0.3,
-		"shadow_opacity": 0.55
+	"_ayuda": "Estilo visual del juego (Pulido 2B). El contorno, la niebla y los colores del MUNDO. Los tonos de las sombras, la luz y los colores de los materiales de los modelos .glb están en data/palette.json (un solo lugar). 'tones' = cuánta luz recibe la sombra, el tono medio y la luz (de 0 a 1). 'thresholds' = dónde cambia de tono. 'outline.width_px' = grosor del contorno en píxeles. Los colores van como #rrggbb. El contorno también se puede apagar en Menú → Info (calidad).",
+	"outline": {
+		"enabled": true,
+		"width_px": 2.2,
+		"color": "#2b2233"
 	},
 	"palette": {
 		"ground": "#7fcf6c",
@@ -31,5 +30,9 @@
 		"ambulance": "#f6f6f6",
 		"cross": "#e04b4b"
 	},
-	"fog": { "enabled": true, "begin": 70.0, "end": 190.0 }
+	"fog": {
+		"enabled": true,
+		"begin": 70.0,
+		"end": 190.0
+	}
 }

@@ -256,6 +256,10 @@ ventana (`godot --path . res://tests/polish2a_demo.tscn`) o, sin pantalla, con
 `data/style.json`; el **mundo** (bosque, vecinos, calle, autos) está en
 `data/world.json`; cómo meter un **modelo `.glb`** nuevo: `docs/estilo.md`.
 
+**Fase 7 — preparación de arte** (versión 0.11.0): cómo meter modelos `.glb`, la paleta (`data/palette.json`), el personaje por
+piezas (`data/character_slots.json`) y la guía de Blender → juego están en `docs/estilo.md`. Pruebas: `tests/test_art.tscn` (sin pantalla),
+`tests/art_demo.tscn` (con ventana; capturas `art_*.png`). Ejemplos: `python3 tools/make_sample_models.py`.
+
 **Pulido 3** (versión 0.10.0; brief en `docs/pulido-3.md`): **3A** — la zona disponible empieza en 64 × 64
 pegada a la calle (con niveles se abre hasta 96 × 96), con vallas de madera y vecinos a los costados; la casa
 va cerca de la calle y el personaje esquiva árboles y rocas. Pruebas: `test_parcel.tscn` (sin pantalla),

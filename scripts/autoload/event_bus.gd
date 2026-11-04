@@ -199,3 +199,6 @@ signal restaurant_changed
 signal restaurant_service_requested(info: Dictionary)
 ## Terminó un servicio: el resultado (lo que contó el servidor, o la práctica).
 signal restaurant_service_finished(result: Dictionary)
+
+## Fase 7: se prendió o apagó «Usar modelos» (Info). Hay que rearmar casa y personaje.
+signal models_toggled(enabled: bool)

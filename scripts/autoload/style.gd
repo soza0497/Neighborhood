@@ -5,6 +5,7 @@ extends Node
 ## luz y niebla) y entrega los materiales a quien los pida:
 ##   Style.toon_material(color)  → material toon (uno por color, compartido)
 ##   Style.color("ground")       → color de la paleta
+##   Style.material_color("wood")→ color de un material con nombre (data/palette.json)
 ##   Style.toonify(nodo)         → pasa los materiales de un modelo (.glb) a toon
 ##   Style.set_outline(false)    → apaga/prende el contorno (Menú → Info)
 ##
@@ -14,6 +15,9 @@ extends Node
 ## cambia el JSON (o el shader), no el código.
 
 const STYLE_PATH := "res://data/style.json"
+## Fase 7: colores de los materiales con nombre de los .glb, tonos de las sombras
+## y luz. Es el único lugar para ajustar esas tres cosas.
+const PALETTE_PATH := "res://data/palette.json"
 const TOON_SHADER := preload("res://assets/shaders/toon.gdshader")
 const OUTLINE_SHADER := preload("res://assets/shaders/outline.gdshader")
 const INVISIBLE_SHADER := preload("res://assets/shaders/invisible.gdshader")
@@ -23,6 +27,8 @@ signal outline_changed(enabled: bool)
 
 var data: Dictionary = {}
 var palette: Dictionary = {}
+## Fase 7: colores por nombre de material (palette.json → "materials").
+var materials: Dictionary = {}
 var outline_enabled := true
 
 var _outline_material: ShaderMaterial
@@ -38,6 +44,15 @@ func reload() -> void:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(STYLE_PATH))
 	data = parsed if parsed is Dictionary else {}
 	palette = data.get("palette", {})
+	# Fase 7: tonos y luz salen de palette.json (si falta, quedan los de style.json
+	# o los valores de respaldo de más abajo).
+	var palette_parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(PALETTE_PATH))
+	var palette_file: Dictionary = palette_parsed if palette_parsed is Dictionary else {}
+	materials = palette_file.get("materials", {})
+	var lighting: Dictionary = palette_file.get("lighting", {})
+	for section in ["toon", "light"]:
+		if lighting.get(section) is Dictionary:
+			data[section] = lighting[section]
 	var outline: Dictionary = data.get("outline", {})
 	outline_enabled = bool(outline.get("enabled", true))
 	_outline_material = ShaderMaterial.new()
@@ -50,6 +65,16 @@ func reload() -> void:
 ## Color de la paleta por nombre ("ground", "road"...).
 func color(color_name: String, fallback := Color.MAGENTA) -> Color:
 	return Color.from_string(str(palette.get(color_name, "")), fallback)
+
+
+## ¿La paleta tiene un color para este nombre de material (wood, cloth_red...)?
+func has_material_color(material_name: String) -> bool:
+	return materials.has(material_name)
+
+
+## Color de un material con nombre (data/palette.json). `fallback` si no está.
+func material_color(material_name: String, fallback := Color.MAGENTA) -> Color:
+	return Color.from_string(str(materials.get(material_name, "")), fallback)
 
 
 ## Material toon de un color (uno por color y textura, compartido).
@@ -103,19 +128,8 @@ func set_outline(enabled: bool) -> void:
 ## conservando su color y su textura. Así el arte nuevo se ve igual que el
 ## resto sin tocar nada en Blender.
 func toonify(node: Node) -> void:
-	if node is MeshInstance3D:
-		var mesh_instance: MeshInstance3D = node
-		if mesh_instance.mesh != null:
-			for surface in mesh_instance.mesh.get_surface_count():
-				var source: Material = mesh_instance.get_active_material(surface)
-				var base := Color.WHITE
-				var texture: Texture2D = null
-				if source is BaseMaterial3D:
-					base = source.albedo_color
-					texture = source.albedo_texture
-				mesh_instance.set_surface_override_material(surface, toon_material(base, texture))
-	for child in node.get_children():
-		toonify(child)
+	# Fase 7: además pinta los materiales con nombre desde la paleta.
+	ModelLoader.apply_materials(node)
 
 
 ## Luz y ambiente del mundo según el JSON (sol, ambiente, sombras, niebla).

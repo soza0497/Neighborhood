@@ -1,0 +1,52 @@
+{
+	"_ayuda": "Paleta del juego (Fase 7), el ÚNICO lugar para la luz y los colores de los modelos. 'materials' = colores por NOMBRE DE MATERIAL: cada material de un .glb que se llame así (wood, cloth_red...) se pinta con este color al cargarlo, aunque en Blender tenga otro. Un material que no está acá conserva su color de Blender. Se pueden agregar nombres nuevos. 'lighting.toon.tones' = cuánta luz recibe la sombra, el tono medio y la luz (0 a 1; 3 tonos = sombras duras, sin degradé; poné 2 iguales para tener solo 2 tonos); 'thresholds' = dónde cambia de un tono al siguiente; 'lighting.light' = sol, ambiente y opacidad de sombras. Colores como #rrggbb. Los colores del mundo (pasto, calle, árboles) siguen en data/style.json.",
+	"format_version": 1,
+	"materials": {
+		"wood": "#c98f5a",
+		"wood_dark": "#8f5f3a",
+		"wood_light": "#e6b883",
+		"cloth_red": "#e8645a",
+		"cloth_blue": "#6fb7ff",
+		"cloth_green": "#7fd18b",
+		"cloth_yellow": "#ffd966",
+		"cloth_pink": "#ff9db5",
+		"cloth_purple": "#b48cff",
+		"cloth_white": "#f2f2f2",
+		"metal": "#aeb6c2",
+		"metal_dark": "#5d6470",
+		"glass": "#bfe6ff",
+		"ceramic": "#f4f1ea",
+		"plastic_white": "#f6f6f6",
+		"stone": "#9aa0a8",
+		"paint_white": "#f7f2e8",
+		"leaf": "#58b85a",
+		"soil": "#7a5a3e",
+		"skin": "#f5c9a6",
+		"hair": "#5a3a22",
+		"eye": "#2b2233",
+		"mouth": "#c4584f",
+		"shirt": "#6fb7ff",
+		"pants": "#3b4a5e",
+		"shoe": "#3a2a20"
+	},
+	"lighting": {
+		"toon": {
+			"tones": [
+				0.5,
+				0.78,
+				1.0
+			],
+			"thresholds": [
+				0.28,
+				0.7
+			]
+		},
+		"light": {
+			"sun_color": "#fff4dc",
+			"sun_energy": 0.45,
+			"ambient_color": "#e4ecff",
+			"ambient_energy": 0.3,
+			"shadow_opacity": 0.55
+		}
+	}
+}

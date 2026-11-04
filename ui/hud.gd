@@ -284,6 +284,18 @@ func _build_info_extras() -> void:
 	rows.add_child(outline)
 	rows.move_child(outline, anchor)
 	anchor += 1
+	# Fase 7: comparar el arte nuevo (.glb) con las figuras simples.
+	var use_models := CheckButton.new()
+	use_models.text = "Usar modelos 3D (arte)"
+	use_models.add_theme_font_size_override("font_size", 20)
+	use_models.focus_mode = Control.FOCUS_NONE
+	use_models.button_pressed = ModelLoader.enabled
+	use_models.toggled.connect(func(on: bool) -> void:
+		GameState.settings["use_models"] = on
+		ModelLoader.set_enabled(on))
+	rows.add_child(use_models)
+	rows.move_child(use_models, anchor)
+	anchor += 1
 	for entry in [["master", "Volumen"], ["sfx", "Efectos"], ["music", "Música"]]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)

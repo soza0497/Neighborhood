@@ -62,6 +62,12 @@ func _ready() -> void:
 	timer.autostart = true
 	timer.timeout.connect(check_construction)
 	add_child(timer)
+	# Fase 7: «Usar modelos» en Info → se arma todo otra vez.
+	EventBus.models_toggled.connect(_on_models_toggled)
+
+
+func _on_models_toggled(_on: bool) -> void:
+	rebuild_all()
 
 
 ## Conecta la vista con una casa y la dibuja completa.

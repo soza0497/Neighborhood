@@ -1,5 +1,51 @@
 # Progreso
 
+## ▶ Fase 7 — preparación de arte y estilo (versión 0.11.0) — en la nube, rama `fase-7` (sale de `pulido-3`)
+
+**No se mergea a `main`, no se exporta APK.** Otra sesión hace la Fase 8 (barrio) en paralelo: aquí se tocó lo mínimo
+en archivos de casas/parcelas/mundo (nada de eso) y casi todo es archivo nuevo.
+
+**Próximo paso:** el desarrollador principal, **en la PC con Godot**, corre lo que en la nube **NO se pudo correr** (ver abajo)
+y, si todo está bien, decide la unión a `main`. Después: empezar a hacer arte real (Blender) siguiendo `docs/estilo.md`, sección 11.
+
+### ⚠ Qué quedó SIN correr (la nube de esta sesión no tenía Godot ni Lua)
+Como el brief pide no descargar binarios externos, **nada de GDScript se ejecutó**: ni siquiera se compiló. Se escribió con cuidado, pero
+puede haber errores de sintaxis o de API al primer arranque. Lo único verificado fue lo hecho con Python: los `.glb` (cabecera, límites,
+orientación de las caras, nombres de materiales) y los JSON (válidos). **Hay que correr, en este orden:**
+1. `godot --headless --path . --import` (importa los `.glb` nuevos y registra las clases nuevas; crea los `.uid` de los scripts nuevos).
+2. `godot --headless --path . res://tests/test_art.tscn` (**nueva**, ≈ 90 comprobaciones; si falla, copiame el texto «FALLÓ: …»).
+3. Todas las pruebas de antes: `test_house` (esperado 158), `test_character` (34), `test_economy` (66), `test_server` (78), `test_couple` (46),
+   `test_business` (46), `test_parcel` (55) y `lua5.1 server/tests/test_rules.lua` (322; no se tocó nada del servidor).
+4. Con ventana: `tests/art_demo.tscn` (genera `docs/capturas/art_1_con_modelos.png`, `art_2_respaldos.png`, `art_3_recoloreo.png`; **esas capturas
+   todavía no existen**) y las demos de antes (`polish2b_demo` se ajustó: la silla ahora trae modelo).
+Los `.uid` de los scripts nuevos no están en el repo: Godot los crea al importar (paso 1); commitealos.
+
+### Fase 7 — qué se hizo
+- **`docs/estilo.md` completo**: proporciones chibi, paleta, reglas para IA (solo referencias del dueño o CC0; nunca arte de otros juegos),
+  convenciones de importación (escala, pivote, orientación, nombres, materiales con nombre, presupuesto de triángulos) y guía de Blender → juego.
+- **`ModelLoader`** (`scripts/art/model_loader.gd`): campo `model` del catálogo → `.glb` en `assets/models/`. Nunca rompe (falta, roto, sin mallas o apagado
+  → figura simple). Respeta la caja de celdas (achica si se pasa), `model_fit/pivot/scale/offset/rotation/colors`. Sirve para **muebles, escaleras,
+  pilares, puertas y ventanas**. Techos no (se arman a medida). `ModelLoader.inspect(ruta)` avisa de pivote, escala y materiales mal.
+- **Paleta y luz en un solo lugar**: `data/palette.json` (colores por nombre de material + tonos de sombra + luz). Se movieron ahí `toon` y `light` de `style.json`.
+- **Personaje modular**: `data/character_slots.json` (esqueleto, 9 slots, ganchos de animación con nombres alternativos) y `CharacterAssembler`
+  (pieza `.glb` por slot con respaldo a las figuras simples; `CharacterAnimator.bind_model` usa el `AnimationPlayer` del `.glb` si existe).
+- **Ejemplos**: `tools/make_sample_models.py` (Python, sin Blender) generó `chair.glb`, `table.glb` y `character/hair_round.glb`
+  (formas redondeadas, ≤ 304 triángulos, materiales `wood`, `cloth_red`, `wood_light`, `hair`). `chair_basic` y `table_basic` ya los usan.
+- **Info → «Usar modelos 3D (arte)»**: apaga/prende y la casa y los personajes se arman de nuevo. Se guarda en la partida (`use_models`).
+- Versión **0.11.0** en `project.godot` y `export_presets.cfg` (sin exportar).
+
+### Fase 7 — cómo probarlo en el teléfono (cuando se exporte el APK, que NO se hizo)
+1. Tienda → Silla o Mesa de comedor → colocalas: se ven redondeadas, con tela roja y madera (los `.glb` de ejemplo).
+2. Menú → Info → apagá «Usar modelos 3D (arte)»: vuelven las cajas de antes; prendelo y vuelven las redondeadas.
+3. Cambiá un color en `data/palette.json` (p. ej. `wood`) y mirá que cambie en todas las piezas de madera.
+4. Medí los 30 FPS con el interruptor prendido y apagado.
+
+### Pendientes / errores conocidos de la Fase 7
+- Todo lo de «SIN correr». Capturas de la demo sin generar.
+- Los modelos ignoran el color con el que se pinta un mueble (`piece_color`); se manejan con `model_colors` o la paleta. Decidir si se quiere pintar muebles con modelo.
+- Techos con modelo y ropa deformable sobre esqueleto real: no hay (ver `docs/estilo.md`, sección 12).
+- Un `.glb` crudo (sin importar) solo se lee en la PC; en el APK viaja el importado (abrir el proyecto en el editor antes de exportar).
+
 ## ▶ Pulido 3 (versión 0.10.0) — en la nube, rama `pulido-3` (sale de `pulido-2`)
 
 Brief completo en `docs/pulido-3.md`. Tres sub-fases, un push a `pulido-3` al terminar cada una.

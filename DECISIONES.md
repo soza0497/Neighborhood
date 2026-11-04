@@ -1192,3 +1192,40 @@ Decisiones menores tomadas por el desarrollador (el dueño no las pidió una por
 - **Medido** (`polish3c_demo`, 4 ángulos): píxeles oscuros en la juntura de dos tramos **22 → 0**; pasadas de
   contorno de la casa de prueba **260 → 194** (menos llamadas de dibujo, no más). En la nube no hay GPU: el
   cuadro sin y con contorno se compara pero **los 30 FPS siguen por medir en el teléfono del dueño**.
+
+## Fase 7 — preparación de arte y estilo (2026-11-04, nube, rama `fase-7`, versión 0.11.0)
+Criterios del dueño: formas redondeadas, pocos polígonos, materiales planos con nombre, `.glb`, 1 celda = 1 m,
+pivote en el centro de la base, **contorno por shader (no modelado)**; el arte se cambia muchas veces, pieza por pieza.
+- **Un solo cargador, `ModelLoader`** (clase estática en `scripts/art/`, no un autoload nuevo, para no tocar `project.godot` y
+  evitar choques con la Fase 8). Reemplaza al `load_model` de la 2B (que sigue existiendo y delega). Nunca rompe: ante cualquier
+  falla (no existe, roto, sin mallas, apagado) devuelve `null` y se usa la figura simple. Las rutas rotas se recuerdan para no repetir
+  el aviso. Se lee primero la escena **importada** (lo que viaja en el APK) y, si no hay, el `.glb` crudo con `GLTFDocument` (PC).
+- **Caja de celdas**: por defecto se **confía en el pivote** del archivo (convención) y solo se **achica parejo** si se pasa más de un 5 %
+  de `footprint × height`. `model_fit: "stretch"` para escaleras; `model_pivot: "auto"` recoloca la base (salida de emergencia para
+  arte que viene mal). No se agranda nunca solo (un objeto pequeño es una decisión de arte).
+- **Materiales con nombre → paleta**: el nombre del material del `.glb` (minúsculas, sin `.001` de Blender) se busca en
+  `data/palette.json` → `materials`; si está, manda el color de la paleta; si no, queda el de Blender. Siempre pasa al toon + contorno de
+  `Style`. Recolorear = volver a llamar `apply_materials` (parte del material original de la malla, nunca del ya pintado).
+- **Luz y sombras en un solo lugar**: `toon` y `light` se **movieron** de `style.json` a `palette.json → lighting` (`style.json` quedó con
+  contorno, niebla y colores del mundo). `Style` lee ambos; si falta `palette.json` usa valores de respaldo del código. Dos tonos = repetir
+  el segundo valor.
+- **Qué lleva modelo**: muebles, escaleras (se estiran al alto del piso), pilares, **puertas** (reemplazan marco y hoja) y **ventanas**
+  (reemplazan el marco; el vidrio sigue siendo del juego). **Techos NO**: se arman a medida de cada casa; piezas modulares quedan para el arte.
+- **Interruptor** «Usar modelos 3D (arte)» en Info (`GameState.settings["use_models"]`, señal `EventBus.models_toggled`): la casa
+  (`HouseView.rebuild_all`) y los personajes (`Character.refresh_look`) se arman de nuevo. Es para comparar y para teléfonos lentos.
+- **Personaje modular**: `data/character_slots.json` define **un esqueleto** (15 huesos en inglés/minúsculas), **9 slots** y los nombres
+  alternativos de los ganchos de animación. `CharacterAssembler` parte de `CharacterLook` (la figura simple siempre existe) y pone cada pieza
+  `.glb` encima, escondiendo las figuras que reemplaza (`hides`, con comodines). Piezas **rígidas** pegadas a un hueso (`BoneAttachment3D`) o a
+  una posición fija; cuerpo completo con `Skeleton3D` + `AnimationPlayer` soportado. **Ropa deformable (skinning compartido) NO**: sin esqueleto real
+  no se puede probar; queda anotado. Las opciones de pelo/ojos/boca apuntan al modelo con un campo `model` en `character_options.json`.
+- **Ganchos de animación por nombre** (`CharacterAnimator.bind_model`): idle, walk, sleep, sit, cook, eat, shower, use, arrive, wave,
+  cough, hurt. Se emparejan sin distinguir mayúsculas y con alias (`walking`, `caminar`...). Sin clip → la animación simple de código.
+- **Los `.glb` de ejemplo se generan con Python** (`tools/make_sample_models.py`, solo biblioteca estándar) y no con `GLTFDocument`: en esta
+  sesión no había Godot y Python sí; el resultado es un `.glb` estándar y sirve igual de ejemplo. Verificado por script: cabecera y largo,
+  caras hacia afuera (0 invertidas), cajas dentro de 1×0,9×1 / 2×0,78×1 y materiales con nombre.
+- **Se bajó el supuesto de pintar muebles**: un mueble con modelo ignora el color de pintura (`piece_color`); sus colores salen de la paleta
+  o de `model_colors`. Anotado como pendiente en PROGRESO (el dueño decide).
+- **`chair_basic` y `table_basic` usan ya los `.glb` de ejemplo** (para ver el interruptor funcionando en el teléfono). `polish2b_demo`
+  se ajustó (guarda y devuelve el `model` de la silla). El dueño puede quitar esas dos líneas `model` del catálogo en cualquier momento.
+- **Versión 0.11.0** (`project.godot`, `export_presets.cfg` code 11). No se exportó APK.
+- **Sin ejecutar**: esta nube no tenía Godot ni Lua y el brief prohíbe bajar binarios. Todo el GDScript está **sin correr**; ver PROGRESO.
