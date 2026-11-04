@@ -201,6 +201,51 @@ func fly_to(point: Vector3, distance: float, duration := 0.8) -> void:
 	_fly_tween.tween_method(_set_distance, _distance, distance, duration)
 
 
+# --- Vista de la isla (Isla 1A) ---
+# Igual que la del barrio: misma cámara y mismos gestos; solo se amplían los límites
+# (borde, zoom mínimo y máximo, alcance de la vista) para recorrer toda la isla.
+
+var _island_limits: Dictionary = {}
+
+
+func in_island_view() -> bool:
+	return not _island_limits.is_empty()
+
+
+## Abre los límites para recorrer la isla. `half_size` = hasta dónde se puede mover el
+## punto que se mira; `far` = alcance de la vista (la isla y el volcán son grandes).
+func enter_island_view(half_size: float, new_max_distance: float, far: float, near := 1.0) -> void:
+	if _island_limits.is_empty():
+		_island_limits = {"bounds": bounds_half_size, "max": max_distance, "far": _camera.far, "near": _camera.near,
+			"floor": floor_height, "min": min_distance}
+	bounds_half_size = half_size
+	max_distance = new_max_distance
+	_camera.far = far
+	_camera.near = near
+	floor_height = 0.0
+	single_finger_pan = true
+
+
+## Vuelve a los límites de antes de entrar a la isla.
+func exit_island_view() -> void:
+	if _island_limits.is_empty():
+		return
+	bounds_half_size = _island_limits["bounds"]
+	max_distance = _island_limits["max"]
+	_camera.far = _island_limits["far"]
+	_camera.near = _island_limits["near"]
+	floor_height = _island_limits["floor"]
+	min_distance = _island_limits["min"]
+	_island_limits = {}
+	_set_distance(_distance)
+	_clamp_position()
+
+
+## La cámara 3D (la usa la isla para medir distancias).
+func camera_node() -> Camera3D:
+	return _camera
+
+
 func current_distance() -> float:
 	return _distance
 

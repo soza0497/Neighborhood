@@ -1371,3 +1371,19 @@ pivote en el centro de la base, **contorno por shader (no modelado)**; el arte s
   `check_support`), y en casa compartida va a la propuesta. Deshacer saca la plantilla entera en un solo paso (en el plan y después de pagar).
 - **Holograma:** verde si cabe, rojo si no (fuera del lote / obstáculo, cerca o zona cerrada / choca con lo construido / sin apoyo / nivel).
   Un dedo (o el mouse) mueve la silueta; dos dedos, la cámara. Sin girar la plantilla todavía.
+## Isla 1A — prototipo de rendimiento y LOD (2026-11-04, nube, rama `isla-1a`)
+
+- **Todo en archivos nuevos** (`scripts/island/`, `scenes/island/`, `data/island.json`, `tests/*island*`, `docs/isla-prototipo.md`); lo único tocado fuera
+  es `camera_rig.gd` (modo isla, como el del barrio: no cambia lo existente) y 2 líneas de `ui/hud.gd` (entrada escondida en Info).
+- **Los lotes son datos, no código.** 60 lotes en 4 anillos con 4 calles radiales en cruz (30 al empezar). El reparto sale de `tools/make_island_data.py`
+  (opcional); el JSON es lo que se edita. Con S/M/L mezclados, 60 lotes piden un radio de 352 m; con 6 calles radiales caben menos.
+- **Lotes L solo en los anillos exteriores (B y D):** en el anillo A su fondo de 64 m choca con la calle circular r2. «Junto al parque» = lotes M/S premium del anillo A.
+- **LOD con histéresis ±12 %** y distancias 70/230/520 m a la cámara (en datos). El mapa de toda la isla (LOD 3) entra a 2,9 × radio y sale a 2,5 × radio.
+  Máximo 1 casa en LOD 0 (`lod0_max`), 2 armados por cuadro.
+- **Una malla, un material, color por vértice** para LOD 1, LOD 2, suelo y árboles (`island_blocks.gdshader`): una llamada de dibujo por malla en vez de una por color.
+  El contorno va como segunda pasada solo en LOD 0/1 (`lod.outline_max_level`). LOD 2 agrupa todas las casas de una zona (`cluster`) en una sola malla.
+- **La ficha exterior** (`ExteriorCard`) guarda huella por rectángulos, colores, ventanas (código entero por pared), techos y puerta; no guarda nada de adentro.
+  Formato versionado (`v: 1`). Se reconstruye a una casa mínima y de ahí a otra ficha igual (prueba).
+- **La demo viaja en el APK** aunque `tests/*` se excluye del export: el script y la escena están en `scripts/island/` y `scenes/island/`; `tests/island_demo.tscn` solo la instancia.
+- **Sin correr:** la nube no tenía Godot ni Lua. Ver `PROGRESO.md`.
+

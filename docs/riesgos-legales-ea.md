@@ -292,3 +292,24 @@ Búsqueda web del dueño y del asesor antes de decidir la isla (`docs/isla.md`):
 - Mantener: nombres propios (isla, volcán, zonas), estilo toon propio, arte propio. La imagen de referencia del
   dueño es **arte generado por IA**: solo como guía de distribución.
 - Pendiente: revisión de alguien con criterio (idealmente legal) antes de publicar en tiendas.
+## Isla 1A (barrio en una isla tropical): puntos a revisar (2026-11-04, no es asesoría legal)
+
+Dudas anotadas al hacer el prototipo de rendimiento de la isla (`docs/isla-prototipo.md`, `data/island.json`). Nada copia
+nombres, mapas ni arte de otros juegos, pero conviene que alguien con criterio lo mire antes de publicar:
+- **«Isla tropical con parque, playa, muelle y volcán»** es un escenario genérico (una *scène à faire* de cualquier juego de vida
+  o de vacaciones), no una expresión protegida. **Lo concreto que se evitó:** ni el nombre ni los lugares de *Sulani* (The Sims 4:
+  Island Living) ni ningún nombre de zona polinesio/hawaiano inventado «en el estilo de»; nada del mapa, la forma de la isla ni
+  la disposición de sus mundos; sin sus animaciones (sirenas, etc.) ni sonidos.
+- **Animal Crossing / Tomodachi:** la isla de ellos es la *premisa* del juego (isla desierta que se coloniza, museo/tienda/centro
+  del pueblo propios, vecinos animales/Miis). Acá la isla es solo el escenario del barrio: sin museo, sin tienda del pueblo con
+  nombre propio, sin habitantes con diálogo. Si algún día se agrega una plaza con edificios públicos, que tengan nombre y arte propios.
+- **Nombres usados** (todos genéricos, en español): «Avenida del Muelle», «Calle del Faro», «Calle de la Ceiba», «Calle del Sol»,
+  parque, glorieta, plaza, comercios, playa, muelle, volcán. Si alguno suena a marca de otro juego, cambiarlo en `data/island.json`
+  (son solo textos).
+- **Parcelas S/M/L (32/48/64 m) y «parcela regalada»:** tamaños y regalo de la primera parcela son mecánicas comunes (Hay Day,
+  Sims). No se copió ninguna tabla de tamaños de otro juego.
+- **Comercios decorados y apagados:** cajas de colores con toldo, sin marcas ni carteles con texto.
+- **Volcán con humo:** un cono simple de baja poligonación; nada de un volcán con mitología o personajes de otra obra.
+- Antes de publicar: los niveles de detalle por distancia son una técnica común de gráficos (sin riesgo particular), pero si el
+  modelo de negocio llega a incluir comprar y vender parcelas por dinero real, revisar con un abogado las reglas de tiendas y de
+  «bienes virtuales».

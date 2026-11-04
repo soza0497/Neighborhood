@@ -151,6 +151,28 @@ Hay que correr, en este orden:
   lento/rápido?, ¿−20° es buen mínimo?).
 - Los pendientes de 0.11.0 siguen (demos con coordenadas viejas, FPS en teléfono, etc.).
 
+## ▶ Isla 1A — prototipo de rendimiento y LOD (2026-11-04) — en la nube, rama `isla-1a` (sale de `main` 0.11.0)
+
+**No se mergea a `main`, no se exporta APK.** Todo es archivo nuevo (`scripts/island/`, `scenes/island/`, `data/island.json`, `tests/test_island.*`,
+`tests/island_demo.tscn`, `docs/isla-prototipo.md`); fuera de eso solo `camera_rig.gd` (modo isla) y 2 líneas de `ui/hud.gd` (botón escondido en Info). El diseño
+general es de `docs/isla.md` (del desarrollador principal; no se tocó). Detalle, cómo medir en el teléfono y mis recomendaciones: **`docs/isla-prototipo.md`**.
+
+- Hecho: datos de la isla (60 lotes, 30 al empezar), `ExteriorCard` (ficha exterior serializable), LOD 0-3 (HouseView / fachada / bloques agrupados por zona / mapa),
+  `IslandLod` con histéresis, escenario (parque con lago, comercios decorados, playa, muelle, volcán con humo opcional, vegetación en MultiMesh por trozos),
+  demo con FPS, botones de LOD, contorno/sombras, estrés (60 lotes, 100 casas) y tabla, pruebas sin ventana y entrada «Herramientas de prueba → Prueba de isla» en Info.
+
+**Próximo paso (el desarrollador principal, en la PC con Godot):**
+1. `godot --headless --path . --import` (registra las clases nuevas y crea los `.uid` de los scripts nuevos; commitealos) y arreglar lo que falle al compilar.
+2. `godot --headless --path . res://tests/test_island.tscn` (unas 100 comprobaciones; copiame el «FALLÓ: …» si algo falla; los presupuestos de dibujo son estimaciones mías).
+3. Correr todas las pruebas de antes (Godot y `lua5.1 server/tests/test_rules.lua`): no se tocó nada existente, pero hay que confirmarlo.
+4. Con ventana: `godot --path . res://tests/island_demo.tscn` (mirar que se vea la isla y que los botones LOD 0/1/2/3 cambien lo que se ve) y la tabla:
+   `ISLAND_BENCH=1 SHOT_DIR=docs/capturas godot --path . res://tests/island_demo.tscn`.
+5. Si todo anda: exportar un APK de prueba y que el dueño mida en el teléfono (`docs/isla-prototipo.md`, §7) y ajustar `data/island.json`. Después decidir la unión con `docs/isla.md`.
+
+### ⚠ Qué quedó SIN correr (la nube no tenía Godot ni Lua; el brief prohíbe descargar binarios)
+Nada de GDScript se ejecutó ni se compiló (ni los 2 shaders nuevos). Lo único verificado con Python: `data/island.json` (válido; 60 lotes sin encimarse, sin pisar calles ni salir de la isla;
+mismas reglas que la prueba). Riesgos típicos al primer arranque: inferencia de tipos con `Variant`, algún método de la API, `HouseView` armado dentro de `IslandWorld` (LOD 0).
+No hay capturas (se generan con la demo). Los `.uid` de los scripts nuevos no están en el repo: Godot los crea al importar.
 
 ## ▶ ESTADO ACTUAL (2026-11-04) — versión 0.11.0, todo unido en `main`
 Pulido 2, Pulido 3, Fase 7 (arte) y Fase 8 (barrio) están unidos y **verificados en la PC**: pruebas de Godot y de
