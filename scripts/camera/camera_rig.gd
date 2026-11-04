@@ -19,7 +19,7 @@ extends Node3D
 @export var pitch_degrees := -50.0
 ## Pulido 2: inclinaciones que se pueden elegir (grados hacia abajo), de
 ## "de frente" (casi horizontal) a "desde arriba" del todo. Editables acá.
-const PITCH_PRESETS := [-8.0, -25.0, -50.0, -70.0, -89.0]
+const PITCH_PRESETS := [-20.0, -30.0, -50.0, -70.0, -89.0]
 const PITCH_NAMES := ["De frente", "Baja", "Normal", "Alta", "Desde arriba"]
 ## Giro inicial, en grados.
 @export var default_yaw_degrees := 45.0
@@ -35,6 +35,19 @@ const PITCH_NAMES := ["De frente", "Baja", "Normal", "Alta", "Desde arriba"]
 ## el constructor. Dos dedos, clic derecho, rueda y rueda apretada siguen igual.
 var single_finger_pan := true
 
+## Pulido 5B: parámetros de data/camera.json (si falta algo, valen estos).
+const CONFIG_PATH := "res://data/camera.json"
+const DEFAULT_CONFIG := {
+	"pitch_min_degrees": -20.0, "pitch_max_degrees": -89.0, "low_pitch_below": -35.0,
+	"pan_cap": 0.3, "frame_cap": 0.12, "pending_cap": 0.5, "damping": 18.0,
+	"low_side_factor": 0.8, "low_forward_factor": 0.3, "low_dead_zone_px": 14.0,
+	"lot_margin": 3.0, "lot_soft_border": 6.0,
+}
+## Si es true, en la vista normal la cámara no sale de la parcela usable (+ margen).
+## La vista del barrio (y la isla, a futuro) lo apagan y conservan sus límites.
+var lot_limit_enabled := true
+var config: Dictionary = DEFAULT_CONFIG.duplicate()
+
 @onready var _pitch: Node3D = $Pitch
 @onready var _camera: Camera3D = $Pitch/Camera3D
 
@@ -44,9 +57,14 @@ var _touches: Dictionary = {}
 var _mouse_left_down := false
 var _mouse_middle_down := false
 var _mouse_rotating := false
+## Pulido 5B: lo que falta mover (metros, plano XZ). Se gasta de a poco cada cuadro.
+var _pending := Vector3.ZERO
+## Píxeles verticales arrastrados en este gesto (para la zona muerta con la cámara baja).
+var _drag_y := 0.0
 
 
 func _ready() -> void:
+	config = load_config()
 	# Pulido 2C: se puede mirar toda la parcela (no más allá de sus bordes).
 	bounds_half_size = maxf(28.0, HouseGrid.LOT_SIZE.x / 2.0 - 2.0)
 	_pitch.rotation_degrees.x = pitch_degrees
@@ -56,7 +74,8 @@ func _ready() -> void:
 
 ## Cambia la inclinación vertical (grados; negativo = mira hacia abajo).
 func set_pitch(degrees: float) -> void:
-	pitch_degrees = clampf(degrees, -89.0, -5.0)
+	# Pulido 5B: no baja de pitch_min_degrees (nada de «primera persona»).
+	pitch_degrees = clampf(degrees, float(config["pitch_max_degrees"]), float(config["pitch_min_degrees"]))
 	_pitch.rotation_degrees.x = pitch_degrees
 
 
@@ -145,6 +164,7 @@ func enter_neighborhood_view() -> void:
 		return
 	_home_limits = {"bounds": bounds_half_size, "max": max_distance, "far": _camera.far, "floor": floor_height}
 	bounds_half_size = NEIGHBORHOOD_BOUNDS
+	lot_limit_enabled = false  # Pulido 5B: en el barrio valen los límites del barrio.
 	max_distance = NEIGHBORHOOD_MAX_DISTANCE
 	_camera.far = NEIGHBORHOOD_FAR
 	floor_height = 0.0
@@ -158,6 +178,7 @@ func exit_neighborhood_view() -> void:
 	if _fly_tween != null and _fly_tween.is_valid():
 		_fly_tween.kill()
 	bounds_half_size = _home_limits["bounds"]
+	lot_limit_enabled = true
 	max_distance = _home_limits["max"]
 	_camera.far = _home_limits["far"]
 	floor_height = _home_limits["floor"]
@@ -209,6 +230,7 @@ func _unhandled_input(event: InputEvent) -> void:
 # --- Táctil ---
 
 func _handle_touch(event: InputEventScreenTouch) -> void:
+	_drag_y = 0.0
 	if event.pressed:
 		_touches[event.index] = event.position
 	else:
@@ -249,6 +271,7 @@ func _handle_mouse_button(event: InputEventMouseButton) -> void:
 	match event.button_index:
 		MOUSE_BUTTON_LEFT:
 			_mouse_left_down = event.pressed
+			_drag_y = 0.0
 		MOUSE_BUTTON_MIDDLE:
 			_mouse_middle_down = event.pressed
 		MOUSE_BUTTON_RIGHT:
@@ -272,15 +295,149 @@ func _handle_mouse_motion(event: InputEventMouseMotion) -> void:
 
 # --- Ayudantes ---
 
-## Mueve la cámara para que el punto del suelo que estaba bajo `from`
-## quede bajo `to`. Así se siente como "agarrar el suelo" con el dedo.
+## Mueve la cámara siguiendo el gesto de `from` a `to` (píxeles).
+## Vista normal: «agarrar el suelo» (el punto bajo el dedo queda bajo el dedo).
+## Cámara baja (Pulido 5B): el suelo agarrado casi en el horizonte se dispara,
+## así que se usa otro control: a los lados desplaza, adelante/atrás avanza
+## despacio y con zona muerta. En los dos casos la velocidad es proporcional a
+## la distancia, con tope por gesto, y el movimiento se amortigua (ver _process).
 func _pan(from: Vector2, to: Vector2) -> void:
-	var ground_from: Variant = _screen_to_ground(from)
-	var ground_to: Variant = _screen_to_ground(to)
-	if ground_from == null or ground_to == null:
+	var move := Vector3.ZERO
+	if is_low_pitch():
+		move = _low_pitch_move(from, to)
+	else:
+		var ground_from: Variant = _screen_to_ground(from)
+		var ground_to: Variant = _screen_to_ground(to)
+		if ground_from == null or ground_to == null:
+			return
+		move = ground_from - ground_to
+	queue_move(move)
+
+
+## ¿La cámara está tan baja que cambian los controles?
+func is_low_pitch() -> bool:
+	return pitch_degrees > float(config["low_pitch_below"])
+
+
+## Metros que mide un píxel a la distancia a la que se mira (proporcional al zoom).
+func meters_per_pixel() -> float:
+	var height := maxf(1.0, get_viewport().get_visible_rect().size.y) if is_inside_tree() else 1080.0
+	return 2.0 * _distance * tan(deg_to_rad(_camera.fov) / 2.0) / height
+
+
+## Control de cámara baja: x = a los lados, y = adelante/atrás (despacio, con zona muerta).
+func _low_pitch_move(from: Vector2, to: Vector2) -> Vector3:
+	var delta := to - from
+	var mpp := meters_per_pixel()
+	var side := delta.x * mpp * float(config["low_side_factor"])
+	# Zona muerta: el dedo tiene que recorrer low_dead_zone_px en vertical antes de avanzar.
+	var dead := float(config["low_dead_zone_px"])
+	var before := dead_zone(_drag_y, dead)
+	_drag_y += delta.y
+	var forward := (dead_zone(_drag_y, dead) - before) * mpp * float(config["low_forward_factor"])
+	# Agarrar el suelo: dedo a la derecha = el mundo va a la derecha = la cámara a la izquierda.
+	var local := Vector3(-side, 0.0, -forward)
+	return global_transform.basis * local if is_inside_tree() else local.rotated(Vector3.UP, rotation.y)
+
+
+## Suma un movimiento pendiente (metros, plano XZ) con tope proporcional a la distancia.
+func queue_move(move: Vector3) -> void:
+	move.y = 0.0
+	_pending += cap_length(move, float(config["pan_cap"]) * _distance)
+	_pending = cap_length(_pending, float(config["pending_cap"]) * _distance)
+
+
+## Gasta una parte del movimiento pendiente (amortiguado y con tope por cuadro).
+func step_pending(delta: float) -> void:
+	if _pending.length_squared() < 0.000001:
+		_pending = Vector3.ZERO
 		return
-	position += ground_from - ground_to
+	var fraction := 1.0 - exp(-float(config["damping"]) * delta)
+	var step := cap_length(_pending * fraction, float(config["frame_cap"]) * _distance)
+	_pending -= step
+	move_by(step)
+
+
+## Deja todo el movimiento pendiente aplicado ya (para pruebas y saltos de cámara).
+func flush_pending() -> void:
+	var guard := 0
+	while _pending.length_squared() > 0.000001 and guard < 400:
+		step_pending(1.0 / 60.0)
+		guard += 1
+	_pending = Vector3.ZERO
+
+
+## Mueve la cámara frenando suave cerca del límite de la parcela (sin golpe).
+func move_by(step: Vector3) -> void:
+	var rect := limit_rect()
+	var soft := soft_limit_step(Vector2(position.x, position.z), Vector2(step.x, step.z), rect,
+		float(config["lot_soft_border"]) if lot_limit_enabled else 0.0)
+	position.x += soft.x
+	position.z += soft.y
 	_clamp_position()
+
+
+func _process(delta: float) -> void:
+	step_pending(delta)
+
+
+## Cuadro (en metros del mundo) donde puede estar el punto que se mira.
+func limit_rect() -> Rect2:
+	var map_rect := Rect2(-bounds_half_size, -bounds_half_size, bounds_half_size * 2.0, bounds_half_size * 2.0)
+	if lot_limit_enabled:
+		var usable := _usable_rect().intersection(map_rect)
+		if usable.has_area():
+			return usable
+	return map_rect
+
+
+## Parcela usable hoy (+ margen) en metros del mundo, o un Rect2 vacío si no se sabe.
+func _usable_rect() -> Rect2:
+	# Sin datos, o con el lote de pruebas (32), no se sabe cuál es la zona: sin límite de parcela.
+	if Parcel.cfg.is_empty() or Parcel.zone_rects().is_empty() or int(Parcel.cfg.get("lot", 0)) != HouseGrid.LOT_SIZE.x:
+		return Rect2()
+	var cells := Parcel.zone_bounds()
+	var origin := Vector2(HouseGrid.LOT_SIZE) / 2.0  # La casa se dibuja centrada: celda (0,0) está en (-lote/2).
+	var margin := float(config["lot_margin"])
+	return Rect2(Vector2(cells.position) - origin - Vector2(margin, margin), Vector2(cells.size) + Vector2(margin, margin) * 2.0)
+
+
+## Zona muerta: ignora los primeros `dead` píxeles del recorrido (0 hasta `dead`, después crece).
+static func dead_zone(value: float, dead: float) -> float:
+	return signf(value) * maxf(0.0, absf(value) - dead)
+
+
+## Recorta un vector a un largo máximo (sin cambiar su dirección).
+static func cap_length(v: Vector3, max_length: float) -> Vector3:
+	if max_length <= 0.0 or v.length() <= max_length:
+		return v
+	return v.normalized() * max_length
+
+
+## Frena un paso (plano XZ) al acercarse al límite: por cada eje, si el paso
+## va hacia el borde y quedan menos de `border` metros, se multiplica por una
+## curva suave que llega a 0 justo en el borde. Alejarse no se frena.
+static func soft_limit_step(pos: Vector2, step: Vector2, rect: Rect2, border: float) -> Vector2:
+	var result := step
+	for axis in 2:
+		var s := step[axis]
+		if s == 0.0 or border <= 0.0:
+			continue
+		var room: float = (rect.end[axis] - pos[axis]) if s > 0.0 else (pos[axis] - rect.position[axis])
+		var t := clampf(room / border, 0.0, 1.0)
+		result[axis] = s * (t * t * (3.0 - 2.0 * t))
+	return result
+
+
+## Lee data/camera.json y completa lo que falte con los valores de DEFAULT_CONFIG.
+static func load_config() -> Dictionary:
+	var result := DEFAULT_CONFIG.duplicate()
+	var json := JSON.new()
+	if json.parse(FileAccess.get_file_as_string(CONFIG_PATH)) == OK and json.data is Dictionary:
+		for key in DEFAULT_CONFIG:
+			if json.data.has(key):
+				result[key] = json.data[key]
+	return result
 
 
 ## Devuelve el punto del suelo (altura 0) que está bajo un punto de la
@@ -297,6 +454,7 @@ func _set_distance(value: float) -> void:
 
 
 func _clamp_position() -> void:
-	position.x = clampf(position.x, -bounds_half_size, bounds_half_size)
-	position.z = clampf(position.z, -bounds_half_size, bounds_half_size)
+	var rect := limit_rect()
+	position.x = clampf(position.x, rect.position.x, rect.end.x)
+	position.z = clampf(position.z, rect.position.y, rect.end.y)
 	position.y = floor_height

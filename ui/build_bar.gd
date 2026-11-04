@@ -246,7 +246,10 @@ func _fill_categories(ids: Array, with_recommended: bool) -> void:
 	current_category = ""
 	if ids.is_empty():
 		return
-	var tabs: Array = ids.duplicate()
+	var tabs: Array = []
+	for id in ids:
+		if Catalog.category_visible(id):  # Pulido 5A: sin negocios propios no hay «Restaurante».
+			tabs.append(id)
 	if with_recommended:
 		_room = _builder.room_here(_character.get("level") if _character != null else -1,
 			_character.get("cell") if _character != null else Vector2i(-1, -1)) if _builder != null else {}
@@ -291,7 +294,7 @@ func _show_category(category_id: String) -> void:
 	var items: Array = []
 	if category_id == RECOMMENDED:
 		for id in recommended:
-			if not Catalog.get_item(id).is_empty():
+			if not Catalog.get_item(id).is_empty() and Catalog.item_visible(id):
 				items.append(Catalog.get_item(id))
 	else:
 		items = Catalog.get_items_in_category(category_id)

@@ -185,6 +185,10 @@ signal home_reload_requested
 ## La interfaz pide abrir el panel de la pareja o el de la casa.
 signal couple_panel_requested
 signal home_panel_requested
+## Pulido 5E: cambió la lista de plantillas de casa (guardar, renombrar o borrar).
+signal templates_changed
+## Pulido 5E: el jugador eligió una plantilla para colocar (id).
+signal template_place_requested(template_id: String)
 ## Aviso con botón "Deshacer" (un cambio menor de la pareja): texto y la
 ## entrada del historial que se puede deshacer (0 = sin botón).
 signal partner_notice(text: String, entry_id: int)

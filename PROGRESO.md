@@ -88,6 +88,69 @@ Godot ni Lua y el brief prohíbe bajar binarios; **nada de GDScript se ejecutó 
 - Si se cae desde un piso alto, el personaje baja a la planta baja (la ambulancia llega por la calle).
 - `dev.svg` necesita el paso de importar; sin él el botón sale sin ícono hasta correr `--import`.
 - Cambiar el ángulo de cámara/zoom mientras el panel está abierto funciona; elegir con dos dedos no (son gestos de cámara).
+## ▶ Pulido 5 (versión 0.12.0) — en la nube, rama `pulido-5` (sale de `main` 0.11.0)
+
+**No se mergea a `main`, no se exportó APK.** Otras sesiones trabajan en paralelo (`pulido-4`: botón de cuartos y panel de
+desarrollador, toca `ui/hud.*`; `isla-1a`: la isla). Acá `ui/hud.*` se tocó lo mínimo (ver «Fusión» abajo).
+
+**Próximo paso:** el desarrollador principal, **en la PC con Godot**, corre lo que en la nube **NO se pudo correr** (la nube no tenía
+Godot ni Lua y el brief prohíbe descargar binarios): **todo el GDScript de este pulido está escrito sin ejecutarse** (ni compilado).
+Hay que correr, en este orden:
+1. `godot --headless --path . --import` (registra las clases nuevas: `HouseTemplate`, `HouseTemplates`, `TemplatePlacer`; crea los `.uid`
+   de los scripts nuevos → commitearlos).
+2. Pruebas **nuevas**: `tests/test_camera.tscn`, `tests/test_floor_map.tscn`, `tests/test_template.tscn`.
+   Después las de siempre: `test_house` (158), `test_character` (34), `test_economy` (66), `test_server` (78), `test_couple` (46),
+   `test_business` (46 + 7 nuevas del interruptor), `test_parcel` (55), `test_art`, `test_neighborhood` y
+   `lua5.1 server/tests/test_rules.lua` (322; **no se tocó nada del servidor**) y `test_goals.lua`.
+3. Demos con ventana (sacan capturas a `docs/capturas/` con `SHOT_DIR=docs/capturas`): `tests/polish5c_demo.tscn` (`p5c_*`),
+   `tests/polish5e_demo.tscn` (`p5e_*`). `polish3b_demo` se ajustó (el ángulo ya no baja de −20°). Las capturas **todavía no existen**.
+   La cámara (5B) y la maqueta (5D) conviene mirarlas a mano en la PC: `tests/polish3b_demo.tscn` + jugar un rato con el mouse.
+4. Si algo falla, copiame el texto «FALLÓ: …».
+
+### Qué se hizo
+- **5A** `data/features.json` (`player_business: false`) esconde el restaurante: botón del ☰, categoría y muebles de la Tienda (y de
+  «Recomendado»). Nada se borró; `test_business` prende el interruptor.
+- **5B** `data/camera.json` (ángulo mínimo −20°, tope de velocidad por gesto/cuadro, amortiguación, zona muerta, margen y borde suave).
+  Cámara baja: lado = desplazar, vertical = avanzar lento. Paneo proporcional a la distancia. Límite a la parcela usable + 3 m con borde
+  suave (solo vista normal). `tests/test_camera.*`.
+- **5C** Capa libre `Overlay` para ☰, Info, ánimo, menú de pieza y ventanitas (no empujan la interfaz); opacos y exclusivos; la barra del
+  ángulo se esconde con un menú abierto y no pisa la Tienda; al construir se ocultan ánimo y necesidades. `tests/polish5c_demo.*`.
+- **5D** Maqueta: 4 aristas de la losa plana + borde de arriba de las paredes de atrás sin techo; punto del personaje solo dentro de la
+  casa, en su piso (apagado si se mira otro) y también al dormir. `tests/test_floor_map.*`.
+- **5E** Plantillas de casa (☰ → Casa → «Plantillas de casa»): guardar con nombre, ver, renombrar, borrar y **Colocar** con holograma
+  verde/rojo que entra por el plan y la factura (el servidor cobra y revisa con `build_apply`). Se guardan en la partida y en la nube con las
+  opciones. `tests/test_template.*`, `tests/polish5e_demo.*`.
+
+### Cómo probarlo en el teléfono (cuando se exporte)
+1. ☰: ya no está «Restaurante»; Obra/Tienda: sin la pestaña Restaurante.
+2. Bajá la perilla del ángulo al máximo: la cámara se frena en −20°. Con un dedo: de lado desplaza, arriba/abajo avanza lento (con un
+   pequeño «aguante» antes de empezar). Alejate de la zona de tu terreno: la cámara frena suave en el borde. El barrio sigue libre.
+3. Abrí el ☰ con la Tienda abierta: las barras de arriba y abajo no se mueven; el menú es opaco; al abrir Info, el ☰ se cierra.
+   Al construir no se ve la carita del ánimo.
+4. Maqueta: con techo liso se ven las 4 aristas de la losa. Salí de la casa al lote: el punto desaparece; mandá a dormir al personaje: el
+   punto queda en la cama; subí de piso en la maqueta y mirá el punto apagado en el piso del personaje.
+5. ☰ → Casa → «Plantillas»: escribí un nombre y «Guardar la casa». «Colocar»: mové la silueta con el dedo (verde = cabe); «Colocar» →
+   Factura → se construye; «Deshacer» la saca de un golpe.
+
+### Fusión con `pulido-4` / `isla-1a` (para quien una las ramas)
+- `ui/hud.gd`: 5A (1 línea, `_restaurant_button.visible`), 5C (`_build_overlay`, `_float_control`, `_place_floating`, `_any_menu_open`,
+  `_close_floating`; cambios en `_toggle_side_menu`, `_open_info`, `_open_popup`, `_on_game_mode_changed`, `_fit_to_screen`, `_process`) y
+  5E (1 línea en `setup_house`). `ui/hud.tscn` NO se tocó. Si `pulido-4` mueve el botón de cuartos o agrega el panel de desarrollador,
+  el panel nuevo debería abrirse con `_close_floating(...)` y agregarse a `_any_menu_open()` para ser exclusivo.
+- `isla-1a`: si usa `CameraRig`, poner `lot_limit_enabled = false` mientras se está en la isla (y revisar `pitch_min_degrees`).
+- `scripts/main.gd`: 4 líneas (crear el `TemplatePlacer`). `scripts/autoload/event_bus.gd`: 2 señales. `scripts/camera/camera_rig.gd`: reescrito el paneo.
+
+### Pendientes / errores conocidos de Pulido 5
+- **TODO el GDScript está sin ejecutar** (ver arriba): esperá errores de sintaxis/tipos al primer arranque. Capturas sin generar.
+- **5D, bug «desaparece al dormir»:** no se pudo reproducir (sin Godot). Se quitó la dependencia de `character.visible`; si sigue pasando,
+  mirar `Character.state` durante `sleep` y la posición del punto.
+- **5E:** no se puede girar la plantilla; no hay prueba Lua nueva (el servidor ya revisa apoyo, lote, obstáculos, zona y nivel en
+  `rules.build` → `check_support`, probado por `test_rules.lua`); el servidor NO prohíbe pisar piezas que ya existen (el cliente sí:
+  «Choca con lo ya construido»); las plantillas viajan en las opciones (un solo objeto de nube: ~10 plantillas máx.).
+- **5B:** los valores de `data/camera.json` son una primera estimación: hay que probarlos en el teléfono (¿el avance vertical es muy
+  lento/rápido?, ¿−20° es buen mínimo?).
+- Los pendientes de 0.11.0 siguen (demos con coordenadas viejas, FPS en teléfono, etc.).
+
 
 ## ▶ ESTADO ACTUAL (2026-11-04) — versión 0.11.0, todo unido en `main`
 Pulido 2, Pulido 3, Fase 7 (arte) y Fase 8 (barrio) están unidos y **verificados en la PC**: pruebas de Godot y de

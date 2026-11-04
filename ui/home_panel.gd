@@ -17,6 +17,13 @@ var house: HouseData
 @onready var _content: VBoxContainer = %Content
 @onready var _close_button: Button = %CloseButton
 
+## Pulido 5E: la casa (la pone el HUD) para guardar plantillas, y el estado de la lista.
+var house: HouseData
+var _new_name := ""
+var _renaming_id := ""
+var _delete_id := ""
+var _template_note := ""
+
 
 func _ready() -> void:
 	visible = false
@@ -27,6 +34,7 @@ func _ready() -> void:
 	EventBus.fund_changed.connect(func(_shared: bool, _fund: int) -> void: _on_changed())
 	EventBus.server_status_changed.connect(func(_online: bool, _user: String) -> void: _on_changed())
 	EventBus.server_busy_changed.connect(func(_busy: bool) -> void: _on_changed())
+	EventBus.templates_changed.connect(_on_changed)
 
 
 func open() -> void:
@@ -66,6 +74,7 @@ func _rebuild() -> void:
 		_build_fund(usable)
 	_build_requests(home, usable)
 	_build_log(home, usable)
+	_build_templates()
 
 
 ## Pulido 4A: «Casa» es también el lugar de los ajustes de la casa: cuartos con su
@@ -181,3 +190,96 @@ func _on_cancel_request(id: int) -> void:
 
 func _on_revert(id: int) -> void:
 	await Couple.revert(id)
+
+
+# --- Plantillas de casa (Pulido 5E) ---
+
+func _build_templates() -> void:
+	var list := HouseTemplates.all()
+	_content.add_child(PanelRows.title("Plantillas de casa (mudanza)"))
+	_content.add_child(PanelRows.label(
+		"Guardá la estructura de tu casa (cimientos, pisos, paredes con puertas y ventanas, techos, escaleras y pilares, con su pintura; sin muebles) para volver a construirla en otro lugar del lote. Tenés %d de %d." % [list.size(), HouseTemplates.MAX_TEMPLATES], 15, Color(0.8, 0.85, 0.95)))
+	var name_edit := LineEdit.new()
+	name_edit.placeholder_text = "Nombre de la plantilla"
+	name_edit.text = _new_name
+	name_edit.max_length = HouseTemplates.MAX_NAME
+	name_edit.custom_minimum_size = Vector2(230, 52)
+	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_edit.add_theme_font_size_override("font_size", 17)
+	name_edit.text_changed.connect(func(text: String) -> void: _new_name = text)
+	_content.add_child(PanelRows.row([name_edit,
+		PanelRows.button("Guardar la casa", _on_save_template, house == null, 190)]))
+	if _template_note != "":
+		_content.add_child(PanelRows.label(_template_note, 15, Color(1, 0.88, 0.6)))
+	var offline := Economy.server_mode and (not GameServer.online or Economy.busy)
+	for template in list:
+		var id: String = template.get("id", "")
+		var size: Array = template.get("size", [0, 0])
+		var pieces := (template.get("pieces", []) as Array).size()
+		if id == _renaming_id:
+			var edit := LineEdit.new()
+			edit.text = str(template.get("name", ""))
+			edit.max_length = HouseTemplates.MAX_NAME
+			edit.custom_minimum_size = Vector2(230, 52)
+			edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			edit.add_theme_font_size_override("font_size", 17)
+			_content.add_child(PanelRows.row([edit,
+				PanelRows.button("Listo", _on_rename_template.bind(id, edit), false, 110),
+				PanelRows.button("Cancelar", _on_cancel_rename, false, 130)]))
+			continue
+		var info := "%s\n%d piezas · %d × %d celdas" % [str(template.get("name", "")), pieces, int(size[0]), int(size[1])]
+		var delete_text := "¿Seguro?" if id == _delete_id else "Borrar"
+		_content.add_child(PanelRows.row([PanelRows.label(info, 17),
+			PanelRows.button("Colocar", _on_place_template.bind(id), offline or house == null, 130),
+			PanelRows.button("Renombrar", _on_start_rename.bind(id), false, 140),
+			PanelRows.button(delete_text, _on_delete_template.bind(id), false, 120)]))
+	if list.is_empty():
+		_content.add_child(PanelRows.label("Todavía no guardaste ninguna plantilla.", 15, Color(0.7, 0.75, 0.85)))
+
+
+func _on_save_template() -> void:
+	_delete_id = ""
+	var result := HouseTemplates.save_house(house, _new_name)
+	if result["ok"]:
+		_new_name = ""
+		_template_note = "Guardada: «%s»." % str(result["template"]["name"])
+	else:
+		_template_note = result["error"]
+	_rebuild()  # El aviso se cambió después de guardar: se dibuja de nuevo.
+
+
+func _on_place_template(id: String) -> void:
+	_template_note = ""
+	hide()
+	EventBus.template_place_requested.emit(id)
+
+
+func _on_start_rename(id: String) -> void:
+	_renaming_id = id
+	_delete_id = ""
+	_rebuild()
+
+
+func _on_cancel_rename() -> void:
+	_renaming_id = ""
+	_rebuild()
+
+
+func _on_rename_template(id: String, edit: LineEdit) -> void:
+	var result := HouseTemplates.rename(id, edit.text)
+	_template_note = "" if result["ok"] else result["error"]
+	if result["ok"]:
+		_renaming_id = ""
+	_rebuild()
+
+
+## Borrar pide tocar dos veces (la segunda vez dice «¿Seguro?»).
+func _on_delete_template(id: String) -> void:
+	if _delete_id != id:
+		_delete_id = id
+		_rebuild()
+		return
+	_delete_id = ""
+	HouseTemplates.remove(id)
+	_template_note = "Plantilla borrada."
+	_rebuild()

@@ -51,6 +51,11 @@ var _viewport: SubViewport
 var _camera: Camera3D
 var _mesh: MeshInstance3D
 var _dot: MeshInstance3D
+var _dot_material: StandardMaterial3D
+## Pulido 5D: ¿el personaje está dentro de la casa? Se recalcula solo si cambió algo.
+var _inside := false
+var _inside_key := ""
+var _inside_dirty := true
 var _dirty := true
 var _blink := 0.0
 var _center := Vector3.ZERO
@@ -84,6 +89,8 @@ func _ready() -> void:
 	dot_mat.albedo_color = Color(1.0, 0.35, 0.5)
 	dot_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	dot_mat.no_depth_test = true
+	dot_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_dot_material = dot_mat
 	_dot.material_override = dot_mat
 	_viewport.add_child(_dot)
 	angle_index = posmod(int(GameState.settings.get("floor_front_angle", 0)), ANGLE_COUNT)
@@ -94,8 +101,12 @@ func _ready() -> void:
 func setup(new_house: HouseData, new_character: Node3D) -> void:
 	house = new_house
 	character = new_character
-	house.piece_changed.connect(func(_l: int, _layer: String, _k: String) -> void: _dirty = true)
-	house.reloaded.connect(func() -> void: _dirty = true)
+	house.piece_changed.connect(func(_l: int, _layer: String, _k: String) -> void:
+		_dirty = true
+		_inside_dirty = true)
+	house.reloaded.connect(func() -> void:
+		_dirty = true
+		_inside_dirty = true)
 	_dirty = true
 
 
@@ -127,12 +138,52 @@ func _process(delta: float) -> void:
 	if _dirty:
 		_dirty = false
 		_rebuild()
-	# El punto del personaje parpadea (se ve y no se ve, suave).
+	# El punto del personaje (Pulido 5D): solo si está DENTRO de la casa, en el piso donde
+	# está aunque se mire otro (apagado y más chico), y también mientras duerme.
 	_blink += delta
-	_dot.visible = character != null and character.visible and fmod(_blink, 1.0) < 0.65
-	if character != null:
-		var level: int = character.get("level") if character.get("level") != null else 0
+	var state := dot_state()
+	_dot.visible = state["visible"]
+	if state["visible"]:
+		var level: int = state["level"]
+		var pulse := fmod(_blink, 1.0) < 0.65
+		_dot_material.albedo_color = Color(1.0, 0.35, 0.5, 1.0 if pulse else 0.0) if not state["dim"] else Color(1.0, 0.35, 0.5, 0.55)
+		_dot.scale = Vector3.ONE * (0.7 if state["dim"] else 1.0)
 		_dot.position = Vector3(character.position.x, _level_y(level) + 0.9, character.position.z)
+
+
+## Qué hace el punto del personaje: {visible, level, dim}. `dim` = está en otro piso
+## que el que se mira (queda quieto y apagado, como una marca en el piso correcto).
+func dot_state() -> Dictionary:
+	var result := {"visible": false, "level": 0, "dim": false}
+	if character == null or house == null:
+		return result
+	# Trabajando está fuera de la casa; dormido sigue en su cama (no se esconde por el sueño).
+	if character.get("state") == Character.State.WORKING:
+		return result
+	var level: int = int(character.get("level")) if character.get("level") != null else 0
+	var cell: Vector2i = character.get("cell") if character.get("cell") != null else Vector2i(-1, -1)
+	var key := "%d:%d,%d" % [level, cell.x, cell.y]
+	if _inside_dirty or key != _inside_key:
+		_inside_dirty = false
+		_inside_key = key
+		_inside = is_inside(house, level, cell)
+	result["visible"] = _inside
+	result["level"] = level
+	result["dim"] = level != current_level
+	return result
+
+
+## ¿La celda está dentro de la casa? Un cuarto cerrado, o una celda con piso y pared
+## al lado (pasillo, puerta, descanso de escalera). En el lote, afuera: no.
+static func is_inside(target: HouseData, level: int, cell: Vector2i) -> bool:
+	if not target.has_piece(level, "floors", HouseGrid.cell_key(cell)):
+		return false
+	if not HouseRooms.room_at(target, level, cell).is_empty():
+		return true
+	for edge in HouseGrid.cell_edges(cell):
+		if target.has_piece(level, "walls", edge):
+			return true
+	return false
 
 
 ## Altura (en el dibujo) del suelo de un piso.
@@ -235,6 +286,7 @@ func _draw_level(st: SurfaceTool, level: int, lo: Vector2, hi: Vector2, dir: Vec
 		# Piso agregado todavía vacío: marco tenue para poder tocarlo.
 		_quad(st, Vector3(lo.x, y0, hi.y), Vector3(hi.x, y0, hi.y), Vector3(hi.x, y1, hi.y), Vector3(lo.x, y1, hi.y), Color(base, FILL_ALPHA * 0.6))
 		_rect_outline(st, Vector3(lo.x, y0, hi.y), Vector3(hi.x, y0, hi.y), Vector3(hi.x, y1, hi.y), Vector3(lo.x, y1, hi.y), Color(base, 0.4), view_dir, width * 0.7)
+	var open_top := house.get_layer(level, "roofs").is_empty() and house.get_layer(level + 1, "floors").is_empty()
 	var corner_count := {}
 	for w in walls:
 		for v in HouseGrid.edge_vertices(w["key"]):
@@ -250,6 +302,10 @@ func _draw_level(st: SurfaceTool, level: int, lo: Vector2, hi: Vector2, dir: Vec
 		# dibujan las aristas de las caras que miran hacia nosotros.
 		var facing := Vector2(w["normal"]).dot(dir) > FACING_MIN
 		_quad(st, a, b, b + up, a + up, fill_color)
+		# Pulido 5D: sin techo ni piso encima, la cara de arriba de la casa se ve desde
+		# arriba: el borde de arriba de las paredes de atrás también es silueta.
+		if not facing and open_top:
+			_line(st, a + up, b + up, line_color, view_dir, width)
 		if not facing:
 			continue
 		_line(st, a, b, line_color, view_dir, width)
@@ -305,8 +361,10 @@ func _draw_roof(st: SurfaceTool, rect: Rect2i, y: float, flat: bool, color: Colo
 	var facing := [false, false, false, false]
 	for i in 4:
 		facing[i] = edge_normals[i].dot(toward) > FACING_MIN
-		if facing[i]:
+		if facing[i] or flat:
 			_line(st, base[i], base[(i + 1) % 4], color, view_dir, width)
+	# Pulido 5D: la losa plana se ve desde arriba, así que sus CUATRO aristas son visibles
+	# (antes faltaba la de atrás/izquierda). El techo a dos aguas esconde las de atrás.
 	if flat:
 		return
 	# Una esquina se dibuja si toca una arista que mira hacia nosotros.

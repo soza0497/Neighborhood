@@ -1317,3 +1317,57 @@ pivote en el centro de la base, **contorno por shader (no modelado)**; el arte s
   registro corto (intención actual con su motivo `last_reason`, accidente forzado, lo que se cambió).
 - **Cuidado legal**: los accidentes y su lógica son propios (nombres, animaciones y reglas inventados para este juego); no se copió
   ninguna mecánica, animación ni nombre de otros juegos.
+## Pulido 5 (versión 0.12.0)
+
+### 5A — Ocultar el restaurante
+- **Interruptor en datos:** `data/features.json` → `"player_business": false`. Con `false` se esconde TODO lo del restaurante
+  propio en la interfaz: botón «Restaurante» del ☰, la categoría «Restaurante» de la Tienda (y de «Recomendado») y sus muebles.
+  Los negocios vendrán ya creados en la isla; el jugador no abre uno propio todavía.
+- **No se borró nada:** el catálogo, `data/business.json`, `Restaurant`, `RestaurantPanel`, el minijuego, el módulo Lua y sus pruebas
+  siguen. `Catalog.feature()`, `category_visible()` e `item_visible()` son los únicos puntos de decisión. `test_business` prende el
+  interruptor (y comprueba que apagado se esconde). Una partida con restaurante abierto no pierde nada: el servidor sigue
+  calculando sus ingresos; solo no hay botón para verlo (se vuelve a prender con `true`).
+
+### 5B — Cámara cerca del suelo
+- **Causa del problema:** el paneo «agarrar el suelo» (el punto del suelo bajo el dedo sigue al dedo) se dispara cuando la cámara casi
+  mira de frente: un píxel vertical cubre decenas de metros de suelo.
+- **Ángulo mínimo en datos** (`data/camera.json`, `pitch_min_degrees` = −20°): la cámara no baja más (ni con la perilla, ni con
+  `set_pitch`, ni con una partida vieja guardada en −8°). El primer preset «De frente» pasó de −8° a −20°.
+- **Controles a inclinación baja** (más horizontal que `low_pitch_below` = −35°): lo que hacen los juegos de construcción en móvil
+  cuando la vista es casi a nivel de calle es **separar los gestos**: arrastre lateral = desplazamiento lateral, arrastre vertical =
+  avance lento, pellizco = zoom, dos dedos = girar. Se eligió así: un dedo horizontal **desplaza a los lados** (no gira; girar queda
+  con dos dedos o clic derecho, como siempre); uno vertical **avanza/retrocede lento** (×0,3) con una **zona muerta** de 14 px; la
+  dirección sigue siendo «agarrar» (dedo hacia arriba = la cámara retrocede) para que no se sienta invertido al cruzar los −35°.
+- **Velocidad proporcional a la distancia:** todo se mide en metros por píxel a la distancia a la que se mira (`2·d·tan(fov/2)/alto`).
+  Hay un **tope por gesto** (`pan_cap` × distancia), un **tope de movimiento pendiente** y un **tope por cuadro** (`frame_cap`); el
+  movimiento pendiente se gasta con **amortiguación** exponencial (`damping`), así un tirón no «salta».
+- **Límite al lote:** en vista normal la cámara se queda dentro de la **parcela usable de hoy + 3 m** (`Parcel.zone_bounds()`, crece al
+  desbloquear terreno). **Borde suave**: cada eje se frena con una curva suave en los últimos 6 m y llega a 0 en el borde (sin golpe).
+  La vista del barrio / visitas (`enter_neighborhood_view`) apaga ese límite y conserva los suyos (±190 m); la isla (`isla-1a`) puede
+  hacer lo mismo con `lot_limit_enabled = false`. Con el lote de pruebas (32) el límite de parcela no se aplica.
+
+### 5C — Menús y pantalla despejada
+- **Capa libre `Overlay`** (un `Control`, no un contenedor) para el ☰, Info, la tarjeta del ánimo, el menú de una pieza y las ventanitas:
+  antes eran hijos de `Root` (un `MarginContainer`) y su tamaño mínimo agrandaba a `Root` y corría las barras. Cada uno se ancla solo
+  (☰ a la derecha al medio; Info y menús al centro; ánimo arriba a la izquierda) y respeta el área segura.
+- **Menús opacos** (alfa 1) y **exclusivos** (`_close_floating`): abrir uno cierra los demás; la barra del ángulo se esconde mientras
+  haya un menú abierto y termina antes de la fila de acciones / barra de abajo (antes quedaba encima de la Tienda).
+- **Interfaz por modo:** al construir se esconden el ánimo y las necesidades (queda dinero y nivel); al vivir todo igual que antes.
+
+### 5D — Maqueta de pisos
+- Una **losa plana** se ve desde arriba: sus **cuatro** aristas son visibles (antes solo las que miraban a la cámara). Sin techo ni piso
+  encima, el borde de arriba de las paredes de atrás también es silueta. Con techo a dos aguas se siguen escondiendo las de atrás.
+- **Punto del personaje:** solo si está **dentro** (cuarto cerrado, o celda con piso y una pared al lado); en el lote, no. Aparece en el
+  piso donde está aunque se mire otro (apagado y más chico). El bug de «desaparece al dormir» venía de depender de `character.visible`:
+  ahora solo se esconde si está en el trabajo. (No se pudo reproducir sin Godot: ver PROGRESO.)
+
+### 5E — Plantillas de casa
+- **Qué es:** estructura sin muebles (cimientos, excavación, pisos, paredes con puertas/ventanas, techos, escaleras y pilares, con
+  pintura). `HouseTemplate` (funciones puras) + `HouseTemplates` (lista) + `TemplatePlacer` (holograma) + `HouseBuilder.place_template`.
+- **Dónde se guardan:** en `GameState.settings["house_templates"]`: viaja con la partida y, con cuenta, con el resto de las opciones a la
+  nube (`CloudSync`) sin tocar el servidor. Tope: 10 por cuenta y 1500 piezas cada una.
+- **Colocar = una obra más:** las escrituras (en orden: sótanos, cimientos, pisos, paredes, escaleras/pilares, techos) entran al **plan y a la
+  factura** del Pulido 2A; con servidor se cobran por `build_apply` (que ya revisa apoyo, lote, obstáculos, zona cerrada y nivel con
+  `check_support`), y en casa compartida va a la propuesta. Deshacer saca la plantilla entera en un solo paso (en el plan y después de pagar).
+- **Holograma:** verde si cabe, rojo si no (fuera del lote / obstáculo, cerca o zona cerrada / choca con lo construido / sin apoyo / nivel).
+  Un dedo (o el mouse) mueve la silueta; dos dedos, la cámara. Sin girar la plantilla todavía.

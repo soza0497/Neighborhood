@@ -181,7 +181,8 @@ func _test_pitch_slider() -> void:
 	await _frames(25)
 	slider.press_at(-1.0)
 	await _frames(500)
-	_check(rig.pitch_degrees >= -8.0 and rig.pitch_degrees <= -5.0, "hacia abajo baja el ángulo hasta casi de frente (%.0f°)" % rig.pitch_degrees)
+	# Pulido 5B: ya no baja hasta casi horizontal; se frena en el mínimo de data/camera.json.
+	_check(is_equal_approx(rig.pitch_degrees, float(rig.config["pitch_min_degrees"])), "hacia abajo baja el ángulo hasta el mínimo permitido (%.0f°)" % rig.pitch_degrees)
 	slider.release_now()
 	await _frames(25)
 	# Con el mouse de verdad: clic en la perilla, arrastrar y soltar.

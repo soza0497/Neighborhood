@@ -51,6 +51,7 @@ var _services: Services
 var _delivery: Delivery
 var _problems_timer := 0.0
 var _neighborhood: NeighborhoodController
+var _template_placer: TemplatePlacer
 const PROBLEMS_INTERVAL := 0.4
 
 
@@ -72,6 +73,11 @@ func _ready() -> void:
 	_house_view.position = Vector3(-HouseGrid.LOT_SIZE.x / 2.0, 0.0, -HouseGrid.LOT_SIZE.y / 2.0)
 	_house_view.setup(house)
 	_builder.setup(house, history, _house_view, _camera_rig)
+	# Pulido 5E: colocar plantillas de casa (hijo de la casa, después del constructor).
+	_template_placer = TemplatePlacer.new()
+	_template_placer.name = "TemplatePlacer"
+	_house_view.add_child(_template_placer)
+	_template_placer.setup(_builder, house, _house_view, _camera_rig)
 	_live.view = _house_view
 	_setup_parcel_nodes()
 	_load_character()
