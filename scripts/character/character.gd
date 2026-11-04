@@ -95,6 +95,8 @@ var _name_tag: Label3D
 
 func _ready() -> void:
 	_rng.randomize()
+	# Fase 7: «Usar modelos» en Info → se arma otra vez la figura.
+	EventBus.models_toggled.connect(_on_models_toggled)
 	_animator = CharacterAnimator.new()
 	add_child(_animator)
 	_bubble = Label3D.new()
@@ -133,14 +135,20 @@ func setup(new_data: CharacterData, new_house: HouseData, new_nav: HouseNav, new
 	_set_idle()
 
 
+func _on_models_toggled(_on: bool) -> void:
+	if _body != null:
+		refresh_look()
+
+
 ## Vuelve a armar la figura (después de usar el editor).
 func refresh_look() -> void:
 	if _body != null:
 		_body.queue_free()
 	_work_props = null
-	_body = CharacterLook.build(data.appearance)
+	_body = CharacterAssembler.build(data.appearance)
 	add_child(_body)
 	_animator.body = _body
+	_animator.bind_model(_body)
 	if _name_tag != null:
 		_name_tag.text = data.name
 

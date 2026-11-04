@@ -14,8 +14,42 @@ const ANIMATIONS := ["idle", "walk", "sleep", "sit", "cook", "eat", "shower", "u
 var body: Node3D
 ## Si el modelo final trae animaciones, se ponen aquí.
 var animation_player: AnimationPlayer
+## Fase 7: nombre del gancho → nombre real en el AnimationPlayer del .glb
+## (según "animations" de data/character_slots.json).
+var _clip_names: Dictionary = {}
 var current := "idle"
 var _time := 0.0
+
+
+## Fase 7: busca un AnimationPlayer en el cuerpo armado (si algún .glb lo trae)
+## y empareja los ganchos (idle, walk, sleep, cook...) con sus animaciones por nombre.
+## Sin AnimationPlayer o sin ese nombre, sigue la animación simple de este archivo.
+func bind_model(model: Node) -> void:
+	animation_player = null
+	_clip_names = {}
+	if model == null:
+		return
+	var found := model.find_children("*", "AnimationPlayer", true, false)
+	if found.is_empty():
+		return
+	animation_player = found[0] as AnimationPlayer
+	# Mayúsculas y minúsculas no importan («Walk» de Blender = «walk»).
+	var by_lowercase := {}
+	for clip_name in animation_player.get_animation_list():
+		by_lowercase[String(clip_name).to_lower()] = String(clip_name)
+	var aliases: Dictionary = CharacterAssembler.config().get("animations", {})
+	for hook in ANIMATIONS:
+		var accepted: Array = aliases.get(hook, [hook])
+		for clip in accepted:
+			if by_lowercase.has(str(clip).to_lower()):
+				_clip_names[hook] = by_lowercase[str(clip).to_lower()]
+				break
+	play(current)
+
+
+## ¿Este gancho tiene una animación real del modelo?
+func _has_clip(hook: String) -> bool:
+	return animation_player != null and _clip_names.has(hook)
 
 
 ## Cambia de animación. Si el nombre no existe, usa "idle".
@@ -23,12 +57,12 @@ func play(anim: String) -> void:
 	if not anim in ANIMATIONS:
 		anim = "idle"
 	current = anim
-	if animation_player != null and animation_player.has_animation(anim):
-		animation_player.play(anim)
+	if _has_clip(anim):
+		animation_player.play(_clip_names[anim])
 
 
 func _process(delta: float) -> void:
-	if body == null or (animation_player != null and animation_player.has_animation(current)):
+	if body == null or _has_clip(current):
 		return
 	_time += delta
 	# Se parte de la pose neutra y cada animación la modifica un poco.

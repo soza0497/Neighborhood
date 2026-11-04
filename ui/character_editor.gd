@@ -124,7 +124,7 @@ func _refresh_preview() -> void:
 	if _preview_body != null:
 		_preview_pivot.remove_child(_preview_body)
 		_preview_body.queue_free()
-	_preview_body = CharacterLook.build(_data.get("appearance", {}))
+	_preview_body = CharacterAssembler.build(_data.get("appearance", {}))
 	_preview_pivot.add_child(_preview_body)
 
 
