@@ -178,6 +178,20 @@ lista que son marca de la casa de The Sims y conviene **no** hacer así:
 2. **El pixelado** para tapar en el baño o la ducha. Mejor algo propio: una
    cortina, vapor, una toalla, o la cámara que mira para otro lado.
 
+### Personalización total del personaje y arte (2026-11-04)
+- Cada jugador debe poder tener **su versión**: ser un furro, ir vestido de
+  lobo o de robot, etc. Se arma con **piezas intercambiables sobre un solo
+  esqueleto** (cuerpo, cabeza, orejas, cola, ropa, disfraces). El editor de
+  personaje completo viene después; lo importante es **no atar el modelo a un
+  solo personaje** desde ahora. Ver `docs/guia-arte.md`.
+- Arte: el dueño lo va a crear él mismo (Blender, Krita) y lo va a cambiar
+  varias veces; el catálogo apunta a `.glb` con respaldo a figuras simples.
+- Interfaz: el dueño puede aportar referencias o diseños en Figma.
+- **Negocios más adelante:** el dueño como **administrador**, que contrata
+  personal (NPCs y jugadores del barrio) y les paga sueldo; los empleados
+  trabajan solos, sin minijuego obligatorio. Cuidar el balance para que no
+  haya ciclos de dinero infinito. Va después del barrio (Fase 8).
+
 ### Casa compartida
 - Remodelación como **propuesta completa** que la pareja previsualiza y
   aprueba: ya pasó a `docs/pulido-1.md`.
