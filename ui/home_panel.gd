@@ -17,8 +17,7 @@ var house: HouseData
 @onready var _content: VBoxContainer = %Content
 @onready var _close_button: Button = %CloseButton
 
-## Pulido 5E: la casa (la pone el HUD) para guardar plantillas, y el estado de la lista.
-var house: HouseData
+## Pulido 5E: estado de la lista de plantillas (la casa ya está arriba).
 var _new_name := ""
 var _renaming_id := ""
 var _delete_id := ""

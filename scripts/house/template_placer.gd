@@ -212,7 +212,7 @@ func _make_hologram() -> void:
 	_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_material.albedo_color = COLOR_OK
 	_hologram.material_override = _material
-	_hologram.cast_shadow = GeometryInstance3D.SHADOW_CASTING_MODE_OFF
+	_hologram.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_view.add_child(_hologram)
 
 
