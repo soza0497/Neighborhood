@@ -126,6 +126,7 @@ func _ready() -> void:
 	_setup_icons()
 	_build_floor_selector()
 	_build_pitch_slider()
+	_build_overlay()  # Pulido 5C: los menús flotan fuera del contenedor (no empujan nada).
 	_build_rooms_button()
 	_build_left_holder()
 	get_viewport().size_changed.connect(_fit_to_screen)
@@ -444,6 +445,87 @@ func _assign_room(room: Dictionary, type_id: String, main: bool) -> void:
 	EventBus.rooms_changed.emit()
 
 
+## Pulido 5C: capa libre (no es un contenedor) para los menús que flotan encima de
+## la interfaz: ☰, Info, tarjeta del ánimo, menú de una pieza y ventanitas. Antes
+## vivían dentro de `Root` (un MarginContainer): su tamaño mínimo agrandaba a
+## `Root` y corría las barras de arriba y de abajo. Aquí cada uno tiene sus anclas.
+var _overlay: Control
+
+
+func _build_overlay() -> void:
+	_overlay = Control.new()
+	_overlay.name = "Overlay"
+	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(_overlay)
+	# Los menús son opacos (sin ver los botones de atrás).
+	for menu in [_side_menu, _info_panel, _action_menu, _mood_card.get_child(0)]:
+		var style := menu.get_theme_stylebox("panel").duplicate() as StyleBoxFlat
+		if style != null:
+			style.bg_color.a = 1.0
+			menu.add_theme_stylebox_override("panel", style)
+	_float_control(_side_menu, 1.0, 0.5)
+	_float_control(_info_panel, 0.5, 0.5)
+	_float_control(_action_menu, 0.5, 0.5)
+	_float_control(_mood_card, 0.0, 0.0)
+	# La barra del ángulo se acomoda sobre la fila de acciones / barra de abajo cuando cambian.
+	for bar in [_bottom_bar, _action_row]:
+		bar.resized.connect(_fit_to_screen.call_deferred)
+		bar.visibility_changed.connect(_fit_to_screen.call_deferred)
+
+
+## Saca un nodo de `Root` y lo ancla a un punto de la pantalla (0..1 en cada eje).
+## Su tamaño sale de su tamaño mínimo y crece hacia adentro de la pantalla.
+func _float_control(control: Control, anchor_x: float, anchor_y: float) -> void:
+	control.reparent(_overlay, false)
+	control.anchor_left = anchor_x
+	control.anchor_right = anchor_x
+	control.anchor_top = anchor_y
+	control.anchor_bottom = anchor_y
+	control.grow_horizontal = Control.GROW_DIRECTION_BEGIN if anchor_x >= 1.0 \
+		else (Control.GROW_DIRECTION_BOTH if anchor_x > 0.0 else Control.GROW_DIRECTION_END)
+	control.grow_vertical = Control.GROW_DIRECTION_BEGIN if anchor_y >= 1.0 \
+		else (Control.GROW_DIRECTION_BOTH if anchor_y > 0.0 else Control.GROW_DIRECTION_END)
+	control.offset_left = 0.0
+	control.offset_right = 0.0
+	control.offset_top = 0.0
+	control.offset_bottom = 0.0
+
+
+## Deja cada menú flotante a su distancia del borde (área segura incluida).
+func _place_floating(margins: Vector4) -> void:
+	if _overlay == null:
+		return
+	_side_menu.offset_left = -margins.z
+	_side_menu.offset_right = -margins.z
+	_mood_card.offset_left = margins.x
+	_mood_card.offset_right = margins.x
+	_mood_card.offset_top = margins.y
+	_mood_card.offset_bottom = margins.y
+
+
+## ¿Hay algún menú abierto? (la barra del ángulo se esconde para no quedar encima)
+func _any_menu_open() -> bool:
+	return _side_menu.visible or _action_menu.visible or _mood_card.visible or _info_panel.visible \
+		or (_popup != null and is_instance_valid(_popup))
+
+
+## Pulido 5C: menús exclusivos. Abrir uno cierra los demás (menos `keep`).
+func _close_floating(keep: Control = null) -> void:
+	if _side_menu != keep:
+		_side_menu.hide()
+	if _action_menu != keep:
+		_action_menu.hide()
+	if _info_panel != keep:
+		_info_panel.hide()
+	if _mood_card != keep:
+		_mood_card.hide()
+	if keep != _side_menu and keep != _mood_card:
+		_card_overlay.hide()
+	if keep != _popup:
+		_close_popup()
+
+
 ## Barra del ángulo de la cámara (Pulido 3B): costado derecho, debajo del menú.
 ## Reemplaza al botón de antes (que pasaba de a saltos por 5 ángulos).
 func _build_pitch_slider() -> void:
@@ -490,10 +572,16 @@ func _fit_to_screen() -> void:
 		var factor := clampf(available / maxf(1.0, need.y), 0.45, 1.0)
 		column.scale = Vector2(factor, factor)
 		column.position = Vector2(0.0, maxf(0.0, (available - need.y * factor) / 2.0))
+	_place_floating(margins)
 	# Barra del ángulo: costado derecho, debajo del menú hamburguesa.
 	if _pitch_slider != null:
 		var menu_bottom := margins.y + float(Icons.BUTTON_SIZE) + 10.0
-		var height := clampf(view.y - menu_bottom - margins.w - 150.0, 120.0, PitchSlider.TRACK_HEIGHT)
+		# Pulido 5C: termina antes de la fila de acciones o de la barra de abajo (la que esté más arriba).
+		var floor_y := view.y - margins.w - 150.0
+		for bar in [_bottom_bar, _action_row]:
+			if bar.is_visible_in_tree() and bar.size.y > 0.0:
+				floor_y = minf(floor_y, bar.get_global_rect().position.y - 10.0)
+		var height := clampf(floor_y - menu_bottom, 90.0, PitchSlider.TRACK_HEIGHT)
 		_pitch_slider.position = Vector2(view.x - margins.z - PitchSlider.TRACK_WIDTH, menu_bottom)
 		_pitch_slider.size = Vector2(PitchSlider.TRACK_WIDTH, height)
 
@@ -526,6 +614,8 @@ func _process(delta: float) -> void:
 	# Pulido 3B: con la perilla del ángulo desviada, la cámara sube o baja.
 	if _pitch_slider != null and absf(_pitch_slider.value) > 0.05:
 		EventBus.camera_pitch_step_requested.emit(_pitch_slider.value * PITCH_RATE * delta)
+	if _pitch_slider != null:
+		_pitch_slider.visible = not _any_menu_open()
 	var fps_text := "%d FPS" % Engine.get_frames_per_second()
 	if _fps_label.visible:
 		_fps_label.text = fps_text
@@ -555,6 +645,7 @@ func _toggle_mood_card() -> void:
 	if _mood_card.visible:
 		_close_cards()
 		return
+	_close_floating(_mood_card)
 	_fill_mood_card()
 	_mood_card.show()
 	_card_overlay.show()
@@ -579,7 +670,7 @@ func _toggle_side_menu() -> void:
 	if _side_menu.visible:
 		_close_side_menu()
 		return
-	_close_cards()
+	_close_floating(_side_menu)
 	_side_menu.show()
 	_card_overlay.show()
 
@@ -660,6 +751,7 @@ func _on_object_menu_requested(level: int, key: String, item_id: String) -> void
 		button.add_theme_font_size_override("font_size", 20)
 		button.pressed.connect(_on_menu_action.bind(level, key, action["id"]))
 		_menu_buttons.add_child(button)
+	_close_floating(_action_menu)
 	_action_menu.show()
 
 
@@ -715,6 +807,7 @@ func _open_from_menu(request: Signal) -> void:
 
 
 func _open_info() -> void:
+	_close_floating(_info_panel)
 	_close_side_menu()
 	_update_info()
 	_update_partner_label()
@@ -762,6 +855,9 @@ func _on_game_mode_changed(mode: String) -> void:
 	var building := mode == "build"
 	Icons.setup(_mode_button, "live" if building else "helmet", "Vivir" if building else "Construir")
 	_bottom_bar.visible = building
+	# Pulido 5C: al construir se ocultan el ánimo y las necesidades (quedan el dinero y el nivel).
+	_mood_button.visible = not building
+	_close_cards()
 	_undo_button.visible = building
 	_redo_button.visible = building
 	_speed_button.visible = not building
@@ -879,7 +975,7 @@ func _update_info() -> void:
 ## Un panel chico en el medio, armado por código (menú de una pieza o lista
 ## de "lo que falta"). Tocar "Cerrar" lo saca.
 func _open_popup(title: String) -> VBoxContainer:
-	_close_popup()
+	_close_floating()
 	_popup = PanelContainer.new()
 	_popup.add_theme_stylebox_override("panel", _mood_card.get_child(0).get_theme_stylebox("panel"))
 	_popup.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -892,7 +988,11 @@ func _open_popup(title: String) -> VBoxContainer:
 	label.add_theme_font_size_override("font_size", 22)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rows.add_child(label)
-	$Root.add_child(_popup)
+	# Pulido 5C: flota en el centro de la capa libre (no en el contenedor de la interfaz).
+	_overlay.add_child(_popup)
+	_popup.set_anchors_preset(Control.PRESET_CENTER)
+	_popup.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_popup.grow_vertical = Control.GROW_DIRECTION_BOTH
 	return rows
 
 
