@@ -22,6 +22,9 @@ var settings: Dictionary = {}
 ## Cuenta del servidor a la que pertenece esta partida: {"user_id", "username"}.
 ## Vacío = partida de antes de la Fase 4 (todavía sin cuenta).
 var account: Dictionary = {}
+## Fase 6: un servicio del restaurante jugado que el servidor todavía no
+## cobró (sin conexión al terminar): {"actions": [...], "started_unix"}.
+var restaurant: Dictionary = {}
 
 
 ## Vuelve todo a una partida nueva.
@@ -33,6 +36,7 @@ func reset() -> void:
 	economy = {}
 	settings = {}
 	account = {}
+	restaurant = {}
 
 
 ## Convierte el estado en un diccionario simple que se puede escribir en JSON.
@@ -45,6 +49,7 @@ func to_dict() -> Dictionary:
 		"economy": economy,
 		"settings": settings,
 		"account": account,
+		"restaurant": restaurant,
 	}
 
 
@@ -58,3 +63,4 @@ func from_dict(data: Dictionary) -> void:
 	economy = data.get("economy", {})
 	settings = data.get("settings", {})
 	account = data.get("account", {})
+	restaurant = data.get("restaurant", {})

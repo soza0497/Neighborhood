@@ -11,6 +11,7 @@ const TRAITS_PATH := "res://data/traits.json"
 const CHARACTER_OPTIONS_PATH := "res://data/character_options.json"
 const PROGRESSION_PATH := "res://data/progression.json"
 const JOBS_PATH := "res://data/jobs.json"
+const BUSINESS_PATH := "res://data/business.json"
 
 ## Campos que todo objeto del catálogo debe tener.
 const REQUIRED_ITEM_FIELDS := ["id", "name", "category", "kind", "price"]
@@ -31,6 +32,8 @@ var character_options: Dictionary = {}
 var progression: Dictionary = {}
 ## Empleos por id (ver data/jobs.json).
 var jobs: Dictionary = {}
+## Negocios (Fase 6, ver data/business.json): {"restaurant": {...}}.
+var business: Dictionary = {}
 
 
 func _ready() -> void:
@@ -111,6 +114,7 @@ func _load_character_data() -> void:
 	jobs.clear()
 	for job in _read_json(JOBS_PATH).get("jobs", []):
 		jobs[job["id"]] = job
+	business = _read_json(BUSINESS_PATH)
 
 	# Avisa si un mueble pide una acción que no existe.
 	for item in items.values():

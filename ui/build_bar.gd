@@ -19,7 +19,7 @@ extends PanelContainer
 ## No toca la casa: pide todo por EventBus (y lee el constructor para saber
 ## en qué cuarto se está, para la Tienda).
 
-const SHOP_CATEGORIES := ["furniture", "appliances", "electronics", "plants", "decor"]
+const SHOP_CATEGORIES := ["furniture", "appliances", "electronics", "plants", "decor", "restaurant"]
 const BUILD_CATEGORIES := ["structure", "openings", "roofs", "stairs"]
 const RECOMMENDED := "__recommended__"
 const ITEM_BUTTON_SIZE := Vector2(150, 76)

@@ -91,12 +91,13 @@ func _build_requests(home: Dictionary, usable: bool) -> void:
 				PanelRows.button("Retirar", _on_cancel_request.bind(request["id"]), not usable, 130),
 			]))
 		else:
-			_content.add_child(PanelRows.row([
-				PanelRows.label("%s propone: %s%s" % [request["by_name"], request["text"], cost_text]),
-				PanelRows.button("Ver", _on_view_request.bind(request["id"]), not usable, 90),
-				PanelRows.button("Aprobar", _on_answer_request.bind(request["id"], true), not usable, 130),
-				PanelRows.button("No", _on_answer_request.bind(request["id"], false), not usable, 90),
-			]))
+			# Fase 6: abrir o cerrar el restaurante no tiene piezas que "Ver".
+			var row: Array = [PanelRows.label("%s propone: %s%s" % [request["by_name"], request["text"], cost_text])]
+			if request.get("business", "") == "":
+				row.append(PanelRows.button("Ver", _on_view_request.bind(request["id"]), not usable, 90))
+			row.append(PanelRows.button("Aprobar", _on_answer_request.bind(request["id"], true), not usable, 130))
+			row.append(PanelRows.button("No", _on_answer_request.bind(request["id"], false), not usable, 90))
+			_content.add_child(PanelRows.row(row))
 
 
 func _build_log(home: Dictionary, usable: bool) -> void:
@@ -127,6 +128,7 @@ func _on_pool_toggled(on: bool) -> void:
 
 func _on_answer_request(id: int, approve: bool) -> void:
 	await Couple.answer_request(id, approve)
+	Restaurant.refresh()  # Por si era abrir o cerrar el restaurante.
 
 
 ## Pulido 1: ver la propuesta en la casa antes de responder.

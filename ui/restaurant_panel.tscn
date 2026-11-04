@@ -1,0 +1,113 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/restaurant_panel.gd" id="1_rest"]
+
+[sub_resource type="StyleBoxFlat" id="Style_panel"]
+bg_color = Color(0.13, 0.17, 0.25, 0.96)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+content_margin_left = 22.0
+content_margin_top = 14.0
+content_margin_right = 22.0
+content_margin_bottom = 14.0
+
+[node name="RestaurantPanel" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_rest")
+
+[node name="Dim" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.35)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Center"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_panel")
+
+[node name="Rows" type="VBoxContainer" parent="Center/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Center/Panel/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Restaurante"
+
+[node name="StatusLabel" type="Label" parent="Center/Panel/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(760, 52)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.88, 0.6, 1)
+theme_override_font_sizes/font_size = 19
+text = "Cerrado."
+autowrap_mode = 3
+
+[node name="InfoLabel" type="Label" parent="Center/Panel/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(760, 90)
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+text = ""
+autowrap_mode = 3
+
+[node name="Buttons" type="HBoxContainer" parent="Center/Panel/Rows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 2
+
+[node name="OpenButton" type="Button" parent="Center/Panel/Rows/Buttons"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(230, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Abrir restaurante"
+
+[node name="CollectButton" type="Button" parent="Center/Panel/Rows/Buttons"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(170, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Cobrar caja"
+
+[node name="ServeButton" type="Button" parent="Center/Panel/Rows/Buttons"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(170, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Atender (1:30)"
+
+[node name="PracticeButton" type="Button" parent="Center/Panel/Rows/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Practicar"
+
+[node name="CloseButton" type="Button" parent="Center/Panel/Rows/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Cerrar"

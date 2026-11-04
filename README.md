@@ -172,6 +172,38 @@ Todo pasa por el servidor: hace falta estar conectado (en la red de casa).
 - Al terminar: la casa queda de quien era, quien se había mudado vuelve a su
   casa de antes (quedó guardada), y la caja se reparte en dos.
 
+## Restaurante (Fase 6)
+
+Tu primer negocio. Todo lo de dinero lo decide el servidor (hace falta estar
+conectado, en la red de casa).
+
+- **Armarlo**: en tu parcela (lo normal, un edificio aparte al lado de la
+  casa), **Construir → Tienda → Restaurante**: un **Mostrador**, una
+  **Plancha de restaurante** y al menos una **Mesa de restaurante** (cada mesa
+  es un cliente más a la vez, hasta 3). Los **Banquitos** son de adorno. La
+  Tienda, mirando ese edificio, recomienda primero "★ Restaurante".
+- **Menú → Restaurante**: dice qué le falta, **Abrir restaurante**, la **caja
+  del restaurante** (junta sola $20 por hora, hasta $160, aunque no entres:
+  **Cobrar caja**) y lo ganado hoy (tope **$600** cada 24 h).
+- **Atender (1:30)**: el minijuego. Arriba llegan clientes con su pedido en
+  un globito. Abajo tocás los ingredientes para armar el plato: pan, lechuga,
+  tomate y queso van directo al plato; **tortita** y **huevo** (con llamita)
+  van a la **plancha**: cuando brillan están a punto, tocalos para pasarlos
+  al plato (si esperás demasiado se queman: tocalos para tirarlos). Después
+  **tocá al cliente** para servirle. El orden no importa. Rápido = propina;
+  bien seguido = racha. Equivocarse lo enoja un poco. **Tirar** vacía el
+  plato.
+- Al terminar, el teléfono manda **solo lo que tocaste**; el servidor repite
+  el servicio y paga lo que calcula él. Si te quedás sin conexión justo al
+  final, se cobra solo cuando vuelvas.
+- **Practicar**: el mismo juego sin cobrar (sirve también sin conexión).
+- Viviendo juntos: abrir o cerrar el restaurante pide permiso a tu pareja; lo
+  que junta solo va a la caja de la casa; lo que ganás atendiendo va a tu
+  billetera (o a la caja, con "Unir ingresos").
+- Los números (precios del servicio, tiempos, topes, qué muebles pide) están
+  en `data/business.json`. Si los cambiás, reiniciá Nakama: el servidor lee el
+  mismo archivo.
+
 ## Pruebas automáticas
 
 En la terminal, dentro de la carpeta del proyecto:
@@ -196,17 +228,23 @@ godot --headless --path . res://tests/test_server.tscn
 godot --headless --path . res://tests/test_couple.tscn
 ```
 
+```bash
+godot --headless --path . res://tests/test_business.tscn
+```
+
 La primera revisa las reglas de construcción y el deshacer; la segunda, las
 necesidades, la IA y los caminos; la tercera, precios, niveles, obras, empleos
 y la migración del guardado; la cuarta, el cliente del servidor (sin red); la
-quinta, la pareja y la casa compartida (sin red). Deben terminar con
+quinta, la pareja y la casa compartida (sin red); la sexta, el restaurante y
+su minijuego (que el teléfono cuente igual que el servidor). Deben terminar con
 `PRUEBAS: N pasaron, 0 fallaron`. (`tests/ui_demo.tscn` prueba la interfaz
 y el constructor nuevos con clics de verdad y saca capturas `ui_*.png`;
 `tests/visual_demo.tscn`,
 `tests/character_demo.tscn` y `tests/economy_demo.tscn` arman casas de ejemplo y sacan capturas, pero
 **pisan la partida guardada**. `tests/server_demo.tscn`,
 `tests/economy_server_demo.tscn`, `tests/login_demo.tscn`,
-`tests/couple_demo.tscn` y `tests/couple_live_demo.tscn` prueban contra el
+`tests/couple_demo.tscn`, `tests/couple_live_demo.tscn` y
+`tests/restaurant_demo.tscn` (Fase 6, con capturas `restaurante_*.png`) prueban contra el
 servidor de verdad: ver `docs/servidor.md`.)
 
 Y las reglas del servidor (opcional, necesita Lua 5.1, ver `docs/servidor.md`):
@@ -239,7 +277,7 @@ parecido y cambiale `id`, `name`, `footprint`, `height` y `color`. Si te equivoc
 | Carpeta | Qué hay |
 |---|---|
 | `scenes/` | Escenas del mundo 3D (`main.tscn` = el juego; arranca después de `ui/login_screen.tscn`) |
-| `scripts/` | Código. `autoload/` = sistemas siempre presentes; `house/` = la casa, el constructor y los caminos; `character/` = el personaje y su IA |
+| `scripts/` | Código. `autoload/` = sistemas siempre presentes; `house/` = la casa, el constructor y los caminos; `character/` = el personaje y su IA; `business/` = el restaurante y su minijuego (Fase 6) |
 | `data/` | Datos editables: catálogo, acciones, rasgos, opciones del personaje |
 | `ui/` | Interfaz (botones, textos) |
 | `assets/` | Modelos, sonidos, texturas, shaders (casi vacía hasta la Fase 7) |
@@ -265,6 +303,9 @@ Están siempre cargados y se usan desde cualquier script por su nombre:
   opciones a la nube, avisar "sigo jugando"). Desde la Fase 5 también la
   conexión en tiempo real (`GameServer.socket`): avisos al instante y
   presencia de la pareja.
+- **Restaurant** (Fase 6): el restaurante (abrir, cobrar la caja, empezar y
+  cobrar un servicio con el servidor; guarda un servicio sin cobrar si se
+  corta la conexión).
 - **Couple** (Fase 5): la pareja y la casa compartida: relación, si la pareja
   está en línea y qué hace su personaje, caja, pedidos de permiso e historial.
 - **SaveSystem**: guarda/carga `GameState` en `user://save.json` (con copia de

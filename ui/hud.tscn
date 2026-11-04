@@ -11,6 +11,8 @@
 [ext_resource type="Script" path="res://ui/floor_map.gd" id="9_map"]
 [ext_resource type="Script" path="res://ui/compass_button.gd" id="10_compass"]
 [ext_resource type="Script" path="res://ui/build_bar.gd" id="11_bar"]
+[ext_resource type="PackedScene" path="res://ui/restaurant_panel.tscn" id="12_rest"]
+[ext_resource type="PackedScene" path="res://ui/restaurant_game.tscn" id="13_game"]
 
 [sub_resource type="StyleBoxFlat" id="Style_bar"]
 bg_color = Color(0.13, 0.17, 0.25, 0.85)
@@ -569,6 +571,14 @@ theme_override_font_sizes/font_size = 19
 text = "Empleos"
 alignment = 0
 
+[node name="RestaurantButton" type="Button" parent="Root/SideMenu/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 19
+text = "Restaurante"
+alignment = 0
+
 [node name="CoupleButton" type="Button" parent="Root/SideMenu/Rows"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
@@ -624,3 +634,7 @@ text = "Cerrar"
 [node name="CouplePanel" parent="." instance=ExtResource("6_couple")]
 
 [node name="HomePanel" parent="." instance=ExtResource("7_home")]
+
+[node name="RestaurantPanel" parent="." instance=ExtResource("12_rest")]
+
+[node name="RestaurantGame" parent="." instance=ExtResource("13_game")]

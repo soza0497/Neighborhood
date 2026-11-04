@@ -55,7 +55,7 @@ static func normalize_home(raw: Variant) -> Dictionary:
 		if r is Dictionary:
 			requests.append({"id": int(r.get("id", 0)), "by_me": bool(r.get("by_me", false)),
 				"by_name": str(r.get("by_name", "")), "at": int(r.get("at", 0)), "text": str(r.get("text", "")),
-				"cost": int(r.get("cost", 0))})
+				"cost": int(r.get("cost", 0)), "business": str(r.get("business", ""))})
 	var log: Array = []
 	for e in CloudSync.as_array(h.get("log")):
 		if e is Dictionary:

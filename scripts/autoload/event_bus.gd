@@ -168,3 +168,13 @@ signal home_panel_requested
 ## entrada del historial que se puede deshacer (0 = sin botón).
 signal partner_notice(text: String, entry_id: int)
 
+
+# --- Restaurante (Fase 6) ---
+## La interfaz pide abrir el panel del restaurante.
+signal restaurant_panel_requested
+## Cambió el estado del restaurante (leer Restaurant.summary).
+signal restaurant_changed
+## Empieza el minijuego "Servicio": {seed, seats, practice}.
+signal restaurant_service_requested(info: Dictionary)
+## Terminó un servicio: el resultado (lo que contó el servidor, o la práctica).
+signal restaurant_service_finished(result: Dictionary)
