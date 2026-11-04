@@ -239,3 +239,12 @@ por tiempo) y el minijuego "Servicio" es un reto opcional con premio extra.
      por qué turno) para poder auditarlo.
 - **Trabajar en un restaurante ajeno** ya existe como empleo común (Mesero,
   Cocinero en `data/jobs.json`): no hace falta tener uno propio.
+
+## Identidad del juego: cooperativo, ciudad compartida (2026-11-04)
+El dueño aclaró el rumbo: lo que se busca **no es un simulador de vida individual** (Los Sims, inZOI), sino algo
+más cercano a los **juegos de ciudad compartida de antes**: una isla/ciudad donde se hacen **tareas, misiones,
+logros y minijuegos**, **cooperando** con la pareja, la familia y los vecinos. La construcción de la casa es una
+parte, no el centro. Cada familia puede comprar **más parcelas** para otros usos (granja, cultivos, negocios).
+Esto guía las decisiones de diseño: metas comunitarias (ya existe la meta del barrio por participación),
+misiones, logros, minijuegos y negocios con administración. Diseño de la isla en `docs/isla.md`.
+Prioridad actual: **que la isla funcione** (mapa, parcelas, LOD); lo demás viene después.

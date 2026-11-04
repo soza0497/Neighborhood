@@ -64,6 +64,17 @@ func _run() -> void:
 	var main := await _wait_for_main()
 	_check(main != null, "se creó la cuenta y se abrió el juego")
 	if main != null:
+		# Los obstáculos de la parcela tienen que ser los del servidor (si no, el servicio dice «no existe»).
+		await _frames(60)
+		var parcel_answer: Dictionary = await GameServer.call_rpc("parcel_load", {})
+		_check(Parcel.seed == int(parcel_answer["data"]["parcel"]["seed"]), "la parcela usa la semilla del servidor")
+		var bush: Dictionary = {}
+		for o in Parcel.obstacles:
+			if o["kind"] == "bush" and str(HouseData.blocked_cells.get("%d,%d" % [o["x"], o["z"]], "")) != "zone":
+				bush = o
+				break
+		var clear_answer: Dictionary = await Economy.request("parcel_clear_start", {"id": bush.get("id", "")})
+		_check(clear_answer["ok"], "llamar al servicio para una maleza: %s" % str(clear_answer.get("error", "ok")))
 		await _frames(30)
 		_check(_server_text(main).begins_with("● Conectado: " + user), "indicador: \"%s\"" % _server_text(main))
 		_check(GameState.account.get("username", "") == user, "la partida quedó marcada con la cuenta")

@@ -104,6 +104,9 @@ func _load_and_enter() -> void:
 	Economy.use_server(true)
 	Economy.apply_server_state(result["data"])
 	Couple.apply_answer(result["data"])
+	# Los obstáculos de la parcela salen de la semilla del servidor: sin esto el juego
+	# usa otra y el servicio responde «ese obstáculo no existe».
+	await Parcel.refresh()
 	GameServer.start_realtime()
 	SaveSystem.save_game()
 	if _new_account:

@@ -441,6 +441,7 @@ func _load_from_server() -> void:
 	Economy.apply_server_state(result["data"])
 	house.rev = Economy.house_rev
 	Couple.apply_answer(result["data"])
+	await Parcel.refresh()  # La semilla de los obstáculos es la del servidor.
 	GameServer.start_realtime()
 	history.refresh()
 	EventBus.toast.emit("Volvió la conexión: tu partida está al día.")
