@@ -1,5 +1,43 @@
 # Progreso
 
+## ▶ Guías de arte: escritas en la rama `guias-arte`, sin verificar con Blender instalado
+Ocho guías para principiante total en `docs/arte/` (00 mapa, 01 instalar Blender, 02 primera silla, 03 muebles con
+partes, 04 Krita y paleta, 05 íconos SVG con Inkscape, 06 cuarto de prueba, 07 personaje, 08 problemas y atajos), más
+`docs/arte/paleta_neighborhood.gpl` (copia de `data/palette.json` para Krita) y `docs/arte/ejemplos/bed.svg`.
+No se tocó código ni datos del juego. **No se mergeó a `main`.**
+
+**Cómo se escribieron:** desde la sesión en la nube **no se pudo abrir `docs.blender.org` ni `docs.krita.org`** (el
+dominio no resuelve en la red de la sesión; habría que permitirlos en la configuración de red). Solo se vieron fragmentos
+de búsqueda web (confirmaron: exportador glTF en `File > Import/Export > glTF 2.0`, Emulate 3 Button Mouse / Emulate
+Numpad en Preferences > Input, Apply Scale con `Ctrl + A`, Mirror/Array/Bevel bajo Generate, Blender 5.2 LTS publicado
+en julio de 2026, exportar una capa vectorial de Krita a SVG de a una). El resto se escribió **de memoria de
+Blender 4.x/Krita 5** y está marcado «(a confirmar en tu versión)». Lo del juego (escala, pivote, `model`, paleta, slots,
+FPS en Menú → Info) sí se verificó leyendo el repo.
+
+**Pasos que quedaron «(a confirmar en tu versión)»** (revisar con Blender 5.2.3 / Krita 6.0.4 / Inkscape instalados):
+- **01:** cuadro de bienvenida (Quick Setup); pestañas de espacios de trabajo; estadísticas en la barra de estado;
+  Recover > Auto Save; permisos de Flatpak sobre la carpeta del proyecto.
+- **02:** Overlays > Statistics y «Triangles»; **Object > Shade Auto Smooth** y el modificador *Smooth by Angle*
+  (ángulo 60°); **todo el panel de exportación glTF** (secciones Include/Transform/Data/Animation y nombres de casillas);
+  cuántos triángulos da la silla (300–450 estimado); `Set Origin`; panel «Add Cylinder» (Vertices/Radius/Depth).
+- **03:** si *Dimensions* incluye modificadores; herramienta Measure; `model_offset` (sentido de los ejes); presupuesto.
+- **04:** (Krita, casi todo de Krita 5) diálogo New Document y perfil sRGB; nombres de presets de pincel; atajos de
+  zoom/rotación; campo Hex; **Settings > Manage Resources > Import Resources** para la `.gpl` (o copiar a `palettes/`);
+  Filter > Adjust > Desaturate; View > Show Grid; modo Multiply para simular los 3 tonos; Add > Image > Reference en Blender.
+- **05:** (Inkscape 1.x) Document Properties (tamaño, fondo, cuadrícula), `#` y `%`, Plain SVG / Save a Copy;
+  exportar vectores desde Krita 6.
+- **06:** cono con Radius 1/2; «Mostrar FPS en pantalla» y «Contorno» en Menú → Info (el texto sale de `ui/hud.tscn`;
+  **no se corrió el juego**); suma de ~3.000 triángulos por cuarto (orientativa, no oficial).
+- **07:** Weight Paint/Pose Mode paso a paso, `Ctrl + P > With Automatic Weights`, exportar acciones (NLA/Fake User),
+  casillas de Skinning/Animation del exportador, nombres de paquetes CC0 (Kenney/Quaternius), espejo con nombres `.L/.R`.
+  **Decisión abierta con el asesor:** dónde queda el origen de las piezas de personaje respecto del hueso `head`
+  (el ensamblador las pega con `BoneAttachment3D` al origen del hueso; con la posición de respaldo `[0, 1.0, 0]` es el centro de la cabeza).
+- **08:** `Ctrl + B` (bisel de aristas), `I` fotogramas clave, atajos de Krita 6.
+
+**Próximo paso:** el dueño hace las guías 01 → 02; con lo que no coincida con su pantalla se corrigen las guías (y
+se quitan las marcas). Si se habilita `docs.blender.org`/`docs.krita.org` en la red de la nube, una sesión puede
+verificar y limpiar las marcas sin necesidad del programa instalado.
+
 ## ▶ ESTADO ACTUAL (2026-11-04) — versión 0.11.0, todo unido en `main`
 Pulido 2, Pulido 3, Fase 7 (arte) y Fase 8 (barrio) están unidos y **verificados en la PC**: pruebas de Godot y de
 Lua en verde (Lua 322 + metas 42), Nakama con los 7 módulos, cuenta nueva completa contra el servidor real
