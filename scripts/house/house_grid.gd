@@ -14,7 +14,13 @@ class_name HouseGrid
 ## Tamaño de la parcela en celdas (ancho X, fondo Z). Es la extensión
 ## máxima donde el jugador puede construir (casa, cobertizo, cancha...).
 ## El frente (Z grande) da a la calle.
-const LOT_SIZE := Vector2i(32, 32)
+## Pulido 2C: 96 x 96 = la casa de antes (32 x 32) con otro 100 % hacia cada
+## lado. Es "static var" (no const) solo para que las pruebas viejas, que
+## arman casas en un lote de 32, puedan elegir ese tamaño.
+static var LOT_SIZE := Vector2i(96, 96)
+## La zona donde queda la casa original (centro de la parcela). Lo demás está
+## lleno de obstáculos hasta que se limpia (ver ParcelRules).
+const HOME_ZONE := 32
 ## Cantidad de pisos (niveles) que se pueden construir: planta baja + 4.
 ## (También en el servidor: neighborhood_house.lua y neighborhood_rules.lua.)
 const MAX_LEVELS := 5
@@ -27,6 +33,18 @@ const WALL_HEIGHT := 2.7
 const WALL_THICKNESS := 0.15
 ## Alto de las paredes cuando la vista es "paredes bajas".
 const CUT_WALL_HEIGHT := 0.5
+
+
+## Solo para las pruebas: elige un lote de 32 (la parcela vieja) y borra los
+## obstáculos, así las pruebas que arman casas con coordenadas chicas siguen igual.
+static func use_test_lot() -> void:
+	LOT_SIZE = Vector2i(32, 32)
+	HouseData.blocked_cells = {}
+
+
+## Esquina de la zona de la casa original dentro de la parcela.
+static func home_origin() -> Vector2i:
+	return (LOT_SIZE - Vector2i(HOME_ZONE, HOME_ZONE)) / 2
 
 
 ## Altura (Y local) de la superficie de un nivel. Nivel 0 = planta baja.

@@ -25,6 +25,10 @@ var account: Dictionary = {}
 ## Fase 6: un servicio del restaurante jugado que el servidor todavía no
 ## cobró (sin conexión al terminar): {"actions": [...], "started_unix"}.
 var restaurant: Dictionary = {}
+## Pulido 2C: la parcela (semilla, obstáculos limpiados, servicios en camino) en
+## partidas SIN servidor, y las cajas de entrega sin abrir.
+var parcel: Dictionary = {}
+var delivery: Dictionary = {}
 
 
 ## Vuelve todo a una partida nueva.
@@ -37,6 +41,8 @@ func reset() -> void:
 	settings = {}
 	account = {}
 	restaurant = {}
+	parcel = {}
+	delivery = {}
 
 
 ## Convierte el estado en un diccionario simple que se puede escribir en JSON.
@@ -50,6 +56,8 @@ func to_dict() -> Dictionary:
 		"settings": settings,
 		"account": account,
 		"restaurant": restaurant,
+		"parcel": parcel,
+		"delivery": delivery,
 	}
 
 
@@ -64,3 +72,5 @@ func from_dict(data: Dictionary) -> void:
 	settings = data.get("settings", {})
 	account = data.get("account", {})
 	restaurant = data.get("restaurant", {})
+	parcel = data.get("parcel", {})
+	delivery = data.get("delivery", {})

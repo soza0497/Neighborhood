@@ -150,16 +150,17 @@ func _build_with_server(main: Node) -> void:
 	_check(main.mode == "build", "con conexión se puede construir")
 	# Un rincón de la parcela (lejos de la casa de las otras demos). Se cuentan
 	# las celdas que estaban libres: esas son las que se cobran.
+	var o := HouseGrid.home_origin()  # Pulido 2C: la parcela es de 96; se construye en la zona del centro.
 	var free := 0
-	for x in range(24, 28):
-		for z in range(2, 5):
+	for x in range(24 + o.x, 28 + o.x):
+		for z in range(2 + o.y, 5 + o.y):
 			if not main.house.has_piece(0, "foundation", "%d,%d" % [x, z]):
 				free += 1
 	var before: int = main.house.get_layer(0, "foundation").size()
 	var money := Economy.money
 	EventBus.build_item_selected.emit("foundation_basic")
-	builder._begin(to_screen.call(Vector2(24.5, 2.5)))
-	builder._update(to_screen.call(Vector2(27.5, 4.5)))
+	builder._begin(to_screen.call(Vector2(24.5 + o.x, 2.5 + o.y)))
+	builder._update(to_screen.call(Vector2(27.5 + o.x, 4.5 + o.y)))
 	builder._release()
 	builder.confirm_pending()
 	_check(free == 0 or Economy.busy, "esperando la respuesta del servidor (botones apagados)")

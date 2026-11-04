@@ -89,6 +89,7 @@ local rules = require("neighborhood_rules")
 local house_rules = require("neighborhood_house")
 local couple = require("neighborhood_couple")
 local business = require("neighborhood_business")
+local parcel = require("neighborhood_parcel")
 
 local STARTING_MONEY = 3000
 local GAME = "game"
@@ -136,6 +137,38 @@ nk.logger_info(string.format("Catálogo del juego leído: %d piezas, %d empleos,
 local restaurant = business.new_config(read_game_data("business.json"))
 nk.logger_info(string.format("Restaurante: servicio de %d s, tope diario $%d",
   restaurant.service.duration_ms / 1000, restaurant.daily_cap))
+-- Pulido 2C: la parcela y sus obstáculos (data/parcel.json, el mismo del juego).
+local parcel_cfg = read_game_data("parcel.json")
+local parcel_cache = {}
+nk.logger_info(string.format("Parcela: %d x %d celdas, %d tipos de obstáculo", parcel_cfg.lot or 0, parcel_cfg.lot or 0,
+  #(parcel_cfg.order or {})))
+
+-- Los obstáculos de la parcela del dueño de la casa (se generan de su id y se
+-- guardan en memoria: son siempre los mismos).
+local function parcel_obstacles(owner_id)
+  local seed = parcel.seed_from_text(owner_id)
+  if parcel_cache[seed] == nil then
+    local size = 0
+    for _ in pairs(parcel_cache) do size = size + 1 end
+    if size > 40 then
+      parcel_cache = {}
+    end
+    local started = os.clock()
+    parcel_cache[seed] = parcel.generate(parcel_cfg, seed)
+    nk.logger_info(string.format("Parcela generada: %d obstáculos en %.0f ms", #parcel_cache[seed], (os.clock() - started) * 1000))
+  end
+  return parcel_cache[seed], seed
+end
+
+-- Lo que el hogar guarda de la parcela: limpiados, en camino y cuántos van.
+local function parcel_state(state)
+  local p = state.home.parcel
+  if type(p.cleared) ~= "table" then p.cleared = {} end
+  if type(p.pending) ~= "table" then p.pending = {} end
+  p.count = math.floor(rules.num(p.count) or 0)
+  return p
+end
+
 -- Semillas de los servicios: al azar (cada máquina de Lua empieza distinto).
 math.randomseed(nk.time())
 
@@ -318,6 +351,8 @@ local function load_state(user_id)
   state.start_money = state.money
   state.start_fund = state.fund
   state.start_xp = state.xp
+  -- Pulido 2C: lo que no se limpió bloquea construir (reglas de apoyo).
+  house_rules.blocked_cells = parcel.blocked_cells(parcel_obstacles(owner_id), parcel_state(state).cleared)
   return state
 end
 
@@ -1290,6 +1325,101 @@ local function service_finish(state, input, now)
 end
 
 
+-- --- Parcela y servicios (Pulido 2C) ---
+
+local function parcel_summary(state, now)
+  local p = parcel_state(state)
+  local _, seed = parcel_obstacles(state.owner_id)
+  local cleared = {}
+  for id in pairs(p.cleared) do
+    table.insert(cleared, id)
+  end
+  table.sort(cleared)
+  local pending = {}
+  for id, job in pairs(p.pending) do
+    pending[id] = { ready_at = job.ready_at, service = job.service, seconds_left = math.max(0, job.ready_at - now) }
+  end
+  return { seed = seed, lot = parcel_cfg.lot, cleared = cleared, pending = pending, count = p.count, server_unix = now }
+end
+
+-- ¿Puede llegar el servicio hasta el obstáculo? (con la casa y lo que no se limpió)
+local function parcel_access(state, obstacles, target, def)
+  local p = parcel_state(state)
+  local blocked = parcel.blocked_cells(obstacles, p.cleared)
+  for cx = target.x, target.x + target.w - 1 do
+    for cz = target.z, target.z + target.d - 1 do
+      blocked[cx .. "," .. cz] = nil
+    end
+  end
+  local house_cells = {}
+  for key in pairs(state.house.levels[1].foundation) do
+    house_cells[key] = true
+  end
+  return parcel.can_reach(parcel_cfg, blocked, house_cells, target, def.vehicle ~= "")
+end
+
+local function parcel_load(state, _input, now)
+  return { changed = {}, result = { parcel = parcel_summary(state, now) } }
+end
+
+-- Llamar al servicio: cobra el servidor y arranca la espera REAL.
+local function parcel_clear_start(state, input, now)
+  local id = tostring(input.id or "")
+  local obstacles = parcel_obstacles(state.owner_id)
+  local target = parcel.find(obstacles, id)
+  if target == nil then
+    rules.refuse("Ese obstáculo no existe.")
+  end
+  local p = parcel_state(state)
+  if p.cleared[id] then
+    rules.refuse("Eso ya está limpio.")
+  end
+  if p.pending[id] then
+    rules.refuse("Ya viene un servicio para eso.")
+  end
+  local def = parcel_cfg.obstacles[target.kind]
+  local ok, why = parcel_access(state, obstacles, target, def)
+  if not ok then
+    rules.refuse(why)
+  end
+  local cost = parcel.cost(parcel_cfg, target.kind, p.count)
+  if state.money < cost then
+    rules.refuse(string.format("Te faltan $%d para llamar al servicio.", cost - state.money))
+  end
+  state.money = state.money - cost
+  p.pending[id] = { ready_at = now + def.seconds, service = def.service, vehicle = def.vehicle, cost = cost, by = state.actor }
+  log_and_notify(state, { kind = "parcel", text = string.format("llamó al servicio para limpiar: %s ($%d)", def.name, cost) })
+  return { changed = { home = true }, result = { cost = cost, money_change = -cost, parcel = parcel_summary(state, now) } }
+end
+
+-- El servicio llegó (pasó la espera): limpia, si el vehículo puede entrar.
+local function parcel_clear_finish(state, input, now)
+  local id = tostring(input.id or "")
+  local p = parcel_state(state)
+  local job = p.pending[id]
+  if job == nil then
+    rules.refuse("No hay un servicio en camino para eso.")
+  end
+  if now < job.ready_at then
+    rules.refuse(string.format("El servicio todavía no llegó (faltan %d s).", job.ready_at - now))
+  end
+  local obstacles = parcel_obstacles(state.owner_id)
+  local target = parcel.find(obstacles, id)
+  local def = parcel_cfg.obstacles[target.kind]
+  local ok, why = parcel_access(state, obstacles, target, def)
+  if not ok then
+    -- El servicio avisa que no puede entrar y se queda esperando (no se cobra de nuevo).
+    return { changed = {}, result = { blocked = true, reason = why, parcel = parcel_summary(state, now) } }
+  end
+  p.pending[id] = nil
+  p.cleared[id] = true
+  p.count = p.count + 1
+  state.xp = state.xp + def.xp
+  house_rules.blocked_cells = parcel.blocked_cells(obstacles, p.cleared)
+  log_and_notify(state, { kind = "parcel", text = string.format("quedó limpio: %s", def.name) })
+  return { changed = { home = true, progress = true }, result = { cleared = id, xp_gained = def.xp, parcel = parcel_summary(state, now) } }
+end
+
 nk.register_rpc(game_load, "game_load")
 nk.register_rpc(game_import, "game_import")
 nk.register_rpc(game_rpc("build_apply", build_apply), "build_apply")
@@ -1323,5 +1453,8 @@ nk.register_rpc(game_rpc("restaurant_load", restaurant_load), "restaurant_load")
 nk.register_rpc(game_rpc("restaurant_open", restaurant_switch("open")), "restaurant_open")
 nk.register_rpc(game_rpc("restaurant_close", restaurant_switch("close")), "restaurant_close")
 nk.register_rpc(game_rpc("restaurant_collect", restaurant_collect), "restaurant_collect")
+nk.register_rpc(game_rpc("parcel_load", parcel_load), "parcel_load")
+nk.register_rpc(game_rpc("parcel_clear_start", parcel_clear_start), "parcel_clear_start")
+nk.register_rpc(game_rpc("parcel_clear_finish", parcel_clear_finish), "parcel_clear_finish")
 nk.register_rpc(game_rpc("service_start", service_start), "service_start")
 nk.register_rpc(game_rpc("service_finish", service_finish), "service_finish")

@@ -32,7 +32,7 @@ local rules = {}
 local house_rules = require("neighborhood_house")
 
 -- Medidas de la casa: las mismas que scripts/house/house_grid.gd.
-rules.LOT_SIZE = 32
+rules.LOT_SIZE = 96
 rules.MAX_LEVELS = 5
 rules.LAYERS = { "foundation", "floors", "walls", "objects", "roofs" }
 -- Capas cuyas piezas tardan en construirse (economy.gd, TIMED_LAYERS).
@@ -212,6 +212,20 @@ function rules.writes_match(house, writes)
   return true
 end
 
+-- ¿Esta escritura pone algo encima de un obstáculo sin limpiar?
+function rules.touches_obstacle(w)
+  if w.layer == "foundation" or w.layer == "floors" then
+    local x, z = house_rules.parse_cell(w.key)
+    return x ~= nil and house_rules.is_blocked(x, z)
+  elseif w.layer == "roofs" and type(w.value) == "table" and type(w.value.rect) == "table" then
+    local r = w.value.rect
+    return house_rules.rect_blocked(r[1], r[2], r[3], r[4])
+  elseif w.layer == "objects" and type(w.value) == "table" and type(w.value.cell) == "table" then
+    return house_rules.is_blocked(w.value.cell[1], w.value.cell[2])
+  end
+  return false
+end
+
 -- Revisa las reglas de apoyo (si el estado lo pide).
 local function check_support(data, state, writes, text, house)
   if not state.check_support then
@@ -219,6 +233,12 @@ local function check_support(data, state, writes, text, house)
   end
   local ok = house_rules.check_batch(data, house or state.house, writes)
   if not ok then
+    -- Pulido 2C: si lo que falla está encima de un obstáculo, se dice.
+    for _, w in ipairs(writes) do
+      if w.value ~= nil and rules.touches_obstacle(w) then
+        refuse("Ahí hay un obstáculo (árbol, roca, laguito...): tocalo y llamá al servicio para limpiarlo.", { reason = "obstacle" })
+      end
+    end
     refuse(text or "Eso no tiene dónde apoyarse, o dejaría algo en el aire.", { reason = "support" })
   end
 end
@@ -258,8 +278,9 @@ function rules.level_for_xp(data, xp)
   return level
 end
 
--- Versión del formato de la casa (HouseData.FORMAT): 3 = Pulido 1.
-rules.HOUSE_FORMAT = 3
+-- Versión del formato de la casa (HouseData.FORMAT): 3 = Pulido 1, 4 = Pulido 2C
+-- (parcela de 96: las casas de 32 quedan en el centro).
+rules.HOUSE_FORMAT = 4
 
 function rules.empty_house()
   local levels = {}
@@ -356,6 +377,37 @@ function rules.repair_house(house)
   return removed
 end
 
+-- Pulido 2C: mueve toda la casa (dx, dz) celdas. Es la misma cuenta que
+-- HouseData._shift en el teléfono (las casas viejas quedan en el centro).
+function rules.shift_house(house, dx, dz)
+  for _, level in ipairs(house.levels) do
+    for _, layer in ipairs({ "foundation", "floors" }) do
+      local moved = {}
+      for key, value in pairs(level[layer]) do
+        local x, z = house_rules.parse_cell(key)
+        moved[house_rules.cell_key(x + dx, z + dz)] = value
+      end
+      level[layer] = moved
+    end
+    local walls = {}
+    for key, value in pairs(level.walls) do
+      local x, z, horizontal = house_rules.parse_edge(key)
+      walls[house_rules.edge_key(x + dx, z + dz, horizontal)] = value
+    end
+    level.walls = walls
+    for _, value in pairs(level.objects) do
+      if type(value.cell) == "table" then
+        value.cell = { value.cell[1] + dx, value.cell[2] + dz }
+      end
+    end
+    for _, value in pairs(level.roofs) do
+      if type(value.rect) == "table" then
+        value.rect = { value.rect[1] + dx, value.rect[2] + dz, value.rect[3], value.rect[4] }
+      end
+    end
+  end
+end
+
 -- Completa una casa leída (le pueden faltar niveles o capas vacías).
 function rules.normalize_house(house)
   if type(house) ~= "table" then
@@ -371,11 +423,19 @@ function rules.normalize_house(house)
     end
   end
   house.next_id = math.floor(num(house.next_id) or 1)
-  house.lot_size = house.lot_size or { rules.LOT_SIZE, rules.LOT_SIZE }
+  house.lot_size = type(house.lot_size) == "table" and house.lot_size or { rules.LOT_SIZE, rules.LOT_SIZE }
   rules.repair_house(house)
-  if (num(house.format) or 1) < rules.HOUSE_FORMAT then
+  -- Pulido 2C: si la parcela era más chica, la casa se centra en la nueva.
+  local saved = num(house.lot_size[1]) or rules.LOT_SIZE
+  if saved ~= rules.LOT_SIZE then
+    local offset = math.floor((rules.LOT_SIZE - saved) / 2)
+    rules.shift_house(house, offset, offset)
+    house.lot_size = { rules.LOT_SIZE, rules.LOT_SIZE }
+  end
+  if (num(house.format) or 1) < 3 then
     rules.upgrade_legacy(rules.data, house)
   end
+  house.format = rules.HOUSE_FORMAT
   return house
 end
 
@@ -984,7 +1044,8 @@ rules.MAX_REQUESTS = 10
 function rules.empty_home(owner_id)
   -- business: el negocio de la casa (Fase 6, neighborhood_business.lua);
   -- vacío = ninguno.
-  return { rev = 0, fund = 0, members = { owner_id }, log = {}, requests = {}, next_id = 1, business = {} }
+  -- parcel: obstáculos limpiados y servicios en camino (Pulido 2C).
+  return { rev = 0, fund = 0, members = { owner_id }, log = {}, requests = {}, next_id = 1, business = {}, parcel = {} }
 end
 
 -- Completa un hogar leído (le pueden faltar campos).

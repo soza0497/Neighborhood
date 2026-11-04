@@ -94,6 +94,13 @@ signal floors_changed(total: int)
 signal build_add_floor_requested
 signal plan_confirm_requested
 signal plan_discard_requested
+## Pulido 2C: parcela, servicios y cajas.
+signal parcel_changed
+signal parcel_obstacle_tapped(id: String)
+signal boxes_changed(dropped: int)
+signal boxes_open_all_requested
+signal box_tapped(level: int, key: String)
+signal ambulance_requested(patient: Node3D)
 ## Pulido 2: el ángulo vertical de la cámara cambió (grados hacia abajo).
 signal camera_pitch_requested(degrees: float)
 ## La interfaz pide mandar o descartar mi propuesta, ver la de mi pareja (id

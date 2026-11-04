@@ -963,3 +963,82 @@ Decisiones menores tomadas por el desarrollador (el dueño no las pidió una por
   con el mismo mecanismo de turnos de la Fase 3.
 - **No se hizo** contratar personal ni sueldos: el diseño quedó en `VISION.md`
   («Restaurante: personal y sueldos»).
+
+
+## Pulido 2C — parcela, servicios y entregas (2026-11-04, nube, rama `pulido-2`)
+
+### Parcela de 96 × 96 que se gana limpiando
+- **La parcela crece 100 % hacia cada lado**: de 32 × 32 a **96 × 96** (`HouseGrid.LOT_SIZE`).
+  La casa de antes queda en el **centro** (la «zona de la casa», 32 × 32, siempre libre).
+  **Migración (guardado v4)**: al cargar, `HouseData.from_dict` mueve la casa
+  `(96 − lote guardado) / 2` celdas (32) y el personaje se mueve igual; el servidor
+  hace lo mismo (`rules.shift_house`, formato de casa 4) y no mueve dos veces una casa
+  ya migrada. Probado en `test_parcel`, `test_rules.lua` y `parcel_server_demo`.
+- `HouseGrid.LOT_SIZE` es `static var` (no `const`) **solo** para que las pruebas viejas,
+  que arman casas con coordenadas chicas, usen `HouseGrid.use_test_lot()` (lote de 32
+  sin obstáculos). El juego real usa 96.
+- **Obstáculos** (`data/parcel.json`, lo leen el juego Y el servidor): **Maleza** (2,5 % de las
+  celdas), **Tocón** (0,8 %), **Árbol** (3,5 %), **Roca grande** 2×2 (60) y **Laguito** 5×4 (2):
+  ≈ 540 en total. Se generan desde una **semilla** (la del dueño) con un generador
+  Park–Miller que da **exactamente lo mismo en GDScript y en Lua** (probado: misma
+  cantidad, mismos lugares). El servidor solo guarda **cuáles se limpiaron**
+  (`game/home.parcel`) y cuáles están **en camino**.
+- **Bloquean construir**: cimientos, pisos, techos y objetos al aire libre no se pueden
+  poner encima (las reglas de apoyo del teléfono y del servidor). Si algo sale en rojo
+  sobre un obstáculo, el aviso lo dice. El personaje tampoco los pisa (la red de
+  caminos los evita).
+- **Rendimiento** (medido): los obstáculos van en **MultiMesh** (árboles, tocones, maleza y
+  rocas: 5-7 llamadas de dibujo) y la **red de caminos solo cubre la zona útil** (la casa,
+  8 celdas de margen y la franja hasta la calle: ≈ 3800 celdas en vez de 9216; armarla
+  tarda ~100 ms en esta máquina). Las cámaras llegan hasta los bordes de la parcela.
+  **Falta medir los 30 FPS en el teléfono del dueño** (en la nube no hay GPU).
+- Se arregló de paso un choque de ids en la red de caminos (los escalones usaban
+  `id + 5000` y con 96 de ancho pisaban a otro nivel): ahora van en otro rango.
+
+### Limpiar obstáculos (servidor cobra, espera real, servicio que llega)
+- Tocar un obstáculo → ventana con **qué servicio lo limpia, cuánto cuesta y cuánto
+  espera** → **Llamar servicio**. RPC nuevas: `parcel_load`, `parcel_clear_start`
+  (**cobra el servidor**, valida el acceso y guarda la hora de llegada) y
+  `parcel_clear_finish` (revisa que pasó la espera y el acceso, limpia y da experiencia).
+  Sin cuenta (partida local) las mismas reglas corren en el teléfono (`Parcel`).
+- **Quién viene** (`data/parcel.json`): **jardinero** (maleza), **leñador** (tocón, árbol), **cuadrilla con
+  tractor** (roca) y **cuadrilla con retroexcavadora** (laguito). Modelos y animación
+  simples (cajas y la figura chibi con colores de la paleta).
+- **Reglas de acceso** (idénticas en teléfono y servidor, `find_path` / `can_reach`):
+  un **vehículo** ocupa un bloque de 2×2 y necesita un **camino libre desde la calle**;
+  una **persona**, de 1 celda. Los cimientos de la casa y los obstáculos sin limpiar
+  no se cruzan. Si no hay camino, **no se puede llamar** (no se cobra) y, si el camino se
+  cierra mientras espera, el vehículo llega, **avisa «No puedo entrar: no hay camino libre»,
+  se va y el servicio queda en espera** (no se cobra de nuevo; se puede «Reintentar» al despejar).
+  Si **solo hace falta la persona**, el **personaje del jugador va a abrirle la puerta**
+  (si trabaja o está lastimado, espera hasta 25 s y el portón se abre solo).
+- **Balance**: el costo **sube con lo ya limpiado** (`× (1 + 0,02 × limpiados)`, tope ×3):
+  la maleza arranca en $15, el árbol $90, la roca $250 y el laguito $900; con el tope, una
+  roca llega a $750. Nunca es imposible: se puede ir limpiando de a poco y la zona de la casa
+  (1024 celdas) ya está libre; expandirse cuesta más cuanto más se limpia, pero cada
+  limpieza da experiencia (2 a 40). Todo se ajusta en `data/parcel.json` (reiniciar Nakama).
+
+### Servicios genéricos (`scripts/world/services.gd`)
+- Un solo sistema (vehículo o persona, ruta por la calle y por la parcela, acceso, animación de
+  trabajo, humo) que usan la **limpieza**, la **entrega** y la **ambulancia**. Cuelga de la casa
+  (coordenadas en celdas). `speed_scale` solo lo usan las demos.
+
+### Entrega de compras (`scripts/world/delivery.gd`)
+- Cuando una pieza **comprada** (mueble o aparato) **termina de construirse**, llega un
+  **camión** por la calle y el **repartidor** baja las cajas (hasta 5 apiladas por viaje; las
+  compras que terminan juntas comparten camión). **En la puerta se le caen** (se inclina, dice
+  «¡Ay!», las cajas salen volando), las junta y **deja una caja en el lugar de cada cosa**.
+- La pieza **ya está en la casa** (y pagada por el servidor): la caja es solo cómo se ve y se
+  usa. **Una pieza en caja no se usa** (la IA no la elige). Hasta que el repartidor la deja
+  no se ve. Las cajas sin abrir **se guardan** en la partida (`GameState.delivery`).
+- **«Abrir todas las cajas»** (botón abajo a la izquierda): el personaje va a cada caja, **sale
+  humo blanco, tose** y aparece el mueble. Tocar una caja manda a abrir solo esa. **Si no se lo
+  ordenan, las abre solo** (su IA: cada vez que piensa, 40 % de abrir una caja).
+
+### Ambulancia (ejemplo de servicio)
+- Como todavía **no hay lesiones**, el disparador de ejemplo es **una caída por una puerta al
+  vacío de un piso alto** (una puerta cuyo otro lado no tiene piso): el personaje, de a ratos,
+  se asoma y **se cae** (queda lastimado en el suelo de afuera, pierde un poco de energía; **sin
+  muerte ni pérdida de progreso**, la experiencia no cambia). Llega la **ambulancia** (sirena,
+  cruz roja), un **paramédico camina hasta él, lo revisa y lo cura**. Es gratis. Queda anotado
+  en el diario. `Character.fall_to(celda)` lo dispara directo (lo usa la demo).

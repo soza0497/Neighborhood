@@ -3,7 +3,7 @@
 ## Fase actual: Pulido 2 (versión 0.9.0) — en la nube, rama `pulido-2`
 
 Orden (lo pidió el dueño): **2A errores y claridad → 2B estilo y vida → 2C parcela,
-servicios y entregas.** Cada sub-fase termina con pruebas en verde, commit y push
+servicios y entregas** (2A y 2B listas; 2C lista salvo los sótanos). Cada sub-fase termina con pruebas en verde, commit y push
 a `pulido-2`. Estado de cada una abajo.
 
 ### Pulido 2A — errores y claridad: HECHO (2026-11-04)
@@ -27,6 +27,68 @@ a `pulido-2`. Estado de cada una abajo.
   (5 posiciones, botón a la izquierda).
 - Pruebas: ver "Verificación" más abajo. Demo nueva `polish2a_demo` con capturas
   (`docs/capturas/p2a_*.png`).
+
+### Pulido 2C — parcela, servicios y entregas: HECHO (2026-11-04) (sin los sótanos: ver «Sótanos» abajo)
+- **Parcela de 96 × 96** (el doble hacia cada lado; la casa de antes queda en el centro y se
+  migra sola, también en el servidor). Llena de **árboles, rocas, un laguito, tocones y
+  maleza** (≈540, desde una semilla: teléfono y servidor generan **los mismos**) que
+  **bloquean construir** hasta limpiarlos. Todo en `data/parcel.json`.
+- **Limpiar**: tocás un obstáculo → «Llamar servicio» → **cobra el servidor** → espera real →
+  llega el **jardinero / leñador** (el personaje va a abrirle la puerta) o la **cuadrilla con
+  tractor / retroexcavadora** (necesita camino libre de 2 × 2 desde la calle; si no, «No puedo
+  entrar»). Costos crecientes (× 1 + 0,02 por cada limpieza, tope × 3).
+- **Servicios genéricos** (vehículo o persona, ruta, acceso, animación) y **ambulancia**:
+  caída por una puerta al vacío de un piso alto → llega la ambulancia, lo curan (sin muerte
+  ni pérdida de progreso).
+- **Entrega de compras**: camión + repartidor, se le caen las cajas en la puerta, una caja en
+  cada lugar, **«Abrir todas las cajas»** (humo blanco, tose) o las abre solo.
+- Guardado **v4** (migración probada). Rendimiento: obstáculos en MultiMesh, red de caminos
+  solo en la zona útil (≈100 ms para armarla).
+- Pruebas nuevas: `test_parcel` (**40**), `polish2c_demo` y `parcel_server_demo` (**22**), y
+  Lua **300** (los mismos obstáculos que el teléfono, caminos, costos, bloqueo al
+  construir y migración de la parcela).
+
+### Pulido 2C — cómo probarlo en el teléfono (para el dueño)
+1. [Claude] Unir `pulido-2` a `main`, **reiniciar Nakama** (`docker compose restart nakama`
+   en `server/`: lee `neighborhood_parcel.lua` y `data/parcel.json`; en los logs aparece
+   «Parcela: 96 x 96 celdas») y exportar el APK 0.9.0. **Tu partida de 0.8.0 se migra sola**:
+   la casa queda en el centro de la parcela nueva.
+2. [Dueño] Instalar el APK. Al abrir: tu casa en el medio de una parcela enorme, con
+   obstáculos alrededor (la zona de tu casa está libre).
+3. Probá construir encima de un árbol: queda en rojo y dice «Ahí hay un obstáculo…».
+4. Tocá una **maleza**: aparece qué servicio la limpia, cuánto cuesta y cuánto espera →
+   **Llamar servicio** (cuesta $15 y tarda unos 20 s). Mirá: tu personaje va al portón de la
+   calle, le abre y llega el jardinero; al terminar, la maleza desaparece y ya podés construir ahí.
+5. Probá una **roca** (tractor) y el **laguito** (retroexcavadora). Para ver «no puede entrar»:
+   cerrá con cimientos todo el frente de la parcela, llamá al servicio de una roca y esperá
+   (aunque antes de llamar, la ventana ya avisa que no hay camino).
+6. Comprá un mueble (Tienda). Cuando termine la obra llega el **camión**: al repartidor se le
+   caen las cajas en la puerta y deja una en cada lugar. Tocá **Abrir todas las cajas**
+   (abajo a la izquierda): el personaje las abre tosiendo entre humo. Si no tocás nada, a veces
+   las abre solo.
+7. **Ambulancia**: hacé un piso de arriba con una puerta que dé al vacío (sin balcón). En
+   algún momento el personaje se asoma y se cae; llega la ambulancia y lo cura. Fijate que no
+   perdés nada.
+8. **FPS** (Menú → Info → Mostrar FPS) con la parcela completa, casa de dos pisos amueblada:
+   meta 30+. Si baja, probá apagar el **contorno**; contame en cuántos FPS anda.
+9. Decime si los precios de limpieza están bien (todo en `data/parcel.json`).
+
+### Pulido 2C — pendientes y errores conocidos
+- **No se midieron los FPS en un teléfono** (en la nube no hay GPU). Las obstrucciones y el
+  bosque van en MultiMesh y la red de caminos se acotó a la zona útil, pero hay que verlo en el
+  teléfono. Armar los caminos tarda ~100 ms en esta máquina; en el teléfono puede ser más.
+- Las cajas y los servicios son **locales** (cada teléfono dibuja los suyos): con pareja, uno
+  puede ver un camión y el otro no. El dinero y la limpieza sí son del servidor.
+- Los servicios de limpieza solo se piden en **modo vivir** (o en construir sin herramienta).
+- La ambulancia no se llama desde ningún lado más (no hay lesiones reales todavía).
+- No se bajaron sonidos (ver 2B).
+
+### Pulido 2C — sótanos
+**Pendiente** (anotado, no se dejó nada a medias): hasta **3 niveles hacia abajo** con
+**excavación** antes de los cimientos (servicio con costo y tiempo), niveles negativos en
+`HouseGrid`/`HouseData`, reglas de soporte en el juego y el servidor y migración. El diseño y los
+cambios están decididos (ver DECISIONES → «Sótanos») y los números ya están en `data/` (la
+excavación va como una pieza del catálogo con precio y espera). Se hará como siguiente paso.
 
 ### Pulido 2B — estilo y vida: HECHO (2026-11-04)
 - **Shader toon con contorno** (geometría invertida, grosor en píxeles, sombras

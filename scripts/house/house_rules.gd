@@ -33,10 +33,11 @@ const PILLAR_REACH := 2
 static func is_supported(house: HouseData, level: int, layer: String, key: String, value: Dictionary) -> bool:
 	match layer:
 		"foundation":
-			return level == 0 and HouseGrid.is_cell_in_lot(HouseGrid.key_to_cell(key))
+			var foundation_cell := HouseGrid.key_to_cell(key)
+			return level == 0 and HouseGrid.is_cell_in_lot(foundation_cell) and not is_blocked(foundation_cell)
 		"floors":
 			var cell := HouseGrid.key_to_cell(key)
-			if not HouseGrid.is_cell_in_lot(cell):
+			if not HouseGrid.is_cell_in_lot(cell) or is_blocked(cell):
 				return false
 			if level == 0:
 				return house.has_piece(0, "foundation", key)
@@ -65,8 +66,17 @@ static func is_supported(house: HouseData, level: int, layer: String, key: Strin
 			var rect := HouseData.roof_rect(value)
 			if not Rect2i(Vector2i.ZERO, HouseGrid.LOT_SIZE).encloses(rect):
 				return false
+			for roof_x in range(rect.position.x, rect.end.x):
+				for roof_z in range(rect.position.y, rect.end.y):
+					if is_blocked(Vector2i(roof_x, roof_z)):
+						return false
 			return roof_blocker(house, level, rect) == ""
 	return false
+
+
+## Pulido 2C: ¿hay un obstáculo sin limpiar (árbol, roca, laguito...) en la celda?
+static func is_blocked(cell: Vector2i) -> bool:
+	return not HouseData.blocked_cells.is_empty() and HouseData.blocked_cells.has(HouseGrid.cell_key(cell))
 
 
 ## ¿Hay una escalera en esa celda de ese nivel?
@@ -348,7 +358,7 @@ static func _is_object_supported(house: HouseData, level: int, key: String, valu
 	var on_ground: bool = level == 0 and item.get("outdoor", false)
 	for cell in cells:
 		if on_ground:
-			if not HouseGrid.is_cell_in_lot(cell):
+			if not HouseGrid.is_cell_in_lot(cell) or is_blocked(cell):
 				return false
 		elif not house.has_piece(level, "floors", HouseGrid.cell_key(cell)):
 			return false

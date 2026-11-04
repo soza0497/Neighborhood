@@ -38,7 +38,32 @@ empiezan en 0, como en el juego.
 
 local M = {}
 
-M.LOT_SIZE = 32
+M.LOT_SIZE = 96
+
+-- Pulido 2C: celdas con un obstáculo sin limpiar ("x,z" → id). Lo pone
+-- neighborhood.lua en cada pedido (según la parcela del dueño de la casa) y
+-- lo borra al terminar; nada se guarda con la casa.
+M.blocked_cells = nil
+
+-- ¿Algún obstáculo sin limpiar dentro del rectángulo?
+function M.rect_blocked(x, z, w, d)
+  if M.blocked_cells == nil then
+    return false
+  end
+  for cx = x, x + w - 1 do
+    for cz = z, z + d - 1 do
+      if M.blocked_cells[cx .. "," .. cz] ~= nil then
+        return true
+      end
+    end
+  end
+  return false
+end
+
+-- ¿La celda (x, z) tiene un obstáculo sin limpiar?
+function M.is_blocked(x, z)
+  return M.blocked_cells ~= nil and M.blocked_cells[x .. "," .. z] ~= nil
+end
 M.MAX_LEVELS = 5
 -- Hasta cuántas celdas sostiene un pilar al piso de arriba.
 M.PILLAR_REACH = 2
@@ -340,7 +365,7 @@ local function is_object_supported(data, house, level, key, value)
   local on_ground = level == 0 and item.outdoor == true
   for _, cell in ipairs(M.object_cells(item, value)) do
     if on_ground then
-      if not M.is_cell_in_lot(cell[1], cell[2]) then
+      if not M.is_cell_in_lot(cell[1], cell[2]) or M.is_blocked(cell[1], cell[2]) then
         return false
       end
     elseif not has_piece(house, level, "floors", M.cell_key(cell[1], cell[2])) then
@@ -364,10 +389,10 @@ end
 function M.is_supported(data, house, level, layer, key, value)
   if layer == "foundation" then
     local x, z = M.parse_cell(key)
-    return level == 0 and x ~= nil and M.is_cell_in_lot(x, z)
+    return level == 0 and x ~= nil and M.is_cell_in_lot(x, z) and not M.is_blocked(x, z)
   elseif layer == "floors" then
     local x, z = M.parse_cell(key)
-    if x == nil or not M.is_cell_in_lot(x, z) then
+    if x == nil or not M.is_cell_in_lot(x, z) or M.is_blocked(x, z) then
       return false
     end
     if level == 0 then
@@ -410,6 +435,7 @@ function M.is_supported(data, house, level, layer, key, value)
     local x, z, w, d = num(r[1]), num(r[2]), num(r[3]), num(r[4])
     return x ~= nil and z ~= nil and w ~= nil and d ~= nil and x >= 0 and z >= 0 and w >= 1 and d >= 1
       and x + w <= M.LOT_SIZE and z + d <= M.LOT_SIZE and M.roof_blocker(house, level, x, z, w, d) == nil
+      and not M.rect_blocked(x, z, w, d)
   end
   return false
 end

@@ -29,6 +29,7 @@ Economy="*res://scripts/autoload/economy.gd"
 GameServer="*res://scripts/autoload/game_server.gd"
 Couple="*res://scripts/autoload/couple.gd"
 Restaurant="*res://scripts/autoload/restaurant.gd"
+Parcel="*res://scripts/autoload/parcel.gd"
 
 [display]
 

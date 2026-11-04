@@ -8,7 +8,7 @@ extends Node
 ## animaciones de esos mismos nombres, se usan esas en vez de estas.
 
 ## Animaciones que el juego puede pedir.
-const ANIMATIONS := ["idle", "walk", "sleep", "sit", "cook", "eat", "shower", "use", "arrive", "wave"]
+const ANIMATIONS := ["idle", "walk", "sleep", "sit", "cook", "eat", "shower", "use", "arrive", "wave", "cough", "hurt"]
 
 ## La figura que se mueve (el nodo "Body" de CharacterLook).
 var body: Node3D
@@ -48,6 +48,15 @@ func _process(delta: float) -> void:
 			# Llega de trabajar: un saltito de alegría (rebota y se estira).
 			body.position.y = absf(sin(_time * 8.0)) * 0.18
 			body.scale = Vector3(1.0, 1.0 + absf(sin(_time * 8.0)) * 0.08, 1.0)
+		"cough":
+			# Tose: se dobla hacia adelante y tiembla.
+			body.rotation.x = 0.25 + sin(_time * 22.0) * 0.08
+			body.position.y = absf(sin(_time * 22.0)) * 0.03
+		"hurt":
+			# Acostado en el suelo, quejándose (nada grave).
+			body.rotation.x = -PI / 2.0
+			body.position = Vector3(0, 0.12, 0.3)
+			body.scale.y = 1.0 + sin(_time * 3.0) * 0.015
 		"wave":
 			# Se despide: se mece de lado a lado.
 			body.rotation.z = sin(_time * 10.0) * 0.18

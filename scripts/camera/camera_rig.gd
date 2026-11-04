@@ -47,6 +47,8 @@ var _mouse_rotating := false
 
 
 func _ready() -> void:
+	# Pulido 2C: se puede mirar toda la parcela (no más allá de sus bordes).
+	bounds_half_size = maxf(28.0, HouseGrid.LOT_SIZE.x / 2.0 - 2.0)
 	_pitch.rotation_degrees.x = pitch_degrees
 	reset_view()
 	EventBus.camera_reset_requested.connect(reset_view)

@@ -85,6 +85,8 @@ const NEED_COLORS := {
 
 var _mode := "build"
 var _builder: Node
+var _house_data: HouseData
+var _boxes_button: Button
 var _pitch_button: Button
 var _pitch_index := 2
 var _plan_bar: Control
@@ -115,6 +117,9 @@ func _ready() -> void:
 	_setup_icons()
 	_build_floor_selector()
 	_build_pitch_button()
+	_build_boxes_button()
+	EventBus.parcel_obstacle_tapped.connect(_show_obstacle)
+	EventBus.boxes_changed.connect(_on_boxes_changed)
 
 	_undo_button.pressed.connect(EventBus.undo_requested.emit)
 	_redo_button.pressed.connect(EventBus.redo_requested.emit)
@@ -191,6 +196,7 @@ func _ready() -> void:
 ## maqueta de pisos y la brújula solo los leen).
 func setup_house(house: HouseData, character: Node3D, builder: Node) -> void:
 	_builder = builder
+	_house_data = house
 	_floor_map.setup(house, character)
 	$RestaurantPanel.house = house
 	_compass_button.target = character
@@ -264,6 +270,58 @@ func _build_info_extras() -> void:
 		rows.add_child(row)
 		rows.move_child(row, anchor)
 		anchor += 1
+
+
+## Pulido 2C: «Abrir todas las cajas» (aparece cuando el repartidor dejó cajas).
+func _build_boxes_button() -> void:
+	_boxes_button = Button.new()
+	_boxes_button.icon = Icons.texture("truck")
+	_boxes_button.add_theme_constant_override("icon_max_width", 30)
+	_boxes_button.add_theme_font_size_override("font_size", 18)
+	_boxes_button.text = "Abrir todas las cajas"
+	_boxes_button.focus_mode = Control.FOCUS_NONE
+	_boxes_button.visible = false
+	_boxes_button.custom_minimum_size = Vector2(0, 52)
+	_boxes_button.pressed.connect(EventBus.boxes_open_all_requested.emit)
+	$Root/Layout/Middle/LeftColumn.add_child(_boxes_button)
+
+
+func _on_boxes_changed(dropped: int) -> void:
+	_boxes_button.visible = dropped > 0
+	_boxes_button.text = "Abrir todas las cajas (%d)" % dropped
+
+
+## Tocaste un obstáculo de la parcela: qué es, qué servicio lo limpia, cuánto
+## cuesta y cuánto tarda. «Llamar servicio» cobra (el servidor) y empieza la espera.
+func _show_obstacle(id: String) -> void:
+	var def := Parcel.definition(id)
+	if def.is_empty():
+		return
+	var vehicle_names := {"tractor": "tractor", "excavator": "retroexcavadora"}
+	var service_text: String = {"gardener": "Jardinero", "lumberjack": "Leñador"}.get(def["service"],
+		"Cuadrilla con %s" % vehicle_names.get(def["vehicle"], "vehículo pesado"))
+	var rows := _open_popup(str(def["name"]))
+	if Parcel.pending.has(id):
+		var left := int(Parcel.pending[id]["ready_at"]) - Economy.now()
+		rows.add_child(_small_label("Ya viene: %s." % service_text, Color(0.75, 0.95, 1)))
+		rows.add_child(_small_label("Llega en %s." % duration_text(maxi(left, 0)) if left > 0 else "Está por llegar (o esperando que haya paso).", Color(0.85, 0.9, 1)))
+		_popup_button(rows, "Reintentar ahora", func() -> void:
+			_close_popup()
+			Parcel.service_due.emit(id))
+	else:
+		var access := Parcel.access(id, _house_data)
+		var cost := Parcel.cost_of(id)
+		rows.add_child(_small_label("Lo limpia: %s" % service_text, Color(0.85, 0.9, 1)))
+		rows.add_child(_small_label("Cuesta $%d · Espera %s" % [cost, duration_text(int(def["seconds"]))], Color(1, 0.9, 0.7)))
+		rows.add_child(_small_label("Bloquea construir en esa zona hasta limpiarlo.", Color(0.85, 0.9, 1)))
+		if not access["ok"]:
+			rows.add_child(_small_label("No puede llegar: %s Despejá un camino desde la calle." % str(access["reason"]), Color(1, 0.7, 0.6)))
+		var call := _popup_button(rows, "Llamar servicio ($%d)" % cost, func() -> void:
+			_close_popup()
+			var result: Dictionary = await Parcel.call_service(id, _house_data)
+			EventBus.toast.emit("Viene el servicio: %s." % service_text if result["ok"] else str(result["error"])))
+		call.disabled = not access["ok"] or Economy.money < cost
+	_popup_button(rows, "Cerrar", _close_popup)
 
 
 ## Botón del ángulo vertical de la cámara (de frente … desde arriba).

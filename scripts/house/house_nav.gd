@@ -56,6 +56,8 @@ func is_walkable(level: int, cell: Vector2i) -> bool:
 		return false
 	if level > 0 and not _house.has_piece(level, "floors", HouseGrid.cell_key(cell)):
 		return false
+	if level == 0 and HouseRules.is_blocked(cell):
+		return false  # Un árbol, una roca o el laguito (Pulido 2C).
 	return _house.object_at(level, cell) == ""
 
 
@@ -112,27 +114,47 @@ func _rebuild_if_needed() -> void:
 		rebuild()
 
 
+## Pulido 2C: con una parcela de 96 x 96, la red solo cubre la zona útil: la
+## casa y su alrededor (con margen) y la franja hasta la calle. Así armarla
+## es barato en un teléfono (≈2000 celdas en vez de 9216).
+const AREA_MARGIN := 8
+
+
+func nav_area() -> Rect2i:
+	var home := HouseGrid.home_origin()
+	var area := Rect2i(home, Vector2i(HouseGrid.HOME_ZONE, HouseGrid.HOME_ZONE)).grow(AREA_MARGIN)
+	for level in HouseGrid.MAX_LEVELS:
+		for layer in ["foundation", "floors"]:
+			for key in _house.get_layer(level, layer):
+				area = area.expand(HouseGrid.key_to_cell(key)).expand(HouseGrid.key_to_cell(key) + Vector2i.ONE)
+	area = area.grow(2)
+	# Hasta la calle (el frente de la parcela).
+	area = area.expand(Vector2i(area.position.x, HouseGrid.LOT_SIZE.y)).expand(Vector2i(area.end.x, HouseGrid.LOT_SIZE.y))
+	return area.intersection(Rect2i(Vector2i.ZERO, HouseGrid.LOT_SIZE))
+
+
 ## Arma la red de puntos completa.
 func rebuild() -> void:
 	_dirty = false
 	_astar.clear()
+	var area := nav_area()
 	for level in HouseGrid.MAX_LEVELS:
-		for x in HouseGrid.LOT_SIZE.x:
-			for z in HouseGrid.LOT_SIZE.y:
+		for x in range(area.position.x, area.end.x):
+			for z in range(area.position.y, area.end.y):
 				var cell := Vector2i(x, z)
 				if is_walkable(level, cell):
 					var pos := HouseGrid.cell_center(cell) + Vector3(0, ground_y(level, cell), 0)
 					_astar.add_point(point_id(level, cell), pos)
 
 	for level in HouseGrid.MAX_LEVELS:
-		for x in HouseGrid.LOT_SIZE.x:
-			for z in HouseGrid.LOT_SIZE.y:
+		for x in range(area.position.x, area.end.x):
+			for z in range(area.position.y, area.end.y):
 				var cell := Vector2i(x, z)
 				_connect_if_open(level, cell, cell + Vector2i(1, 0))
 				_connect_if_open(level, cell, cell + Vector2i(0, 1))
 		# Diagonales: solo si se puede ir por los dos lados (no corta esquinas).
-		for x in HouseGrid.LOT_SIZE.x:
-			for z in HouseGrid.LOT_SIZE.y:
+		for x in range(area.position.x, area.end.x):
+			for z in range(area.position.y, area.end.y):
 				for step in [Vector2i(1, 1), Vector2i(1, -1)]:
 					_connect_diagonal(level, Vector2i(x, z), step)
 

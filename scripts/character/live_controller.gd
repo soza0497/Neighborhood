@@ -13,6 +13,10 @@ const TAP_MAX_TIME := 0.35
 
 var view: HouseView
 var active := false
+## Pulido 2C: la vista de obstáculos y el constructor (tocar un obstáculo
+## también sirve con el constructor sin herramienta elegida).
+var parcel_view: ParcelView
+var builder: HouseBuilder
 
 var _press_pos := Vector2.ZERO
 var _press_time := 0.0
@@ -20,7 +24,7 @@ var _pressed := false
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not active:
+	if not active and not _builder_idle():
 		return
 	var position_2d := Vector2.ZERO
 	var pressed := false
@@ -49,17 +53,39 @@ func _unhandled_input(event: InputEvent) -> void:
 			_on_tap(position_2d)
 
 
+## ¿Se está construyendo pero sin herramienta? (Entonces un toque no hace nada
+## en el constructor y sirve para tocar obstáculos.)
+func _builder_idle() -> bool:
+	return builder != null and builder.active and builder.tool == HouseBuilder.Tool.NONE
+
+
 func _on_tap(screen_pos: Vector2) -> void:
 	var cam := get_viewport().get_camera_3d()
 	var origin := to_local(cam.project_ray_origin(screen_pos))
 	var direction := global_transform.basis.inverse() * cam.project_ray_normal(screen_pos)
+	if not active:
+		_tap_obstacle(origin, direction)
+		return
 	# Se prueba desde el piso que se ve hacia abajo: lo de arriba tapa lo de abajo.
 	for level in range(view.top_visible_level, -1, -1):
 		var key := view.pick_object(origin, direction, level)
 		if key != "":
 			var piece: Dictionary = view.house.get_piece(level, "objects", key)
-			if HouseData.is_under_construction(piece):
+			var delivery := get_tree().get_first_node_in_group("delivery")
+			if delivery != null and delivery.is_boxed(level, key):
+				EventBus.box_tapped.emit(level, key)
+			elif HouseData.is_under_construction(piece):
 				EventBus.toast.emit("Todavía se está construyendo.")
 			elif not Catalog.get_item_actions(piece["item"]).is_empty():
 				EventBus.object_menu_requested.emit(level, key, piece["item"])
 			return
+	_tap_obstacle(origin, direction)
+
+
+## Un toque que no agarró ningún mueble: ¿tocó un obstáculo de la parcela?
+func _tap_obstacle(origin: Vector3, direction: Vector3) -> void:
+	if parcel_view == null:
+		return
+	var id := parcel_view.pick(origin, direction)
+	if id != "":
+		EventBus.parcel_obstacle_tapped.emit(id)

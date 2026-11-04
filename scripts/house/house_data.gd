@@ -31,7 +31,13 @@ signal reloaded
 const LAYERS := ["foundation", "floors", "walls", "objects", "roofs"]
 ## Versión del formato de la casa. 3 = Pulido 1 (pintura por cara de pared y
 ## unión de ventanas en la juntura). Las casas sin número son de antes.
-const FORMAT := 3
+const FORMAT := 4
+## Casas con formato menor a este vienen de antes del Pulido 1 (pintura y ventanas).
+const LEGACY_FORMAT := 3
+
+## Pulido 2C: celdas con un obstáculo sin limpiar ("x,z" → id). Lo pone Parcel;
+## es de todas las casas (como la parcela) y no se guarda con la casa.
+static var blocked_cells: Dictionary = {}
 
 ## levels[nivel][capa][clave] = valor
 var levels: Array = []
@@ -217,7 +223,7 @@ func from_dict(data: Dictionary) -> void:
 		for layer in LAYERS:
 			levels[i][layer] = (saved_levels[i] as Dictionary).get(layer, {}).duplicate(true)
 	next_id = int(data.get("next_id", 1))
-	if int(data.get("format", 1)) < FORMAT:
+	if int(data.get("format", 1)) < LEGACY_FORMAT:
 		upgrade_legacy(levels)
 
 	# Migración: las casas guardadas antes tenían un lote de 12x12. Si la

@@ -21,6 +21,7 @@ var _shots: Array[String] = []
 
 
 func _ready() -> void:
+	HouseGrid.use_test_lot()  # Estas pruebas arman casas en un lote de 32 (la parcela real, desde el Pulido 2C, es de 96).
 	_shot_dir = OS.get_environment("SHOT_DIR")
 	if _shot_dir == "":
 		_shot_dir = OS.get_user_data_dir()
@@ -200,9 +201,9 @@ func _test_work_visuals() -> void:
 	_character.state = Character.State.IDLE
 	_character._return_from_work()
 	await _frames(3)
-	_check(_character._returning and _character._work_props.visible and _character.cell == Character.WORK_CELL,
+	_check(_character._returning and _character._work_props.visible and _character.cell == Character.work_cell(),
 		"vuelve: aparece en la acera con saco y maleta y camina hasta la puerta (%s)" % str(_character._plan.get("spot")))
-	_check(_character._plan.get("spot", Vector2i.ZERO) != Character.WORK_CELL and _character._path.size() > 2, "el camino de vuelta es largo (%d tramos)" % _character._path.size())
+	_check(_character._plan.get("spot", Vector2i.ZERO) != Character.work_cell() and _character._path.size() > 2, "el camino de vuelta es largo (%d tramos)" % _character._path.size())
 	var waited := 0.0
 	while _character._returning and waited < 25.0:
 		await get_tree().process_frame

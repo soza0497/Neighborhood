@@ -10,7 +10,7 @@ class_name SaveMigrations
 const STARTING_MONEY := 3000
 
 ## version de origen → función que la sube a la siguiente.
-const STEPS := {1: "_v1_to_v2", 2: "_v2_to_v3"}
+const STEPS := {1: "_v1_to_v2", 2: "_v2_to_v3", 3: "_v3_to_v4"}
 
 
 ## Sube `data` hasta la versión `target`. Devuelve el diccionario nuevo.
@@ -60,9 +60,28 @@ static func _v2_to_v3(data: Dictionary) -> Dictionary:
 	var house_dict: Dictionary = state.get("house", {})
 	# Solo los niveles: lo demás (por ejemplo el tamaño de la parcela, que mueve
 	# la casa al cargar) queda igual.
-	if not house_dict.is_empty() and int(house_dict.get("format", 1)) < HouseData.FORMAT:
+	if not house_dict.is_empty() and int(house_dict.get("format", 1)) < HouseData.LEGACY_FORMAT:
 		HouseData.upgrade_legacy(house_dict.get("levels", []))
-		house_dict["format"] = HouseData.FORMAT
+		house_dict["format"] = HouseData.LEGACY_FORMAT
+		state["house"] = house_dict
+	data["state"] = state
+	return data
+
+
+## v3 → v4 (Pulido 2C): la parcela crece 100 % hacia cada lado (de 32 a 96) y
+## aparecen los obstáculos y los sótanos. La casa de antes NO se toca acá: al
+## cargarla, HouseData.from_dict la centra sola según el tamaño de parcela
+## con el que se guardó (lot_size), y el personaje se mueve igual. Lo único
+## que se agrega es el estado nuevo, vacío (la parcela empieza sin limpiar).
+static func _v3_to_v4(data: Dictionary) -> Dictionary:
+	var state: Dictionary = data.get("state", {})
+	if not state.has("parcel"):
+		state["parcel"] = {}
+	if not state.has("delivery"):
+		state["delivery"] = {}
+	var house_dict: Dictionary = state.get("house", {})
+	if not house_dict.is_empty() and not house_dict.has("lot_size"):
+		house_dict["lot_size"] = [12, 12]  # Las más viejas usaban 12 x 12.
 		state["house"] = house_dict
 	data["state"] = state
 	return data

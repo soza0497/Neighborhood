@@ -1915,6 +1915,24 @@ func _update_camera_pan() -> void:
 
 ## Explica por qué algo salió en rojo, según la herramienta y el piso.
 func _blocked_hint() -> String:
+	# Pulido 2C: si lo rojo está sobre un obstáculo, se dice.
+	for w in _pending_blocked:
+		var cells: Array = []
+		match w["layer"]:
+			"foundation", "floors":
+				cells = [HouseGrid.key_to_cell(w["key"])]
+			"objects":
+				if w["value"] != null:
+					cells = HouseData.value_cells(w["value"])
+			"roofs":
+				if w["value"] != null:
+					var rect := HouseData.roof_rect(w["value"])
+					for x in range(rect.position.x, rect.end.x):
+						for z in range(rect.position.y, rect.end.y):
+							cells.append(Vector2i(x, z))
+		for c in cells:
+			if HouseRules.is_blocked(c):
+				return "Ahí hay un obstáculo (árbol, roca, laguito...): tocalo y llamá al servicio para limpiarlo."
 	var upstairs := level > 0
 	match tool:
 		Tool.FOUNDATION:

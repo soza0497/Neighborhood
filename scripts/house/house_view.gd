@@ -123,6 +123,11 @@ func check_construction() -> void:
 		if left <= 0:
 			_pending.erase(id)
 			EventBus.toast.emit("Terminó: %s" % Catalog.get_item(value["item"]).get("name", ""))
+			# Pulido 2C: lo comprado llega en camión, en caja.
+			if info[1] == "objects":
+				var delivery := get_tree().get_first_node_in_group("delivery")
+				if delivery != null:
+					delivery.request(info[0], info[2])
 			house.piece_changed.emit(info[0], info[1], info[2])  # Se redibuja y la navegación se entera.
 		else:
 			count += 1
@@ -192,6 +197,9 @@ func set_problems(problems: Array) -> void:
 const PLAN_GLOW_PERIOD := 3.0
 const PLAN_GLOW_SECONDS := 0.8
 var _planned: Dictionary = {}
+## Pulido 2C: piezas en caja ("nivel|objects|clave" → "transit" | "dropped").
+## En camino no se ven; ya dejadas se ven como una caja de cartón.
+var _boxed: Dictionary = {}
 var _planned_materials: Array = []
 var _glow_clock := 0.0
 
@@ -210,6 +218,18 @@ func set_planned(ids: Dictionary) -> void:
 			_refresh_by_id(id)
 	if ids.is_empty():
 		_planned_materials.clear()
+
+
+## Qué piezas están en caja (las manda Delivery). Se redibujan solo las que cambian.
+func set_boxed(ids: Dictionary) -> void:
+	var old := _boxed
+	_boxed = ids
+	for id in old:
+		if not ids.has(id) or ids[id] != old[id]:
+			_refresh_by_id(id)
+	for id in ids:
+		if not old.has(id):
+			_refresh_by_id(id)
 
 
 func _process(delta: float) -> void:
@@ -269,6 +289,11 @@ func make_piece(level: int, layer: String, key: String, value: Dictionary, previ
 				not preview and not _merged_window(level, vertices[0]).is_empty(),
 				not preview and not _merged_window(level, vertices[1]).is_empty())
 		"objects":
+			var boxed: String = _boxed.get(_node_id(level, layer, key), "")
+			if boxed == "transit":
+				return null
+			if boxed == "dropped" and not preview:
+				return HousePieces.build_delivery_box(value)
 			return HousePieces.build_object(value, _ground_drop(level, value))
 		"roofs":
 			if roofs_visible(level) or preview:

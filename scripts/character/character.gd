@@ -22,7 +22,7 @@ extends Node3D
 ##   - Con la pareja fuera de línea, vive con su propia IA (con sus
 ##     necesidades de la última vez que guardó), como mi personaje.
 
-enum State { IDLE, WALKING, ACTING, WORKING }
+enum State { IDLE, WALKING, ACTING, WORKING, OPENING, HURT }
 
 ## Metros por segundo real a velocidad x1.
 const WALK_SPEED := 1.6
@@ -33,9 +33,13 @@ const WANDER_RADIUS := 4
 ## Cada cuántos segundos reales avisa a la interfaz cómo están sus necesidades.
 const NEEDS_REPORT_SECONDS := 0.5
 ## Dónde aparece un personaje nuevo: al frente de la parcela, en el pasto.
-const SPAWN_CELL := Vector2i(HouseGrid.LOT_SIZE.x / 2, HouseGrid.LOT_SIZE.y - 2)
+## (Pulido 2C: con la parcela de 96, aparece al frente de la ZONA DE LA CASA.)
+static func spawn_cell() -> Vector2i:
+	return HouseGrid.home_origin() + Vector2i(HouseGrid.HOME_ZONE / 2, HouseGrid.HOME_ZONE - 2)
 ## Por dónde sale (y vuelve) cuando va a trabajar: la acera, al frente.
-const WORK_CELL := Vector2i(HouseGrid.LOT_SIZE.x / 2, HouseGrid.LOT_SIZE.y - 1)
+## La acera: el borde de adelante de la parcela, en línea con la casa.
+static func work_cell() -> Vector2i:
+	return Vector2i(HouseGrid.LOT_SIZE.x / 2, HouseGrid.LOT_SIZE.y - 1)
 
 var data: CharacterData
 var house: HouseData
@@ -45,7 +49,7 @@ var view: HouseView
 var state := State.IDLE
 ## Nivel y celda donde está parado (o adonde llega si camina).
 var level := 0
-var cell := SPAWN_CELL
+var cell := spawn_cell()
 
 ## Lo que planea hacer: {action, level, key, spot, path} o {} si solo pasea.
 var _plan: Dictionary = {}
@@ -68,6 +72,14 @@ var _body: Node3D
 var _work_props: Node3D
 ## Vuelve del trabajo: camina de la acera a la casa y al llegar "salta".
 var _returning := false
+## Pulido 2C: cajas por abrir (de la entrega) y el tiempo que tose al abrir una.
+var _open_queue: Array = []
+var _open_timer := 0.0
+## Se lastimó (el ejemplo es una caída por una puerta al vacío): espera a la ambulancia.
+var hurt := false
+
+## Terminó de abrirle la puerta a un servicio (Pulido 2C).
+signal gate_opened
 var _animator: CharacterAnimator
 var _bubble: Label3D
 
@@ -149,7 +161,7 @@ func reset_after_build() -> void:
 	if not nav.is_walkable(level, cell):
 		var spot := nav.nearest_walkable(position)
 		if spot.is_empty():
-			spot = [0, SPAWN_CELL]
+			spot = [0, spawn_cell()]
 		place_at(spot[0], spot[1])
 	else:
 		place_at(level, cell)
@@ -198,7 +210,7 @@ func _process(delta: float) -> void:
 		data.decay(minutes)
 		# Si ya va camino al trabajo, no se vuelve a empezar. (La pareja va a
 		# trabajar en SU teléfono: aquí solo se ve por su intención.)
-		if not is_partner and state != State.WORKING and not _plan.has("work") and Economy.shift_due():
+		if not is_partner and state != State.WORKING and not hurt and not _plan.has("work") and Economy.shift_due():
 			_go_to_work()
 		match state:
 			State.IDLE:
@@ -212,6 +224,13 @@ func _process(delta: float) -> void:
 			State.WORKING:
 				if not is_partner:
 					_work(minutes)
+			State.OPENING:
+				pass
+
+	if state == State.OPENING:
+		_open_timer -= delta
+		if _open_timer <= 0.0:
+			_next_box()
 
 	# Si construyen en la planta baja, no se ve al personaje que está arriba.
 	visible = (view == null or level <= view.top_visible_level) and state != State.WORKING
@@ -232,6 +251,22 @@ func _think() -> void:
 	if remote_driven:
 		_wander()  # Lo que hace lo dice su intención; mientras, pasea.
 		return
+	if hurt:
+		return
+	# Pulido 2C: si hay cajas sin abrir, cuando quiere abre una (su IA).
+	var delivery := _delivery()
+	if delivery != null and delivery.dropped_count() > 0 and _order.is_empty() and _rng.randf() < 0.4:
+		_open_queue = [delivery.dropped_boxes()[0]]
+		_next_box()
+		return
+	# Pulido 2C: un piso alto con una puerta al vacío: a veces se asoma y se cae.
+	if level > 0 and _order.is_empty() and _rng.randf() < 0.15:
+		var door := _void_door_inside()
+		if door != Vector2i(-1, -1):
+			var path := nav.find_path(level, cell, level, door)
+			if not path.is_empty() or door == cell:
+				_go({"level": level, "spot": door, "path": path, "fall": true})
+				return
 	var choice := _order
 	_order = {}
 	if choice.is_empty():
@@ -253,6 +288,10 @@ func _gather_options() -> Array:
 			var item_id: String = piece["item"]
 			# Lo que está usando el otro personaje no se elige (Fase 5).
 			if companion != null and companion.using(object_level, key):
+				continue
+			# Lo que sigue en su caja no se puede usar (Pulido 2C).
+			var delivery := _delivery()
+			if delivery != null and delivery.is_boxed(object_level, key):
 				continue
 			for action in Catalog.get_item_actions(item_id):
 				var option := _option_for(object_level, key, action)
@@ -330,6 +369,12 @@ func _arrive() -> void:
 		_start_work()
 	elif _plan.has("return"):
 		_arrive_home()
+	elif _plan.has("box"):
+		_start_open_box()
+	elif _plan.has("gate"):
+		_finish_gate()
+	elif _plan.has("fall"):
+		_fall_from_door()
 	elif _plan.has("action"):
 		_start_action()
 	else:
@@ -407,14 +452,14 @@ func _go_to_work() -> void:
 	_stop_action()
 	_order = {}
 	_show_work_props(true)
-	var path := nav.find_path(level, cell, 0, WORK_CELL)
-	_go({"level": 0, "spot": WORK_CELL, "path": path, "work": true})
+	var path := nav.find_path(level, cell, 0, work_cell())
+	_go({"level": 0, "spot": work_cell(), "path": path, "work": true})
 
 
 ## Llegó a la acera: desaparece (está en el trabajo) hasta que termina el turno.
 ## Con servidor, el turno lo anota el servidor; si no responde, vuelve.
 func _start_work() -> void:
-	place_at(0, WORK_CELL)
+	place_at(0, work_cell())
 	# Se despide y desaparece del lote en una nubecita (utilería de mentira).
 	if get_parent() != null:
 		Fx.puff(get_parent(), position + Vector3(0, 0.6, 0), 10)
@@ -457,10 +502,10 @@ func _work(minutes: float) -> void:
 ## Vuelve a la casa: aparece en la acera con saco y maleta, camina hasta el
 ## pasto del frente y ahí "llega" (saltito y se le guardan las cosas).
 func _return_from_work() -> void:
-	place_at(0, WORK_CELL)
+	place_at(0, work_cell())
 	_show_work_props(true)
 	var target := _front_door_cell()
-	var path := nav.find_path(0, WORK_CELL, 0, target)
+	var path := nav.find_path(0, work_cell(), 0, target)
 	if path.is_empty():
 		_arrive_home()
 		return
@@ -472,12 +517,12 @@ func _return_from_work() -> void:
 func _partner_go_to_work() -> void:
 	_stop_action()
 	_show_work_props(true)
-	var path := nav.find_path(level, cell, 0, WORK_CELL)
-	_go({"level": 0, "spot": WORK_CELL, "path": path, "work": true})
+	var path := nav.find_path(level, cell, 0, work_cell())
+	_go({"level": 0, "spot": work_cell(), "path": path, "work": true})
 
 
 func _partner_arrive_at_work() -> void:
-	place_at(0, WORK_CELL)
+	place_at(0, work_cell())
 	if get_parent() != null:
 		Fx.puff(get_parent(), position + Vector3(0, 0.6, 0), 10)
 	_show_work_props(false)
@@ -488,7 +533,7 @@ func _partner_arrive_at_work() -> void:
 ## Dónde "llega" de vuelta del trabajo: la celda de afuera junto a la puerta
 ## de la planta baja más cercana a la calle (o, si no hay puerta, el frente).
 func _front_door_cell() -> Vector2i:
-	var best := SPAWN_CELL
+	var best := spawn_cell()
 	var best_distance := 1 << 30
 	for key in house.get_layer(0, "walls"):
 		var wall: Dictionary = house.get_piece(0, "walls", key)
@@ -497,11 +542,163 @@ func _front_door_cell() -> Vector2i:
 		for side in HouseGrid.edge_cells(key):
 			if house.has_piece(0, "floors", HouseGrid.cell_key(side)):
 				continue  # Es el lado de adentro.
-			var distance := absi(side.x - WORK_CELL.x) + absi(side.y - WORK_CELL.y)
+			var distance := absi(side.x - work_cell().x) + absi(side.y - work_cell().y)
 			if nav.is_walkable(0, side) and distance < best_distance:
 				best_distance = distance
 				best = side
 	return best
+
+
+# --- Pulido 2C: entrega, puerta del jardín, caída y ambulancia ---
+
+func _delivery() -> Node:
+	return get_tree().get_first_node_in_group("delivery") if is_inside_tree() else null
+
+
+## «Abrir todas las cajas»: va a cada una, la abre (humo blanco), tose y sigue.
+func open_all_boxes() -> void:
+	var delivery := _delivery()
+	if delivery == null or state == State.WORKING or hurt:
+		return
+	_stop_action()
+	_order = {}
+	_open_queue = delivery.dropped_boxes()
+	_next_box()
+
+
+## Orden de abrir UNA caja (el jugador la tocó).
+func open_box_order(box_level: int, key: String) -> void:
+	if state == State.WORKING or hurt:
+		EventBus.toast.emit("%s no puede ahora." % data.name)
+		return
+	_stop_action()
+	_order = {}
+	_open_queue = [{"level": box_level, "key": key}]
+	_next_box()
+
+
+func _next_box() -> void:
+	var delivery := _delivery()
+	while not _open_queue.is_empty():
+		var box: Dictionary = _open_queue.pop_front()
+		if delivery == null or not delivery.is_boxed(box["level"], box["key"]):
+			continue
+		var spots := nav.object_spots(box["level"], box["key"])
+		for spot in spots:
+			var path := nav.find_path(level, cell, box["level"], spot)
+			if path.is_empty() and not (level == box["level"] and spot == cell):
+				continue
+			_go({"level": box["level"], "spot": spot, "path": path, "box": box})
+			return
+		# No hay camino hasta esa caja: se abre igual (sin caminar) para no dejarla trabada.
+		delivery.open_box(box["level"], box["key"])
+	if state == State.OPENING or state == State.WALKING:
+		_set_idle()
+
+
+func _start_open_box() -> void:
+	var box: Dictionary = _plan["box"]
+	var delivery := _delivery()
+	state = State.OPENING
+	_open_timer = 1.8
+	_animator.play("cough")
+	_bubble.text = "¡Cof, cof!"
+	_bubble.modulate = Color.WHITE
+	_mark_intention()
+	if delivery != null:
+		delivery.open_box(box["level"], box["key"])
+	Sound.play("cough")
+
+
+## Va a la puerta de la calle y le abre al servicio (si está trabajando o
+## lastimado, espera a estar libre; no más de `wait` segundos).
+func go_open_gate(wait := 25.0) -> void:
+	var waited := 0.0
+	while (state == State.WORKING or hurt) and waited < wait:
+		await get_tree().create_timer(0.5).timeout
+		waited += 0.5
+	if state == State.WORKING or hurt:
+		gate_opened.emit()  # No pudo: la puerta "se abre sola" (el portón queda abierto).
+		return
+	_stop_action()
+	_order = {}
+	var gate_cell := Vector2i(work_cell().x, work_cell().y - 1)
+	var path := nav.find_path(level, cell, 0, gate_cell)
+	if path.is_empty():
+		gate_opened.emit()
+		return
+	_go({"level": 0, "spot": gate_cell, "path": path, "gate": true})
+
+
+func _finish_gate() -> void:
+	_bubble.text = "¡Adelante!"
+	_animator.play("wave")
+	gate_opened.emit()
+	await get_tree().create_timer(1.4).timeout
+	if state == State.WALKING or state == State.IDLE:
+		_bubble.text = ""
+		_set_idle()
+
+
+## ¿Hay una puerta a un piso alto que da al vacío? Devuelve la celda de adentro
+## junto a ella, o (-1, -1) si no hay.
+func _void_door_inside() -> Vector2i:
+	for key in house.get_layer(level, "walls"):
+		var wall: Dictionary = house.get_piece(level, "walls", key)
+		if Catalog.get_item(wall.get("opening", "")).get("kind", "") != "door":
+			continue
+		var sides := HouseGrid.edge_cells(key)
+		var inside_a := house.has_piece(level, "floors", HouseGrid.cell_key(sides[0]))
+		var inside_b := house.has_piece(level, "floors", HouseGrid.cell_key(sides[1]))
+		if inside_a != inside_b:
+			var inside: Vector2i = sides[0] if inside_a else sides[1]
+			if nav.is_walkable(level, inside):
+				return inside
+	return Vector2i(-1, -1)
+
+
+## Se asoma por la puerta al vacío y se cae: queda lastimado en el suelo de
+## afuera (sin muerte ni pérdida de progreso) y llama a la ambulancia.
+func _fall_from_door() -> void:
+	var door := _void_door_inside()
+	var ground := cell
+	if door != Vector2i(-1, -1):
+		for key in house.get_layer(level, "walls"):
+			var wall: Dictionary = house.get_piece(level, "walls", key)
+			if Catalog.get_item(wall.get("opening", "")).get("kind", "") != "door":
+				continue
+			for side in HouseGrid.edge_cells(key):
+				if not house.has_piece(level, "floors", HouseGrid.cell_key(side)) and HouseGrid.is_cell_in_lot(side):
+					ground = side
+	fall_to(ground)
+
+
+## La caída: baja al suelo de esa celda, se lastima y pide la ambulancia.
+## (También se puede llamar directo: es el disparador de ejemplo.)
+func fall_to(ground: Vector2i) -> void:
+	_stop_action()
+	hurt = true
+	state = State.HURT
+	level = 0
+	cell = ground
+	place_at(0, ground)
+	data.add_need("energy", -15.0)
+	data.add_journal("Se cayó por una puerta al vacío (¡ay!)")
+	_animator.play("hurt")
+	_bubble.text = "¡Ay!"
+	_bubble.modulate = Color(1, 0.6, 0.5)
+	EventBus.toast.emit("¡%s se cayó! Llamamos a la ambulancia." % data.name)
+	EventBus.ambulance_requested.emit(self)
+
+
+## La ambulancia lo revisó y lo curó.
+func recover() -> void:
+	hurt = false
+	data.add_journal("La ambulancia lo revisó y lo curó")
+	data.add_need("fun", 5.0)
+	_bubble.text = "¡Gracias!"
+	_bubble.modulate = Color.WHITE
+	_set_idle()
 
 
 func _arrive_home() -> void:
@@ -566,7 +763,7 @@ func _update_bubble() -> void:
 func get_intention() -> Dictionary:
 	var intention := {
 		"character": data.name,
-		"state": ["idle", "walking", "acting", "working"][state],
+		"state": ["idle", "walking", "acting", "working", "idle", "idle"][state],
 		"action": "",
 		"verb": "paseando",
 		"object": "",

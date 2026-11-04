@@ -137,6 +137,21 @@ static func add_box(parent: Node3D, center: Vector3, size: Vector3, mat: Materia
 	return box
 
 
+## La caja de cartón que deja el repartidor en el lugar de una pieza (2C).
+static func build_delivery_box(value: Dictionary) -> Node3D:
+	var footprint := HouseData.item_footprint(Catalog.get_item(value["item"]))
+	var rot := int(value.get("rot", 0))
+	var anchor := HouseData.object_anchor(value)
+	var size := HouseGrid.rotated_size(footprint, rot)
+	var node := Node3D.new()
+	node.position = Vector3(anchor.x + size.x / 2.0, 0.0, anchor.y + size.y / 2.0)
+	var side := minf(0.85, minf(size.x, size.y) * 0.85)
+	var cardboard := material(Color("#c9a06b"))
+	add_box(node, Vector3(0, side * 0.4, 0), Vector3(side, side * 0.8, side), cardboard)
+	add_box(node, Vector3(0, side * 0.8 + 0.01, 0), Vector3(side * 0.2, 0.03, side * 1.02), material(Color("#e7d7b5")))
+	return node
+
+
 # --- Modelos del catálogo (.glb) con respaldo a las figuras simples ---
 
 ## Instancia el modelo de una pieza del catálogo (campo "model": ruta a un

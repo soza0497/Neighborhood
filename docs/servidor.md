@@ -274,6 +274,25 @@ no cobra) y, viviendo juntos, cerrar el restaurante pide permiso. Guarda
 capturas `restaurante_*.png`. Tiene que terminar con
 `DEMO RESTAURANTE: N pasaron, 0 fallaron`.
 
+```bash
+godot --headless --path . res://tests/parcel_server_demo.tscn
+```
+
+La del **Pulido 2C**: la parcela de 96 × 96 contra el servidor. Una casa vieja
+(parcela de 32) queda en el centro, el servidor genera los mismos obstáculos que
+el teléfono, **no deja construir encima de un obstáculo**, y llamar al servicio de
+limpieza **cobra el servidor** y tiene espera real (~25 s): terminar antes de
+tiempo se rechaza, al pasar la espera limpia y da experiencia, y el lugar queda libre
+para construir. Tiene que terminar con `DEMO PARCELA EN EL SERVIDOR: N pasaron, 0 fallaron`.
+
+**RPC de la parcela (Pulido 2C):** `parcel_load` (semilla, obstáculos limpiados y servicios
+en camino), `parcel_clear_start` (llamar al servicio: valida el acceso, **cobra** y guarda
+la hora de llegada) y `parcel_clear_finish` (pasó la espera: revisa el acceso, limpia y da
+experiencia; si el vehículo no puede entrar, responde `blocked` y el servicio sigue en
+camino). Lo guardado va en `game/home.parcel`. Los precios, tiempos y la cantidad de cada
+obstáculo están en `data/parcel.json` (**reiniciá Nakama si lo cambiás**). La **caja del
+restaurante** (Pulido 2B) se cobra sola: al entrar (`work_settle`) y con `game_heartbeat`.
+
 Ninguna de estas demos toca tu partida (la apartan y la devuelven).
 
 Las cuentas demo quedan en el servidor: se pueden borrar desde la consola.
