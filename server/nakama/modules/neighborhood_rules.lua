@@ -950,7 +950,9 @@ rules.MAX_LOG_WRITES = 300
 rules.MAX_REQUESTS = 10
 
 function rules.empty_home(owner_id)
-  return { rev = 0, fund = 0, members = { owner_id }, log = {}, requests = {}, next_id = 1 }
+  -- business: el negocio de la casa (Fase 6, neighborhood_business.lua);
+  -- vacío = ninguno.
+  return { rev = 0, fund = 0, members = { owner_id }, log = {}, requests = {}, next_id = 1, business = {} }
 end
 
 -- Completa un hogar leído (le pueden faltar campos).

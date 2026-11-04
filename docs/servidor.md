@@ -21,13 +21,14 @@ Todo está en la carpeta `server/` del proyecto:
 | `nakama/modules/neighborhood_rules.lua` | Las **reglas** que decide el servidor (precios, obras, deshacer, empleos, turnos, caja de la casa, historial) |
 | `nakama/modules/neighborhood_house.lua` | Fase 5: reglas de **apoyo** de la casa (nada en el aire) y qué cambio es menor o estructural |
 | `nakama/modules/neighborhood_couple.lua` | Fase 5: la **relación** (invitar, aceptar, casarse, mudarse, terminar) |
+| `nakama/modules/neighborhood_business.lua` | Fase 6: el **restaurante** y su minijuego (el servidor lo repite para saber cuánto pagar) |
 | `tests/test_rules.lua` | Pruebas de esas reglas (sin Nakama, ver "Probar el servidor") |
 | `.env` | **Secretos** (contraseñas y llaves). No va a Git. No lo compartas |
 | `db-data/` | Los datos de la base (las cuentas y partidas). No va a Git |
 
 El servidor lee el **mismo** `data/catalog.json` del juego (solo lectura),
-y también `progression.json` (niveles) y `jobs.json` (empleos): los precios
-están en un solo lugar.
+y también `progression.json` (niveles), `jobs.json` (empleos) y, desde la
+Fase 6, `business.json` (el restaurante): los precios están en un solo lugar.
 
 ## Qué decide el servidor (Fase 4B)
 
@@ -76,6 +77,21 @@ cuenta del servidor que lo pida; para la familia no es un problema.
 el botón queda apagado y avisa "Sin conexión al servidor". El personaje
 tampoco sale a trabajar; al volver a casa, el servidor paga los días que
 faltaron (tope 3).
+
+## Restaurante (Fase 6)
+
+| Lo que pide el juego | Qué hace el servidor |
+|---|---|
+| Ver el restaurante (`restaurant_load`) | Qué le falta (cuenta los muebles **terminados** de la casa), cuántas mesas, la caja que juntó solo y el tope de hoy |
+| Abrir / cerrar (`restaurant_open`, `restaurant_close`) | Revisa que tenga mostrador, plancha y mesa. En la casa compartida es un **pedido** que la pareja aprueba (Menú → Casa) |
+| Cobrar la caja (`restaurant_collect`) | Paga lo que juntó solo ($20 por hora con **su** reloj, hasta $160). En la casa compartida va a la caja de la casa |
+| Empezar un servicio (`service_start`) | Elige la **semilla** (de ahí salen los clientes) y anota la hora. Uno por vez |
+| Terminar un servicio (`service_finish`) | Recibe **solo los toques** del jugador. Revisa que pasaron los 90 s, que los toques sean posibles para una persona (no más de 400, no más rápido que 70 ms) y **repite el servicio** él mismo: paga lo que calcula, con tope de **$600 cada 24 h**. Si algo no vale, lo anula sin pagar |
+
+Dónde se guarda: `game/business` (de cada jugador: servicio en marcha, lo
+ganado hoy, récord) y el campo `business` de `game/home` (el restaurante de
+la casa). En el "Wallet Ledger" los cobros dicen `service_finish` o
+`restaurant_collect`.
 
 > Todos los comandos de abajo se escriben en la terminal (fish), **dentro de
 > la carpeta `server/`**. Para entrar a esa carpeta:
@@ -245,7 +261,20 @@ y Casa. Guarda capturas `pareja_*.png` en
 `~/.local/share/godot/app_userdata/Neighborhood/`. Tiene que terminar con
 `DEMO PAREJA EN PANTALLA: N pasaron, 0 fallaron`.
 
-Ninguna de las dos toca tu partida (la apartan y la devuelven).
+```bash
+godot --path . res://tests/restaurant_demo.tscn
+```
+
+La de la Fase 6, **con ventana** (tarda unos 2 minutos y medio): arma un
+restaurante aparte en la parcela, compra la plancha, lo abre, juega un
+servicio entero de 1:30 en la pantalla (lo juega un jugador automático) y
+compara lo que contó el teléfono con lo que pagó el servidor; después una
+segunda cuenta intenta hacer trampa (toques de robot y un puntaje inventado:
+no cobra) y, viviendo juntos, cerrar el restaurante pide permiso. Guarda
+capturas `restaurante_*.png`. Tiene que terminar con
+`DEMO RESTAURANTE: N pasaron, 0 fallaron`.
+
+Ninguna de estas demos toca tu partida (la apartan y la devuelven).
 
 Las cuentas demo quedan en el servidor: se pueden borrar desde la consola.
 

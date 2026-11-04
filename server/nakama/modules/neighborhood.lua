@@ -43,6 +43,14 @@ RPC (el teléfono las llama con GameServer.call_rpc):
                    (Pulido 1: la remodelación se manda entera como propuesta)
   home_revert      {id}  deshacer un cambio menor del historial
   home_contribute  {amount}  poner dinero en la caja de la casa
+  -- Fase 6: el restaurante (reglas en neighborhood_business.lua) --
+  restaurant_load     estado del restaurante (qué falta, caja, tope del día)
+  restaurant_open     abrir el restaurante (en la casa compartida: pedido)
+  restaurant_close    cerrarlo (en la casa compartida: pedido)
+  restaurant_collect  cobrar lo que juntó solo (clientes de paso, con tope)
+  service_start       empezar el minijuego: el servidor da la semilla
+  service_finish      {actions}  los toques del jugador; el servidor repite
+                      el servicio y paga lo que calcula él (tope diario)
 
 Toda respuesta es {ok, error?, state, ...}. ok = false con un texto para el
 jugador cuando una regla no lo deja (no alcanza el dinero, nivel...).
@@ -55,6 +63,7 @@ Dónde se guarda cada cosa (storage de Nakama, por usuario):
   game/history    pasos de deshacer propios (texto JSON, con la casa a la que
                   pertenecen)                       (solo el servidor)
   game/relation   relación con la pareja            (solo el servidor)
+  game/business   servicio en marcha y tope diario del restaurante (solo el servidor)
   cloud/character personaje                         (lo escribe el teléfono)
   cloud/settings  opciones del menú                 (lo escribe el teléfono)
   wallet "coins"  dinero (billetera de Nakama, con historial de movimientos)
@@ -79,6 +88,7 @@ local nk = require("nakama")
 local rules = require("neighborhood_rules")
 local house_rules = require("neighborhood_house")
 local couple = require("neighborhood_couple")
+local business = require("neighborhood_business")
 
 local STARTING_MONEY = 3000
 local GAME = "game"
@@ -122,6 +132,12 @@ for _ in pairs(data.items) do item_count = item_count + 1 end
 for _ in pairs(data.jobs) do job_count = job_count + 1 end
 nk.logger_info(string.format("Catálogo del juego leído: %d piezas, %d empleos, %d niveles",
   item_count, job_count, #data.levels))
+-- Fase 6: el restaurante (data/business.json, el mismo que lee el juego).
+local restaurant = business.new_config(read_game_data("business.json"))
+nk.logger_info(string.format("Restaurante: servicio de %d s, tope diario $%d",
+  restaurant.service.duration_ms / 1000, restaurant.daily_cap))
+-- Semillas de los servicios: al azar (cada máquina de Lua empieza distinto).
+math.randomseed(nk.time())
 
 
 local function now_unix()
@@ -247,7 +263,7 @@ end
 
 local OWN_KEYS = {
   { GAME, "house" }, { GAME, "home" }, { GAME, "progress" }, { GAME, "work" }, { GAME, "history" },
-  { GAME, "relation" },
+  { GAME, "relation" }, { GAME, "business" },
 }
 local HOME_KEYS = { { GAME, "house" }, { GAME, "home" } }
 
@@ -290,6 +306,7 @@ local function load_state(user_id)
     xp = math.floor(rules.num(progress and progress.xp) or 0),
     discovered = {},
     work = rules.normalize_work(value_of(objects, "game/work")),
+    business = business.normalize_record(value_of(objects, "game/business")),
     history = { undo = history.undo or {}, redo = history.redo or {} },
     imported_unix = progress and progress.imported_unix or 0,
     check_support = true,
@@ -341,6 +358,9 @@ local function save_state(state, changed, reason)
   if changed.work then
     table.insert(writes, versioned_write(state.objects, state.user_id, GAME, "work", state.work))
   end
+  if changed.business then
+    table.insert(writes, versioned_write(state.objects, state.user_id, GAME, "business", state.business))
+  end
   if changed.history then
     table.insert(writes, versioned_write(state.objects, state.user_id, GAME, "history",
       { json = nk.json_encode({ undo = state.history.undo, redo = state.history.redo }), home = state.owner_id }))
@@ -389,6 +409,8 @@ local function summary(state)
     fund = state.fund or 0,
     pool_income = state.shared and state.relation.pool_income or false,
     requests = #state.home.requests,
+    -- Fase 6
+    restaurant_open = business.is_open(state.home),
   }
 end
 
@@ -399,7 +421,7 @@ local function home_summary(state)
   local requests = {}
   for _, r in ipairs(state.home.requests) do
     table.insert(requests, { id = r.id, by_me = r.by == me, by_name = r.by_name, at = r.at, text = r.text,
-      cost = r.cost })
+      cost = r.cost, business = r.business })
   end
   local log = {}
   local first = math.max(1, #state.home.log - LOG_TO_PHONE + 1)
@@ -1032,6 +1054,21 @@ local function home_answer(context, payload)
       rules.refuse("Ese pedido ya no vale: ya no viven en la misma casa.")
     end
     rules.take_request(requester.home, id)
+    if request.business ~= nil then
+      -- Fase 6: abrir o cerrar el restaurante (no tiene piezas).
+      if request.business == "open" then
+        business.open(restaurant, data.items, requester, now)
+      else
+        business.close(requester)
+      end
+      log_and_notify(requester, { kind = "business", text = string.format("%s (aprobado por %s)",
+        request.done_text or request.text, context.username) })
+      table.insert(requester.notify, { to = request.by, code = NOTIFY_REQUESTS, content = {
+        text = string.format("%s aprobó: %s", context.username, request.text) } })
+      save_state(requester, { home = true }, "home_answer")
+      send_notifications(requester.notify, me)
+      return { ok = true, approved = true, writes = {} }
+    end
     local result = rules.build(data, requester, request.writes, now, encode_history)
     log_and_notify(requester, { kind = "approved", text = string.format("%s (aprobado por %s)",
       request.done_text or request.text, context.username), money_fund = result.money_fund, money_own = result.money_own })
@@ -1170,6 +1207,70 @@ local function game_heartbeat(state, _input, now)
 end
 
 
+
+-- --- Restaurante (Fase 6) ---
+
+local function restaurant_summary(state, now)
+  return business.summary(restaurant, data.items, state, now)
+end
+
+local function restaurant_load(state, _input, now)
+  return { changed = {}, result = { restaurant = restaurant_summary(state, now) } }
+end
+
+-- Abrir o cerrar: en la casa compartida es un cambio estructural
+-- ("convertir en negocio", VISION.md): queda como pedido para la pareja.
+local function restaurant_switch(kind)
+  return function(state, _input, now)
+    if kind == "open" then
+      business.check_open(restaurant, data.items, state, now)
+    elseif not business.is_open(state.home) then
+      rules.refuse("El restaurante ya está cerrado.")
+    end
+    local wish = kind == "open" and "abrir el restaurante" or "cerrar el restaurante"
+    local done = kind == "open" and "abrió el restaurante" or "cerró el restaurante"
+    if state.shared then
+      local request = rules.add_request(state.home, { by = state.actor, by_name = state.username or "", at = now,
+        writes = {}, business = kind, text = wish, done_text = done, cost = 0 })
+      table.insert(state.notify, { to = housemate(state), code = NOTIFY_REQUESTS, content = {
+        text = string.format("%s pide permiso para: %s", state.username or "", wish) } })
+      return { changed = { home = true }, result = { requested = true, request_id = request.id, text = wish,
+        restaurant = restaurant_summary(state, now) } }
+    end
+    if kind == "open" then
+      business.open(restaurant, data.items, state, now)
+    else
+      business.close(state)
+    end
+    log_and_notify(state, { kind = "business", text = done })
+    return { changed = { home = true }, result = { restaurant = restaurant_summary(state, now) } }
+  end
+end
+
+local function restaurant_collect(state, _input, now)
+  local result = business.collect(restaurant, data.items, state, now)
+  if result.to_fund then
+    log_and_notify(state, { kind = "fund", text = string.format("cobró el restaurante: $%d a la caja", result.coins) })
+  end
+  result.restaurant = restaurant_summary(state, now)
+  return { changed = { home = true }, result = result }
+end
+
+local function service_start(state, _input, now)
+  local result = business.service_start(restaurant, data.items, state, now, math.random(1, 2147483646))
+  return { changed = { business = true }, result = result }
+end
+
+local function service_finish(state, input, now)
+  local result = business.service_finish(restaurant, data.items, state, now, input.actions)
+  if result.valid then
+    note_income(state, result, result.pay, "lo ganado en el restaurante ($%d) fue a la caja")
+  end
+  result.restaurant = restaurant_summary(state, now)
+  return { changed = { business = true, progress = (result.xp_gained or 0) > 0 }, result = result }
+end
+
+
 nk.register_rpc(game_load, "game_load")
 nk.register_rpc(game_import, "game_import")
 nk.register_rpc(game_rpc("build_apply", build_apply), "build_apply")
@@ -1199,3 +1300,9 @@ nk.register_rpc(game_rpc("home_cancel", home_cancel), "home_cancel")
 nk.register_rpc(game_rpc("home_request", home_request), "home_request")
 nk.register_rpc(game_rpc("home_revert", home_revert), "home_revert")
 nk.register_rpc(game_rpc("home_contribute", home_contribute), "home_contribute")
+nk.register_rpc(game_rpc("restaurant_load", restaurant_load), "restaurant_load")
+nk.register_rpc(game_rpc("restaurant_open", restaurant_switch("open")), "restaurant_open")
+nk.register_rpc(game_rpc("restaurant_close", restaurant_switch("close")), "restaurant_close")
+nk.register_rpc(game_rpc("restaurant_collect", restaurant_collect), "restaurant_collect")
+nk.register_rpc(game_rpc("service_start", service_start), "service_start")
+nk.register_rpc(game_rpc("service_finish", service_finish), "service_finish")

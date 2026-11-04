@@ -44,6 +44,7 @@ const NEED_COLORS := {
 @onready var _toast_box: Control = %ToastBox
 @onready var _toast_label: Label = %ToastLabel
 @onready var _jobs_button: Button = %JobsButton
+@onready var _restaurant_button: Button = %RestaurantButton
 @onready var _menu_button: Button = %MenuButton
 @onready var _side_menu: Control = %SideMenu
 @onready var _character_button: Button = %CharacterButton
@@ -132,6 +133,7 @@ func _ready() -> void:
 	_character_button.pressed.connect(_open_from_menu.bind(EventBus.character_editor_requested))
 	_diary_button.pressed.connect(_open_from_menu.bind(EventBus.journal_requested))
 	_jobs_button.pressed.connect(_open_from_menu.bind(EventBus.jobs_requested))
+	_restaurant_button.pressed.connect(_open_from_menu.bind(EventBus.restaurant_panel_requested))
 	_info_button.pressed.connect(_open_info)
 	_info_close_button.pressed.connect(_info_panel.hide)
 	_builds_button.pressed.connect(EventBus.construction_accelerate_requested.emit)
@@ -181,6 +183,7 @@ func _ready() -> void:
 ## maqueta de pisos y la brújula solo los leen).
 func setup_house(house: HouseData, character: Node3D, builder: Node) -> void:
 	_floor_map.setup(house, character)
+	$RestaurantPanel.house = house
 	_compass_button.target = character
 	_bottom_bar.setup(_action_row, builder, character)
 
@@ -203,7 +206,7 @@ func _setup_icons() -> void:
 	_speed_button.add_theme_constant_override("icon_max_width", 26)
 	_speed_button.add_theme_font_size_override("font_size", 22)
 	_speed_button.text = "x%d" % GameClock.speed
-	for pair in [[_character_button, "person"], [_diary_button, "diary"], [_jobs_button, "work"],
+	for pair in [[_character_button, "person"], [_diary_button, "diary"], [_jobs_button, "work"], [_restaurant_button, "dish"],
 			[_couple_button, "heart"], [_home_button, "home"], [_info_button, "info"], [_logout_button, "logout"]]:
 		pair[0].icon = Icons.texture(pair[1])
 		pair[0].add_theme_constant_override("icon_max_width", 30)

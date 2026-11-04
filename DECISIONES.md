@@ -690,3 +690,110 @@ dueño), rama `pulido-1`.
 - **Cámara por piso**: con 5 pisos la cámara sube a la altura del piso que se
   mira (`CameraRig.floor_height`), si no quedaba metida entre paredes.
 - **Versión 0.7.0.**
+
+## Restaurante (Fase 6) — 2026-11-04, sesión en la nube
+
+Sub-fases: **6A — servidor** (reglas, simulación del minijuego, RPC y pruebas
+en Lua) y **6B — teléfono** (simulación copia, panel, minijuego, pruebas y
+demo con capturas).
+
+### Dónde vive el restaurante en la parcela
+- **Un edificio (o cuarto) aparte en la parcela, no "la casa marcada como
+  negocio".** La parcela es de 32 × 32 y VISION dice que ahí caben la casa y
+  un negocio al lado. El jugador arma el restaurante donde quiera (lo normal:
+  un edificio aparte) con los muebles de la categoría nueva **Restaurante**
+  de la Tienda: **Mostrador** ($250), **Plancha de restaurante** ($450, la
+  plancha del minijuego), **Mesa de restaurante** ($120) y **Banquito** ($30).
+- **Abrir = convertir la propiedad en negocio**: el servidor revisa que la
+  casa tenga al menos 1 mostrador, 1 plancha y 1 mesa **terminados** (una obra
+  en marcha no cuenta). Lo que pide está en `data/business.json` (`requires`).
+- Por qué así y no "declarar zonas": declarar qué edificio es casa y cuál es
+  negocio (VISION, "Parcela") es una herramienta nueva de dibujo y de datos
+  que la fase no pide. Con esto el restaurante ya vive "al lado" y el día que
+  existan zonas se le agrega su rectángulo sin cambiar el minijuego ni el
+  servidor. El cuarto "Restaurante" de `rooms.json` hace que la Tienda
+  recomiende lo de restaurante cuando la cámara mira ese edificio.
+- **Cada mesa de restaurante es un lugar** para un cliente (hasta 3). Más
+  mesas = más clientes a la vez (y más ingresos posibles), pero dentro del
+  minijuego gana la habilidad: un servicio con 1 mesa es más tranquilo.
+- Nivel 1 (todo desbloqueado de entrada): es el primer negocio y para la
+  familia conviene probarlo ya. Cambiarlo es `unlock_level` en el catálogo.
+
+### El minijuego: "Servicio" (1:30)
+- Propio, sin copiar otro juego: arriba las **mesas** con clientes chibi y su
+  pedido en un globito (2 a 4 ingredientes); abajo **6 ingredientes** (pan,
+  lechuga, tomate, queso; **tortita** y **huevo** van a la **plancha**). Lo
+  frío va directo al plato; lo caliente se cocina 2,5 s y hay que sacarlo en
+  los 3 s siguientes, cuando **brilla** (después se **quema** y hay que
+  tirarlo). Tocar al cliente le sirve el plato.
+- **El orden del plato no importa** (con el dedo, pedir orden exacto frustra).
+- Pago: $3 por ingrediente + **propina** (hasta $5, baja con la espera) +
+  **racha** (+$1 por cada plato bien seguido, hasta +$4). Plato equivocado:
+  el cliente pierde 5 s de paciencia y se corta la racha. Si se le acaba la
+  paciencia, se va (sin multa). Si las mesas están llenas, el que llega sigue
+  de largo.
+- Se pone más difícil cada 30 s (pedidos más grandes, llegan más seguido,
+  menos paciencia). Un jugador ordenado gana ~$200–250 por servicio; jugando
+  normal, $100–200.
+- Todo con figuras dibujadas por el juego (sin arte final). Nada de rombos
+  ni íconos de otros juegos (`docs/riesgos-legales-ea.md`).
+
+### Anti-trampa: el servidor repite el servicio
+- El teléfono **nunca manda un puntaje**. Al empezar, el **servidor** elige
+  una **semilla** y anota la hora (`service_start`). Con esa semilla, el
+  teléfono y el servidor arman la misma lista de clientes.
+- Al terminar, el teléfono manda **solo los toques**: `[t (ms), acción,
+  número]`. El servidor (`service_finish`) revisa: que pasaron los 90 s
+  (margen 3 s), máximo 400 toques, en orden, **no más rápidos que 70 ms**
+  entre uno y otro, números válidos; y **repite el servicio** con
+  `neighborhood_business.lua`. Paga lo que calcula él. Si algo no vale, el
+  servicio se **anula** (no paga, queda anotado). Un servicio se cobra una sola
+  vez; no se puede tener dos a la vez.
+- Para que dé **exactamente** lo mismo en Lua y en GDScript: solo números
+  enteros (ms) y un generador al azar simple (**Park-Miller**). Las pruebas
+  de los dos lados comparan los mismos números (semilla 4242: 17 clientes,
+  llegadas que suman 719677, etc.) y la demo compara el servidor real con el
+  teléfono.
+- Límite conocido: un programa que juegue "perfecto" a velocidad humana
+  ganaría lo máximo, pero el **tope diario** acota eso (y es un juego en
+  familia).
+
+### Ingresos, topes y "nada castiga"
+- **Tope diario del minijuego: $600** por jugador cada 24 h (desde la primera
+  ganancia). Llegado el tope se puede seguir jugando, pero no paga ni da
+  experiencia.
+- **Caja del restaurante (clientes de paso)**: abierto, junta **$20 por hora
+  hasta $160** (8 h), con la hora del servidor, aunque nadie entre: VISION
+  dice "los negocios acumulan ganancias hasta un tope; nada se pierde por no
+  entrar". Se cobra con "Cobrar caja". Llegado el tope deja de juntar (no
+  se pierde lo juntado).
+- Si se corta la conexión o se cierra el juego **en medio de un servicio**,
+  los toques quedan guardados en la partida (`GameState.restaurant`) y se
+  mandan solos al volver; el servidor los acepta **hasta 24 h** después.
+- Sin conexión (o "Jugar sin conexión") se puede **Practicar**: el mismo
+  juego, sin cobrar.
+- Experiencia: 1 por cliente atendido (solo si el servicio pagó algo).
+
+### Casa compartida (reglas de la Fase 5)
+- El restaurante es del **hogar** (`game/home` del dueño de la casa,
+  campo `business`): viviendo juntos, es de los dos y los dos pueden atender.
+- **Abrir o cerrar** el restaurante es cambio **estructural** ("convertir en
+  negocio", VISION): queda como **pedido** que la pareja aprueba en Menú →
+  Casa (sin botón "Ver": no tiene piezas).
+- Lo que junta solo (caja del restaurante) va a la **caja de la casa**.
+- Lo del minijuego es el trabajo de cada uno: a su **billetera**, o a la caja
+  con **"unir ingresos"**. Cada uno tiene su propio tope diario.
+- Si se separan, el restaurante queda con la casa (con su dueño).
+
+### Técnica
+- Reglas en `server/nakama/modules/neighborhood_business.lua` (sin Nakama,
+  se prueban con `lua5.1`), copia en `scripts/business/restaurant_sim.gd`.
+  Lo de cada jugador en `game/business` (servicio en marcha, tope del día,
+  récord); el negocio en `game/home.business`.
+- RPC nuevas: `restaurant_load`, `restaurant_open`, `restaurant_close`,
+  `restaurant_collect`, `service_start`, `service_finish`.
+- Autoload nuevo `Restaurant` (habla con el servidor); pantalla
+  `ui/restaurant_game.gd` (todo dibujado con `_draw`, un solo nodo: liviano
+  para el teléfono); panel `ui/restaurant_panel.gd` (Menú → Restaurante).
+- `tests/restaurant_bot.gd`: jugador automático **solo para pruebas y demos**.
+- **Versión 0.8.0.**

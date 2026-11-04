@@ -1,6 +1,12 @@
 # Progreso
 
-## Fase actual: Pulido 1 — interfaz limpia y constructor 2.0 (hecho y verificado en la PC; falta probarlo en el teléfono)
+## Fase actual: 6 — Primer negocio: restaurante (verificada en la PC; falta probarla en el teléfono)
+
+**Fase 6 verificada en la PC (2026-11-04).** Rama `fase-6` unida a `main`.
+Nakama reiniciado sin errores (45 piezas, 5 módulos). Sin red 369/369, Lua
+273/273, demos: servidor 24, economía 39, entrada 17, pareja 78, pareja en
+pantalla 12, interfaz 40, restaurante 32/32 (capturas revisadas). Partida del
+dueño intacta. APK 0.8.0 en `build/neighborhood.apk`.
 
 **Pendiente anotado (2026-11-03):** `docs/pulido-2.md` = lo que notó el dueño
 con el APK 0.7.0 (techos que no se borran, basurero, menú que no se cierra,
@@ -9,9 +15,84 @@ entrega, servicios, parcela más grande, sótanos, niebla, cámara). **Orden:**
 Fase 6 (en la nube, rama `fase-6`) → el dueño prueba su APK y manda feedback
 → Pulido 2 = esta lista + ese feedback.
 
-**Próximo paso:** el dueño prueba el Pulido 1 en el teléfono (checklist de
-abajo). Después: cerrar la Fase 5 en dos teléfonos y seguir con la **Fase 6**
-(restaurante). Lo que sigue pendiente de la Fase 5 está más abajo.
+**Próximo paso:** el dueño prueba el APK 0.8.0 en el teléfono (checklist de la
+Fase 6 de abajo) y manda su feedback. Después: **Pulido 2** (`docs/pulido-2.md`
++ ese feedback). Siguen pendientes las pruebas de la Fase 5 y del Pulido 1 en
+los teléfonos.
+
+### Fase 6 — hecho (2026-11-04, sesión en la nube, rama `fase-6`)
+- **6A — servidor** (commit "Fase 6A"): `neighborhood_business.lua` (sin
+  Nakama, probado con `lua5.1`): restaurante del hogar, qué le falta, caja que
+  junta sola ($20/h hasta $160), servicio con **semilla del servidor**, revisión
+  de toques y **el servidor repite el servicio** para saber cuánto pagar, tope
+  de **$600 cada 24 h**. 6 RPC nuevas; abrir/cerrar en la casa compartida es un
+  **pedido** que aprueba la pareja. Datos en `data/business.json`; muebles
+  nuevos (Mostrador, Plancha de restaurante, Mesa de restaurante, Banquito,
+  categoría "Restaurante" en la Tienda) y el cuarto "Restaurante" en `rooms.json`.
+- **6B — teléfono**: `RestaurantSim` (copia exacta de la simulación),
+  autoload `Restaurant`, **Menú → Restaurante** (abrir, cobrar caja, Atender,
+  Practicar), el minijuego **"Servicio"** (1:30, táctil, figuras dibujadas),
+  servicio sin cobrar guardado si se corta la conexión (se manda solo al
+  volver), pedidos del restaurante en Menú → Casa (sin "Ver").
+- Versión **0.8.0** (también en `export_presets.cfg`: el APK ya dice 0.8.0).
+- Pruebas (en la nube: Godot 4.7.2, Nakama 3.41.0 + PostgreSQL 16 de prueba):
+  sin red **369** (99 casa + 34 personaje + 66 economía + 78 servidor + 46
+  pareja + **46 restaurante**), Lua **273** (214 + 59 nuevas), demo nueva
+  **`restaurant_demo` 32/32** (con capturas `restaurante_1` a `_7` en
+  `docs/capturas/`), y las demos de antes: `server_demo` 24/24, `economy_server_demo` 39/39,
+  `login_demo` 17/17, `couple_demo` 78/78, `couple_live_demo` 12/12, `ui_demo` 40/40.
+  No se exportó el APK (lo pidió así la tarea).
+
+### Fase 6 — cómo probarlo en el teléfono (para el dueño)
+1. [Claude] Traer la rama `fase-6` (o el `fase-6.bundle`), unirla a `main`,
+   reiniciar Nakama (`docker compose restart nakama` en `server/`: tiene que
+   leer el módulo nuevo y `business.json`; en los logs aparece
+   "Restaurante: servicio de 90 s, tope diario $600"), correr las pruebas y
+   exportar el APK 0.8.0.
+2. [Dueño] Instalar el APK (como siempre).
+3. Construir → **Tienda → Restaurante**: en tu parcela, al lado de la casa,
+   armá un edificio (cimientos, piso, paredes, puerta) y poné un
+   **Mostrador**, una **Plancha de restaurante** y 1 a 3 **Mesas de
+   restaurante**. Con la cámara mirando ese edificio, la Tienda muestra
+   primero "★ Restaurante".
+4. Esperá la obra de la plancha (45 s) o acelerala.
+5. **Menú → Restaurante** → **Abrir restaurante**. Tiene que decir "Abierto ·
+   N mesas".
+6. **Atender (1:30)**: cuenta 3-2-1 y llegan clientes. Tocá los
+   ingredientes del globito; tortita y huevo van a la plancha: cuando
+   brillan, tocalos. Tocá al cliente para servirle. Al final: "Cobraste $X"
+   y el dinero de arriba sube eso.
+7. Probá equivocarte (le servís otra cosa: "¡Eso no pedí!") y dejar quemar
+   algo en la plancha (tocá para tirarlo).
+8. Cerrá el juego en medio de un servicio y volvé a entrar a los 2 minutos:
+   aparece "Servicio: cobraste $X" solo (lo que alcanzaste a servir).
+9. **Practicar** con el wifi apagado: se juega igual, dice "Práctica".
+10. Al otro día (o después de unas horas): Menú → Restaurante → **Cobrar
+    caja** (lo que juntó solo, hasta $160).
+11. [Con tu pareja, viviendo juntos] Cerrar el restaurante → dice "Le
+    pediste permiso…"; en el otro teléfono Menú → Casa → **Aprobar**.
+12. Medir los FPS durante el servicio (Menú → Info → Mostrar FPS). Meta: 30+.
+13. Decime si el juego es muy fácil o muy difícil, y si la plata está bien:
+    todo se cambia en `data/business.json`.
+14. [Claude] Corregir lo que salga; commit "Fase 6 cerrada".
+
+### Fase 6 — pendientes y errores conocidos
+- El piso de color del restaurante de la demo se ve casi blanco con la luz
+  (la baldosa es clara); es solo la demo.
+- Los clientes del minijuego no aparecen en la casa 3D (solo en la pantalla
+  del minijuego); el personaje no camina al mostrador al atender.
+- "Declarar zonas" de la parcela (qué edificio es casa y cuál negocio) no se
+  hizo: el restaurante es "los muebles de restaurante de la parcela"
+  (DECISIONES, "Restaurante").
+- Un programa que juegue perfecto a velocidad humana gana lo máximo por
+  servicio; lo frena el tope diario.
+- La caja del restaurante solo junta mientras está abierto; si se le saca un
+  mueble necesario, sigue juntando pero no se puede cobrar hasta volver a
+  ponerlo.
+- El jugador automático de la demo atiende a casi todos: es más fácil que
+  para una persona. Falta medir con gente de verdad (punto 13).
+
+## Pulido 1 — interfaz limpia y constructor 2.0 (hecho y verificado en la PC; falta probarlo en el teléfono)
 
 ### Pulido 1 — hecho (2026-11-03, sesión local en la PC del dueño, rama `pulido-1`)
 - **P1A — interfaz** (commit "Pulido 1A"): pantalla casi vacía con 42 íconos
@@ -96,8 +177,8 @@ Unido a `main`. Nakama del dueño reiniciado sin errores (41 piezas). Sin red
 - La onda de "pintar arrastrando" es un anillo blanco en el piso (simple).
 - Si la pareja cambia algo mientras ves una propuesta, te pones al día al
   cerrarla (no antes).
-- `export_presets.cfg` sigue con versión "0.0.1" para Android (lo que se ve
-  en la ficha del APK); el juego muestra 0.7.0 (de `project.godot`).
+- ~~`export_presets.cfg` sigue con versión "0.0.1"~~ (arreglado en la Fase 6:
+  0.8.0, código 8).
 - Los avisos de abajo del menú de arriba se apilan y a veces quedan dos a la
   vez ("Elegí Tienda, Obra o Borrar" + otro); visto en las capturas.
 
@@ -360,5 +441,5 @@ Todo en un solo tramo (1A + 1B + 1C):
 - ¿Tu pareja usa Android o iPhone? (VISION.md)
 
 ## Fases siguientes
-- Fase 6 — Primer negocio: restaurante (Sonnet alcanza; Opus si el cálculo de
-  ingresos en el servidor se complica). Antes: cerrar la Fase 5 en los teléfonos.
+- Fase 7 — Arte y estilo (Sonnet alcanza). Antes: probar las Fases 5 y 6 y el
+  Pulido 1 en los teléfonos.

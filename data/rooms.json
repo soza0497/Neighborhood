@@ -9,6 +9,7 @@
 		{ "id": "kitchen", "name": "Cocina", "items": { "stove_basic": 3, "fridge_basic": 3, "table_basic": 1, "chair_basic": 1, "vase_basic": 1 } },
 		{ "id": "bathroom", "name": "Baño", "items": { "toilet_basic": 3, "shower_basic": 3, "plant_pot": 1 } },
 		{ "id": "living", "name": "Sala", "items": { "sofa_basic": 3, "tv_basic": 3, "lamp_floor": 1, "plant_tall": 1, "vase_basic": 1 } },
-		{ "id": "study", "name": "Estudio", "items": { "desk_basic": 3, "computer_basic": 2, "bookshelf_basic": 2, "chair_basic": 1, "lamp_floor": 1 } }
+		{ "id": "study", "name": "Estudio", "items": { "desk_basic": 3, "computer_basic": 2, "bookshelf_basic": 2, "chair_basic": 1, "lamp_floor": 1 } },
+		{ "id": "restaurant", "name": "Restaurante", "items": { "counter_restaurant": 3, "stove_restaurant": 3, "table_restaurant": 2, "stool_restaurant": 1, "plant_pot": 1, "vase_basic": 1 } }
 	]
 }
