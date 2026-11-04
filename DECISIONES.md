@@ -1280,3 +1280,40 @@ pivote en el centro de la base, **contorno por shader (no modelado)**; el arte s
 - **Panel «Casa» (☰)**: lista de cuartos de todos los pisos con su tipo y botón «Cambiar tipo», y el interruptor «Mi casa se puede
   visitar» (el mismo ajuste que ya estaba en Barrio). Queda como el lugar de los ajustes de la casa.
 - La columna izquierda queda con techo, paredes y la maqueta de pisos.
+
+
+## Pulido 4B — Modo desarrollador (versión 0.12.0)
+
+- **Interruptor** «Modo desarrollador» en Menú → Info, **apagado por defecto**, guardado en `GameState.settings["dev_mode"]` (partida
+  local). **Nunca va al servidor**: las opciones se suben como un bloque (`CloudSync.cloud_objects` / `import_payload`), así que se
+  agregó `CloudSync.LOCAL_ONLY_SETTINGS = ["dev_mode"]` y `CloudSync.public_settings()`, que lo sacan al subir y al unir con la nube
+  (el servidor Lua no cambió). Al apagarlo se borra la clave, se quitan los peligros, el personaje recupera atención 1 y la IA.
+- **Dónde vive qué**: lógica en `scripts/debug/dev_mode.gd` (funciones estáticas; todas devuelven `{ok, reason}` y **se niegan con el
+  modo apagado**), mapa de peligros en `scripts/debug/hazard_map.gd`, marcadores en `scripts/debug/hazard_view.gd`, interfaz en
+  `ui/dev_panel.gd/.tscn`, datos en `data/hazards.json` (tipos, accidentes, atención, botones rápidos). El personaje solo expone
+  `attention`, `force_action(spec)`, `force_accident(kind)` y, para el panel, `teleport_to`, `set_ai_frozen`, `last_reason`.
+- **Nada de dinero, experiencia ni propiedad**: el modo no tiene ninguna función que toque `Economy`, el servidor ni la casa; hay una
+  prueba que lo revisa en el código y otra que compara dinero/XP/casa antes y después. Las necesidades respetan el mínimo del juego
+  (10) y la hora **solo avanza** (hasta la próxima vez que sea esa hora) para no confundir turnos ni obras.
+- **Atención** (`attention`, 0 a 1, por defecto 1): desde `careful_at = 0.5` el personaje **esquiva** los peligros; por debajo los
+  pisa y le pasa el accidente. Es un umbral, no una probabilidad: así las pruebas son exactas. Con atención alta y **sin otro camino**
+  (el peligro es la única entrada) cruza con cuidado y no se cae. Los botones «distraído» (0,35), «desorbitado» (0,05) y «recién
+  levantado» (0,25) **solo ponen el número** (están en `data/hazards.json`); el juego los usará después con sus propias reglas.
+- **Esquivar** reutiliza el truco del Pulido 3A: las celdas peligrosas pesan ×40 en la red de caminos (`HouseNav`), así se rodean
+  y, si no hay más remedio, se cruzan. Para quien NO presta atención, `find_path(..., careful=false)` pone el peso normal un
+  instante y busca el camino más corto. El camino se regenera cuando cambia el mapa de peligros.
+- **Peligros** (`HazardMap`, genérico: nivel, celda, tipo): `wet` charco → **caerse**, `hot` caliente → **quemarse**, `drop`
+  desnivel → **tropezar**. No se guardan (son de la sesión). Cualquier objeto o evento futuro llama `HazardMap.add/remove`.
+- **Accidentes**: caerse y quemarse dejan al personaje en `HURT` y llaman a la ambulancia que ya existía (`ambulance_requested`);
+  tropezar es una sacudida de ~1 s **sin** ambulancia (si no, un desnivel sería igual de grave que un charco). Cada uno usa un
+  gancho de animación por nombre (`fall`, `trip`, `burn`; alias en `character_slots.json`; sin clip, una animación simple de
+  código) y una burbuja con un ícono chato sobre la cabeza. Caerse desde un piso alto baja al suelo de la planta baja. Todo
+  baja un poco la energía y queda en el diario; nada más.
+- **«Accidente en ese lugar»**: al elegir un accidente sobre un mueble o el suelo, el panel **lleva** al personaje a esa celda
+  (teletransporte) y le hace pasar el accidente: sirve para probar «quemarse junto a la cocina» sin esperar.
+- **Panel**: ícono propio (`assets/icons/dev.svg`) junto al menú; abierto queda a la derecha, debajo de los botones y a la izquierda
+  de la barra del ángulo, dentro del área segura. Los toques en el mundo los usa el panel solo mientras está abierto y en modo
+  vivir (el `LiveController` los ignora); la cámara sigue moviéndose. Pestañas: Acción, Atención, Peligros, Estados. Abajo, un
+  registro corto (intención actual con su motivo `last_reason`, accidente forzado, lo que se cambió).
+- **Cuidado legal**: los accidentes y su lógica son propios (nombres, animaciones y reglas inventados para este juego); no se copió
+  ninguna mecánica, animación ni nombre de otros juegos.

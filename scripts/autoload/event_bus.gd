@@ -218,3 +218,15 @@ signal neighborhood_goal_changed
 ## Fase 8C: ganchos de sonido por evento. `event` es un nombre fijo (ver
 ## data/neighborhood.json, "sounds"); todavía no hay archivos de audio.
 signal neighborhood_sound(event: String, position: Vector3)
+
+
+# --- Modo desarrollador (Pulido 4B) ---
+## Se prendió o apagó el modo desarrollador (Info). Solo cambia lo que se ve; no se manda al servidor.
+signal dev_mode_changed(enabled: bool)
+## Cambiaron las celdas peligrosas (HazardMap).
+signal hazards_changed
+## Al personaje le pasó un accidente: tipo (fall, trip, burn), nivel, celda y el motivo
+## ("forzado por el modo desarrollador", "pisó un charco"…).
+signal character_accident(kind: String, level: int, cell: Vector2i, reason: String)
+## Una línea para el registro corto del modo desarrollador (qué decidió el personaje y por qué).
+signal dev_log(text: String)

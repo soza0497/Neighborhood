@@ -13,6 +13,8 @@ extends RefCounted
 var _house: HouseData
 var _astar := AStar3D.new()
 var _dirty := true
+## Pulido 4B: puntos de la red que son peligrosos (HazardMap) y su peso normal.
+var _hazard_weights: Dictionary = {}
 
 
 func _init(house: HouseData) -> void:
@@ -21,6 +23,8 @@ func _init(house: HouseData) -> void:
 	_house.reloaded.connect(mark_dirty)
 	# Pulido 3A: al limpiar un obstáculo (o abrirse un terreno) el camino se regenera.
 	Parcel.changed.connect(mark_dirty)
+	# Pulido 4B: si aparece o se quita un peligro (charco, desnivel…), el camino se regenera.
+	EventBus.hazards_changed.connect(mark_dirty)
 
 
 ## La casa cambió: el camino se vuelve a armar cuando se pida.
@@ -79,8 +83,21 @@ func is_edge_open(level: int, edge: String) -> bool:
 
 ## Camino desde una celda hasta otra. Devuelve las posiciones (coordenadas de
 ## la casa) o una lista vacía si no se puede llegar.
-func find_path(from_level: int, from_cell: Vector2i, to_level: int, to_cell: Vector2i) -> PackedVector3Array:
+##
+## Pulido 4B: `careful` = true (lo normal) rodea las celdas peligrosas de HazardMap
+## (si no hay otro camino, las cruza); con false (un personaje sin atención) no las
+## distingue y va por el camino más corto.
+func find_path(from_level: int, from_cell: Vector2i, to_level: int, to_cell: Vector2i, careful := true) -> PackedVector3Array:
 	_rebuild_if_needed()
+	if not careful and not _hazard_weights.is_empty():
+		_set_hazard_weights(false)
+		var path := _find_path_now(from_level, from_cell, to_level, to_cell)
+		_set_hazard_weights(true)
+		return path
+	return _find_path_now(from_level, from_cell, to_level, to_cell)
+
+
+func _find_path_now(from_level: int, from_cell: Vector2i, to_level: int, to_cell: Vector2i) -> PackedVector3Array:
 	var from_id := point_id(from_level, from_cell)
 	var to_id := point_id(to_level, to_cell)
 	if not _astar.has_point(from_id) or not _astar.has_point(to_id):
@@ -163,6 +180,16 @@ func rebuild() -> void:
 				if _astar.has_point(point_id(0, cell)) and _touches_obstacle(cell):
 					_astar.set_point_weight_scale(point_id(0, cell), NEAR_OBSTACLE_COST)
 
+	# Pulido 4B: celdas peligrosas (charco, calor, desnivel) «cuestan» mucho: quien presta
+	# atención las rodea. (Quien no, usa find_path(..., false) y las ignora.)
+	_hazard_weights.clear()
+	if not HazardMap.is_empty():
+		for hazard in HazardMap.all():
+			var hazard_id := point_id(hazard["level"], hazard["cell"])
+			if _astar.has_point(hazard_id):
+				_hazard_weights[hazard_id] = _astar.get_point_weight_scale(hazard_id)
+		_set_hazard_weights(true)
+
 	for level in HouseGrid.level_range():
 		for x in range(area.position.x, area.end.x):
 			for z in range(area.position.y, area.end.y):
@@ -179,6 +206,14 @@ func rebuild() -> void:
 	for level in range(HouseGrid.MIN_LEVEL, HouseGrid.MAX_LEVELS - 1):
 		for key in _house.get_layer(level, "objects"):
 			_add_stairs(level, key)
+
+
+## Pone el costo de los peligros: `costly` = true los hace caros (se esquivan), false
+## los deja con su peso normal (no se distinguen).
+func _set_hazard_weights(costly: bool) -> void:
+	for id in _hazard_weights:
+		var base: float = _hazard_weights[id]
+		_astar.set_point_weight_scale(id, base * HazardMap.avoid_cost() if costly else base)
 
 
 ## Cuánto más "cuesta" caminar pegado a un obstáculo (1 = igual que en campo abierto).

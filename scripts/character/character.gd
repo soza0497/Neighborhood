@@ -77,11 +77,28 @@ var _open_queue: Array = []
 var _open_timer := 0.0
 ## Se lastimó (el ejemplo es una caída por una puerta al vacío): espera a la ambulancia.
 var hurt := false
+## Pulido 4B: atención, de 0 (distraído, desorbitado) a 1 (atento). Con atención alta
+## (>= HazardMap.careful_at()) rodea las celdas peligrosas (HazardMap) y no sufre
+## accidentes; con atención baja no las esquiva y, al pisarlas, le pasa el accidente que
+## corresponde. Hoy solo la cambia el modo desarrollador; el juego podrá usarla después
+## (distraído, desorbitado, recién levantado…) con sus propias reglas.
+var attention := 1.0:
+	set(value):
+		attention = clampf(value, 0.0, 1.0)
+## Pulido 4B: IA congelada (no elige qué hacer; sí cumple lo que se le fuerza).
+var ai_frozen := false
+## Pulido 4B: el último accidente: {kind, reason, level, cell} ({} si no hubo).
+var last_accident: Dictionary = {}
+## Pulido 4B: por qué eligió lo que está haciendo ("IA: lo que más necesita es comida",
+## "orden del jugador", "forzado desde el modo desarrollador"…). Solo informa.
+var last_reason := ""
 
 ## Terminó de abrirle la puerta a un servicio (Pulido 2C).
 signal gate_opened
 var _animator: CharacterAnimator
 var _bubble: Label3D
+## Pulido 4B: ícono sobre la cabeza durante un accidente.
+var _accident_icon: Sprite3D
 
 # --- Fase 5: la pareja ---
 ## true = es el personaje de la pareja (ver arriba).
@@ -95,6 +112,7 @@ var _name_tag: Label3D
 
 func _ready() -> void:
 	_rng.randomize()
+	attention = HazardMap.default_attention()
 	# Fase 7: «Usar modelos» en Info → se arma otra vez la figura.
 	EventBus.models_toggled.connect(_on_models_toggled)
 	_animator = CharacterAnimator.new()
@@ -204,6 +222,7 @@ func order(object_level: int, key: String, action_id: String) -> void:
 		_bubble.text = "No llego"
 		return
 	_stop_action()
+	option["why"] = "orden del jugador"
 	_order = option
 	_idle_minutes = 0.0
 	state = State.IDLE
@@ -218,7 +237,7 @@ func _process(delta: float) -> void:
 		data.decay(minutes)
 		# Si ya va camino al trabajo, no se vuelve a empezar. (La pareja va a
 		# trabajar en SU teléfono: aquí solo se ve por su intención.)
-		if not is_partner and state != State.WORKING and not hurt and not _plan.has("work") and Economy.shift_due():
+		if not is_partner and not ai_frozen and state != State.WORKING and not hurt and not _plan.has("work") and Economy.shift_due():
 			_go_to_work()
 		match state:
 			State.IDLE:
@@ -261,6 +280,10 @@ func _think() -> void:
 		return
 	if hurt:
 		return
+	# Pulido 4B: con la IA congelada solo cumple lo que se le fuerza.
+	if ai_frozen and _order.is_empty():
+		_idle_minutes = 0.5
+		return
 	# Pulido 2C: si hay cajas sin abrir, cuando quiere abre una (su IA).
 	var delivery := _delivery()
 	if delivery != null and delivery.dropped_count() > 0 and _order.is_empty() and _rng.randf() < 0.4:
@@ -271,7 +294,7 @@ func _think() -> void:
 	if level > 0 and _order.is_empty() and _rng.randf() < 0.15:
 		var door := _void_door_inside()
 		if door != Vector2i(-1, -1):
-			var path := nav.find_path(level, cell, level, door)
+			var path := _find_path(level, cell, level, door)
 			if not path.is_empty() or door == cell:
 				_go({"level": level, "spot": door, "path": path, "fall": true})
 				return
@@ -282,6 +305,7 @@ func _think() -> void:
 	if choice.is_empty():
 		_wander()
 	else:
+		last_reason = str(choice.get("why", _ai_reason()))
 		_go(choice)
 
 
@@ -308,13 +332,19 @@ func _gather_options() -> Array:
 	return options
 
 
+## Por qué la IA eligió: lo que más necesita (solo para informar).
+func _ai_reason() -> String:
+	var lowest := data.lowest_need()
+	return "IA: lo que más necesita es %s (%d)" % [CharacterData.NEED_NAMES[lowest].to_lower(), int(data.needs[lowest])]
+
+
 ## Prepara una opción: busca la celda de uso más cercana a la que se llega.
 func _option_for(object_level: int, key: String, action: Dictionary) -> Dictionary:
 	var best: Dictionary = {}
 	for spot in nav.object_spots(object_level, key):
 		var path := PackedVector3Array()
 		if object_level != level or spot != cell:
-			path = nav.find_path(level, cell, object_level, spot)
+			path = _find_path(level, cell, object_level, spot)
 			if path.is_empty():
 				continue
 		if best.is_empty() or path.size() < best["path_length"]:
@@ -331,8 +361,9 @@ func _wander() -> void:
 			_rng.randi_range(-WANDER_RADIUS, WANDER_RADIUS))
 		if target == cell or not nav.is_walkable(level, target):
 			continue
-		var path := nav.find_path(level, cell, level, target)
+		var path := _find_path(level, cell, level, target)
 		if not path.is_empty():
+			last_reason = "paseo: no hay nada que necesite"
 			_go({"level": level, "spot": target, "path": path})
 			return
 	_set_idle()
@@ -361,6 +392,9 @@ func _walk(distance: float) -> void:
 			position = target
 			distance -= to_target.length()
 			_path_index += 1
+			# Pulido 4B: ¿pisó una celda peligrosa sin prestar atención?
+			if _step_on_hazard(target) or state != State.WALKING:
+				return
 		else:
 			position += to_target.normalized() * distance
 			distance = 0.0
@@ -460,7 +494,7 @@ func _go_to_work() -> void:
 	_stop_action()
 	_order = {}
 	_show_work_props(true)
-	var path := nav.find_path(level, cell, 0, work_cell())
+	var path := _find_path(level, cell, 0, work_cell())
 	_go({"level": 0, "spot": work_cell(), "path": path, "work": true})
 
 
@@ -513,7 +547,7 @@ func _return_from_work() -> void:
 	place_at(0, work_cell())
 	_show_work_props(true)
 	var target := _front_door_cell()
-	var path := nav.find_path(0, work_cell(), 0, target)
+	var path := _find_path(0, work_cell(), 0, target)
 	if path.is_empty():
 		_arrive_home()
 		return
@@ -525,7 +559,7 @@ func _return_from_work() -> void:
 func _partner_go_to_work() -> void:
 	_stop_action()
 	_show_work_props(true)
-	var path := nav.find_path(level, cell, 0, work_cell())
+	var path := _find_path(level, cell, 0, work_cell())
 	_go({"level": 0, "spot": work_cell(), "path": path, "work": true})
 
 
@@ -593,7 +627,7 @@ func _next_box() -> void:
 			continue
 		var spots := nav.object_spots(box["level"], box["key"])
 		for spot in spots:
-			var path := nav.find_path(level, cell, box["level"], spot)
+			var path := _find_path(level, cell, box["level"], spot)
 			if path.is_empty() and not (level == box["level"] and spot == cell):
 				continue
 			_go({"level": box["level"], "spot": spot, "path": path, "box": box})
@@ -631,7 +665,7 @@ func go_open_gate(wait := 25.0) -> void:
 	_stop_action()
 	_order = {}
 	var gate_cell := Vector2i(work_cell().x, work_cell().y - 1)
-	var path := nav.find_path(level, cell, 0, gate_cell)
+	var path := _find_path(level, cell, 0, gate_cell)
 	if path.is_empty():
 		gate_opened.emit()
 		return
@@ -796,6 +830,8 @@ func get_intention() -> Dictionary:
 		intention["object"] = Economy.current_job().get("name", "")
 	elif state == State.IDLE:
 		intention["verb"] = "pensando qué hacer"
+	elif state == State.HURT:
+		intention["verb"] = "lastimado"
 	return intention
 
 
@@ -818,6 +854,196 @@ func _mark_intention() -> void:
 	_since = int(Time.get_unix_time_from_system())
 	if not is_partner:
 		EventBus.character_intention_changed.emit(get_intention())
+
+
+# --- Pulido 4B: ganchos para el modo desarrollador y los accidentes ---
+## El personaje solo expone `force_action`, `force_accident` y `attention`; el resto del
+## modo desarrollador vive en scripts/debug/dev_mode.gd y ui/dev_panel.gd.
+
+## Camino que tiene en cuenta la atención: con atención alta rodea los peligros.
+func _find_path(from_level: int, from_cell: Vector2i, to_level: int, to_cell: Vector2i) -> PackedVector3Array:
+	return nav.find_path(from_level, from_cell, to_level, to_cell, HazardMap.is_careful(attention))
+
+
+## Celda y piso donde está parado AHORA (mientras camina, `cell` es la última a la que llegó).
+func current_cell() -> Vector2i:
+	return Vector2i(floori(position.x), floori(position.z))
+
+
+func current_level() -> int:
+	var here := current_cell()
+	var best := level
+	var best_gap := INF
+	for candidate in HouseGrid.level_range():
+		var gap := absf(position.y - nav.ground_y(candidate, here))
+		if gap < best_gap - 0.001:
+			best_gap = gap
+			best = candidate
+	return best
+
+
+## Si el punto del camino es una celda peligrosa y el personaje no presta atención,
+## le pasa el accidente. Devuelve true si le pasó.
+func _step_on_hazard(point: Vector3) -> bool:
+	if HazardMap.is_empty() or nav == null:
+		return false
+	var here := Vector2i(floori(point.x), floori(point.z))
+	for candidate in HouseGrid.level_range():
+		var kind := HazardMap.kind_at(candidate, here)
+		if kind == "" or absf(point.y - nav.ground_y(candidate, here)) > 0.06:
+			continue
+		if HazardMap.is_careful(attention):
+			return false  # Lo cruza con cuidado.
+		var reason := "%s sin prestar atención (atención %.2f)" % [HazardMap.kind_info(kind).get("log", "pisó un peligro"), attention]
+		return _accident(HazardMap.accident_for(kind), reason)
+	return false
+
+
+## Fuerza una acción (modo desarrollador). `spec`:
+##   {"type": "go",  "level": piso, "cell": celda}                → ir hasta ahí.
+##   {"type": "use", "level": piso, "key": mueble, "action": id}   → usarlo (dormir, cocinar…).
+## Va por el camino que corresponde a su atención. Devuelve {ok, reason}.
+func force_action(spec: Dictionary) -> Dictionary:
+	if data == null:
+		return {"ok": false, "reason": "no hay personaje"}
+	if hurt:
+		return {"ok": false, "reason": "está lastimado (espera a la ambulancia)"}
+	if state == State.WORKING:
+		return {"ok": false, "reason": "está trabajando"}
+	if is_partner:
+		return {"ok": false, "reason": "es el personaje de la pareja"}
+	if state == State.WALKING:
+		cell = current_cell()
+		level = current_level()
+	var option := {}
+	match str(spec.get("type", "")):
+		"go":
+			var target_level := int(spec.get("level", level))
+			var target: Vector2i = spec.get("cell", cell)
+			if not nav.is_walkable(target_level, target):
+				return {"ok": false, "reason": "no se puede estar parado ahí"}
+			var path := PackedVector3Array()
+			if target_level != level or target != cell:
+				path = _find_path(level, cell, target_level, target)
+				if path.is_empty():
+					return {"ok": false, "reason": "no hay camino hasta ahí"}
+			option = {"level": target_level, "spot": target, "path": path}
+		"use":
+			var action: Dictionary = Catalog.actions.get(str(spec.get("action", "")), {})
+			var piece: Variant = house.get_piece(int(spec.get("level", 0)), "objects", str(spec.get("key", "")))
+			var offered := false
+			if piece != null:
+				for offer in Catalog.get_item_actions(str(piece["item"])):
+					offered = offered or offer["id"] == action.get("id", "")
+			if action.is_empty() or not offered:
+				return {"ok": false, "reason": "ese objeto no ofrece esa acción"}
+			option = _option_for(int(spec.get("level", 0)), str(spec.get("key", "")), action)
+			if option.is_empty():
+				return {"ok": false, "reason": "no llega hasta ese objeto"}
+		_:
+			return {"ok": false, "reason": "acción desconocida"}
+	_stop_action()
+	option["why"] = "forzado desde el modo desarrollador"
+	_order = option
+	state = State.IDLE
+	_think()
+	return {"ok": true, "reason": ""}
+
+
+## Fuerza un accidente (modo desarrollador): "fall" (caerse), "trip" (tropezar) o "burn"
+## (quemarse). Caerse y quemarse lo dejan lastimado (HURT) y llaman a la ambulancia.
+func force_accident(kind: String) -> bool:
+	return _accident(kind, "forzado desde el modo desarrollador")
+
+
+## Lo comparten el accidente forzado y los peligros del mapa. Nada de dinero ni progreso:
+## solo baja un poco la energía y queda anotado en el diario.
+func _accident(kind: String, reason: String) -> bool:
+	var info := HazardMap.accident_info(kind)
+	if info.is_empty() or data == null or hurt or state == State.WORKING:
+		return false
+	var here := current_cell()
+	var here_level := current_level()
+	_stop_action()
+	_order = {}
+	_path = PackedVector3Array()
+	level = here_level
+	cell = here
+	if kind == "fall" and level != 0:
+		# Cae hasta el suelo de abajo (la ambulancia llega por la calle).
+		var ground := here
+		if not nav.is_walkable(0, ground):
+			var spot := nav.nearest_walkable(HouseGrid.cell_center(here))
+			ground = spot[1] if not spot.is_empty() and spot[0] == 0 else spawn_cell()
+		level = 0
+		cell = ground
+	place_at(level, cell)
+	data.add_need("energy", float(info.get("energy", 0.0)))
+	data.add_journal(str(info.get("journal", "Tuvo un accidente")))
+	_animator.play(str(info.get("anim", "hurt")))
+	_bubble.text = str(info.get("bubble", "¡Ay!"))
+	_bubble.modulate = Color(str(info.get("color", "#ffffff")))
+	_show_accident_icon(info)
+	last_accident = {"kind": kind, "reason": reason, "level": level, "cell": cell}
+	EventBus.character_accident.emit(kind, level, cell, reason)
+	if info.get("hurt", false):
+		hurt = true
+		state = State.HURT
+		_mark_intention()
+		EventBus.toast.emit("¡%s se lastimó! Llamamos a la ambulancia." % data.name)
+		EventBus.ambulance_requested.emit(self)
+	else:
+		# Un tropiezo: se sacude y sigue (sin ambulancia).
+		state = State.IDLE
+		_idle_minutes = float(info.get("seconds", 1.2))
+		_mark_intention()
+		var seconds := float(info.get("seconds", 1.2))
+		var anim_name := str(info.get("anim", ""))
+		get_tree().create_timer(seconds).timeout.connect(func() -> void:
+			if is_instance_valid(self) and state == State.IDLE and not hurt and _animator.current == anim_name:
+				_animator.play("idle")
+				_bubble.text = ""
+				_bubble.modulate = Color.WHITE)
+	return true
+
+
+## Un ícono chato (billboard) sobre la cabeza durante el accidente.
+func _show_accident_icon(info: Dictionary) -> void:
+	var texture := Icons.texture(str(info.get("icon", "warning")))
+	if texture == null:
+		return
+	if _accident_icon == null:
+		_accident_icon = Sprite3D.new()
+		_accident_icon.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_accident_icon.no_depth_test = true
+		_accident_icon.pixel_size = 0.0045
+		_accident_icon.position.y = 2.1
+		add_child(_accident_icon)
+	_accident_icon.texture = texture
+	_accident_icon.modulate = Color(str(info.get("color", "#ffffff")))
+	_accident_icon.visible = true
+	get_tree().create_timer(2.5).timeout.connect(func() -> void:
+		if is_instance_valid(self) and is_instance_valid(_accident_icon):
+			_accident_icon.visible = false)
+
+
+## Teletransporta al personaje a una celda caminable (modo desarrollador). Cancela lo
+## que hacía. Si la celda es peligrosa y no presta atención, le pasa el accidente.
+func teleport_to(target_level: int, target: Vector2i) -> bool:
+	if data == null or state == State.WORKING or not nav.is_walkable(target_level, target):
+		return false
+	_stop_action()
+	_order = {}
+	place_at(target_level, target)
+	if not hurt:
+		_set_idle()
+	_step_on_hazard(position)
+	return true
+
+
+## Congela o reanuda la IA (modo desarrollador).
+func set_ai_frozen(on: bool) -> void:
+	ai_frozen = on
 
 
 # --- Fase 5: la pareja ---

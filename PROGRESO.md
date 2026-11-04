@@ -1,5 +1,56 @@
 # Progreso
 
+## ▶ PULIDO 4 (versión 0.12.0) — rama `pulido-4` (sale de `main` 0.11.0). **No se mergea a `main`, no se exporta APK.**
+
+**Próximo paso (el desarrollador principal, en la PC con Godot):** correr lo que en la nube **NO se pudo correr** (esta sesión no tenía
+Godot ni Lua y el brief prohíbe bajar binarios; **nada de GDScript se ejecutó ni compiló**, solo se revisó a mano). En este orden:
+1. `godot --headless --path . --import` (registra las clases nuevas, importa `assets/icons/dev.svg` y **crea los `.uid`** de los scripts nuevos:
+   `hazard_map`, `hazard_view`, `dev_mode`, `dev_panel`, `test_dev_mode`; commitealos).
+2. `godot --headless --path . res://tests/test_dev_mode.tscn` (**nueva**, ≈ 90 comprobaciones; si falla, copiame el «FALLÓ: …»).
+3. Las pruebas de antes: `test_house` (158), `test_character` (34), `test_economy` (66), `test_server` (78), `test_couple` (46),
+   `test_business` (46), `test_parcel` (55), `test_art` (≈90), `test_neighborhood`, y `lua5.1 server/tests/test_rules.lua` (322) +
+   `test_goals.lua` (42). El servidor Lua **no se tocó**; en Godot se tocaron `character.gd`, `character_animator.gd`, `house_nav.gd`,
+   `house_builder.gd`, `build_bar.gd`, `hud.gd`, `home_panel.gd`, `cloud_sync.gd`, `live_controller.gd` y `main.gd`, así que conviene correr todas.
+4. Con ventana: `tests/polish3b_demo.tscn` (ahora cubre la herramienta Cuartos y el panel Casa; genera `p4a_herramienta_cuartos.png` y
+   `p4a_casa_cuartos.png`; **esas capturas todavía no existen**; las viejas `p3b_lista_cuartos.png` ya no se genera) y `ui_demo.tscn`.
+
+### 4A — Los cuartos salen de la columna izquierda (hecho, sin correr)
+- La columna izquierda queda con techo, paredes y la maqueta de pisos (se quitó el botón «Cuartos» de `hud.gd`).
+- **Obra → Cuartos** (ícono `room.svg`, junto a Construir · Modificar · Borrar): resalta los cuartos cerrados del piso con colores chatos
+  (el dormitorio principal, más marcado); tocar uno abre el menú de tipo del Pulido 3B (cocina, dormitorio, baño, sala, estudio…, y
+  principal/secundario). `HouseBuilder.Tool.ROOMS`, `HouseBuilder.ROOMS_TOOL_ID`, `refresh_room_overlay()`.
+- **☰ → Casa**: lista de cuartos de todos los pisos con su tipo y «Cambiar tipo», y el interruptor «Mi casa se puede visitar».
+- `polish3b_demo` y `ui_demo` actualizadas (ya no usan el botón viejo).
+
+### 4B — Modo desarrollador (hecho, sin correr)
+- **Info → «Modo desarrollador (probar situaciones)»**, apagado por defecto, en `GameState.settings["dev_mode"]`, **nunca al servidor**
+  (`CloudSync.LOCAL_ONLY_SETTINGS`). Apagado no se ve ni se puede usar nada (prueba incluida).
+- Ícono nuevo arriba (junto al menú) abre el **panel** (derecha, debajo de los botones, no tapa los controles): *Acción* (tocar mueble,
+  puerta o suelo → ir, usarlo o accidente caerse/tropezar/quemarse), *Atención* (deslizador 0–1 + distraído/desorbitado/recién levantado),
+  *Peligros* (tocar el suelo: charco/caliente/desnivel), *Estados* (comida, energía, limpieza, diversión, teletransportar, congelar IA,
+  hora) y un **registro corto** (intención con su motivo + accidente forzado).
+- Nuevo: `data/hazards.json`, `scripts/debug/{hazard_map,hazard_view,dev_mode}.gd`, `ui/dev_panel.{gd,tscn}`, `assets/icons/dev.svg`,
+  `tests/test_dev_mode.{gd,tscn}`. El personaje expone `attention`, `force_action`, `force_accident(kind)` (+ `teleport_to`,
+  `set_ai_frozen`, `last_reason`). `HouseNav.find_path(..., careful)` rodea peligros con atención alta.
+- **Nada de dinero, experiencia ni propiedad** (prueba que lo revisa). Decisiones completas en `DECISIONES.md` → «Pulido 4B».
+
+### Cómo probarlo en el teléfono (cuando se exporte el APK, que NO se hizo)
+1. ☰ → Info → prendé **Modo desarrollador**: aparece un ícono de bicho arriba, a la izquierda del menú.
+2. Tocalo: se abre el panel. **Peligros** → «Poner peligros (tocar el suelo)» con *Charco* y tocá 2–3 celdas del suelo (se ven placas azules).
+3. **Atención** → «Desorbitado» (0,05). **Acción** → tocá un mueble lejano del otro lado del charco → «Ir hasta ahí»: el personaje pasa por el
+   charco, se cae (burbuja ¡Ay! con ícono), llega la ambulancia. Repetí con «Atento (1.0)»: rodea el charco.
+4. **Acción** → tocá la cocina → «Accidente en ese lugar» → «Quemarse»; tocá una puerta → «Caerse». «Tropezar» no llama a la ambulancia.
+5. **Estados**: poné comida en 20; «Congelar la IA» (se queda quieto); «Teletransportar» y tocá el suelo; hora 19:00.
+6. Apagá el modo: desaparecen ícono, panel y marcadores y el personaje vuelve a ser normal.
+
+### Pendientes / errores conocidos de Pulido 4
+- **Todo sin ejecutar** (ver arriba); esperá errores de sintaxis o de tipos al primer arranque. Sin capturas nuevas.
+- Mientras el panel está abierto, los toques del mundo sirven al panel (no abren el menú de acciones del mueble); cerrá el panel para jugar normal.
+- Los peligros no se guardan (son de la sesión). La pareja (personaje remoto) no se ve afectada por los peligros de tu pantalla de forma sincronizada.
+- Si se cae desde un piso alto, el personaje baja a la planta baja (la ambulancia llega por la calle).
+- `dev.svg` necesita el paso de importar; sin él el botón sale sin ícono hasta correr `--import`.
+- Cambiar el ángulo de cámara/zoom mientras el panel está abierto funciona; elegir con dos dedos no (son gestos de cámara).
+
 ## ▶ ESTADO ACTUAL (2026-11-04) — versión 0.11.0, todo unido en `main`
 Pulido 2, Pulido 3, Fase 7 (arte) y Fase 8 (barrio) están unidos y **verificados en la PC**: pruebas de Godot y de
 Lua en verde (Lua 322 + metas 42), Nakama con los 7 módulos, cuenta nueva completa contra el servidor real
