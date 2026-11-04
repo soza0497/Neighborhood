@@ -2,6 +2,13 @@
 
 ## Fase actual: Pulido 1 — interfaz limpia y constructor 2.0 (hecho y verificado en la PC; falta probarlo en el teléfono)
 
+**Pendiente anotado (2026-11-03):** `docs/pulido-2.md` = lo que notó el dueño
+con el APK 0.7.0 (techos que no se borran, basurero, menú que no se cierra,
+selector de pisos con el frente de la casa, construcción con factura y
+entrega, servicios, parcela más grande, sótanos, niebla, cámara). **Orden:**
+Fase 6 (en la nube, rama `fase-6`) → el dueño prueba su APK y manda feedback
+→ Pulido 2 = esta lista + ese feedback.
+
 **Próximo paso:** el dueño prueba el Pulido 1 en el teléfono (checklist de
 abajo). Después: cerrar la Fase 5 en dos teléfonos y seguir con la **Fase 6**
 (restaurante). Lo que sigue pendiente de la Fase 5 está más abajo.

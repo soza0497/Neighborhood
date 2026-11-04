@@ -227,3 +227,38 @@ Google Play.
 - Compra de EA: [EA — completion of acquisition](https://www.ea.com/es/news/ea-announces-completion-of-acquisition)
 - IA: [Oficina de Derecho de Autor de EE. UU., Parte 2](https://www.copyright.gov/newsnet/2025/1060.html)
 - Google Play: [GoodBarber — rechazo por propiedad intelectual](https://www.goodbarber.com/help/google-rejection-r101/google-rejection-intellectual-property-infringement-a223)
+
+## Otros juegos (revisión rápida, 2026-11-03)
+
+No es asesoría legal; antes de publicar en tiendas conviene que lo revise un
+abogado de propiedad intelectual.
+
+**Regla general:** las *ideas* y las mecánicas de género (necesidades,
+construir casas, humor de la vida diaria, limpiar terreno, entregas a
+domicilio) no tienen derechos de autor. Lo que sí se protege es la
+*expresión* (personajes, arte, nombres, textos, músicas) y las **marcas**. Y
+en algunos países se pueden **patentar mecánicas concretas**: eso es lo más
+peligroso con Nintendo.
+
+**Nintendo (Tomodachi Life, Animal Crossing).** Defiende su propiedad muy
+fuerte y usa patentes de mecánicas: demandó a Pocketpair (Palworld) en Japón
+por patentes de capturar, invocar y montar criaturas. El caso se fue
+achicando (oficinas de patentes rechazaron solicitudes relacionadas) y la
+sentencia se esperaba para noviembre de 2026. Tomodachi Life: Living the
+Dream salió en 2026. Para no acercarse:
+- Nada de personajes tipo **Mii** (su editor de caras, sus proporciones y su
+  estilo exactos). El chibi propio con su guía de estilo (Fase 7) está bien.
+- No armar el "edificio de departamentos con ventanas de cada habitante" ni
+  la **isla** como premisa; ni sus gags característicos (los sueños, el
+  noticiero de la isla, las canciones).
+- De Animal Crossing: nada de mapache casero con préstamos de la casa, ni su
+  forma exacta de mandar paquetes; el camión del repartidor propio está bien.
+- Antes de publicar: buscar patentes de Nintendo sobre lo que hagamos muy
+  parecido (por ejemplo, personajes autónomos que interactúan entre sí).
+
+**Krafton (inZOI).** No se encontraron demandas. Simulador realista (nosotros
+somos chibi, lejos). Evitar el nombre "Zoi" y sus marcas de funciones (como
+"Smart Zoi").
+
+**Supercell (Clash of Clans, Hay Day).** Quitar árboles y rocas para ganar
+terreno es una mecánica común de muchos juegos. Usar arte y nombres propios.
