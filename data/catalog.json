@@ -1,5 +1,5 @@
 {
-	"_ayuda": "Catálogo editable. Cada objeto necesita id, name, category, kind y price. Los ids van en inglés, sin espacios, y no se repiten. kind = qué tipo de pieza es: foundation, floor, wall, room, door, window, stairs, pillar, roof, furniture o paint. Las categorías de muebles (kind furniture) van en la Tienda; las demás en Obra. footprint = celdas que ocupa [ancho, fondo]. height = alto en metros (muebles). shape = forma provisional: box, table, bed, chair, sofa. opening = hueco en la pared [desde, hasta] en metros (puertas y ventanas). actions = acciones que el mueble ofrece al personaje (ver actions.json). build_seconds = segundos REALES que tarda en construirse (solo muebles, escaleras y techos; 0 = al instante). unlock_level = nivel necesario (por defecto 1). price = lo que cuesta; las paredes suman el precio de su puerta o ventana, y el techo cuesta por celda cubierta. color = color provisional hasta tener arte. outdoor = true: en la planta baja va sobre el pasto (no necesita piso). roof_style = gable (dos aguas, por defecto) o flat (plano). stairs_style = straight (por defecto), spiral o metal. Los tipos de cuarto y qué muebles cuentan para cada uno están en rooms.json.",
+	"_ayuda": "Catálogo editable. Cada objeto necesita id, name, category, kind y price. Los ids van en inglés, sin espacios, y no se repiten. kind = qué tipo de pieza es: foundation, floor, wall, room, door, window, stairs, pillar, roof, furniture o paint. Las categorías de muebles (kind furniture) van en la Tienda; las demás en Obra. footprint = celdas que ocupa [ancho, fondo]. height = alto en metros (muebles). shape = forma provisional: box, table, bed, chair, sofa. opening = hueco en la pared [desde, hasta] en metros (puertas y ventanas). actions = acciones que el mueble ofrece al personaje (ver actions.json). build_seconds = segundos REALES que tarda en construirse (solo muebles, escaleras y techos; 0 = al instante). unlock_level = nivel necesario (por defecto 1). price = lo que cuesta; las paredes suman el precio de su puerta o ventana, y el techo cuesta por celda cubierta. color = color provisional hasta tener arte. outdoor = true: en la planta baja va sobre el pasto (no necesita piso). roof_style = gable (dos aguas, por defecto) o flat (plano). stairs_style = straight (por defecto), spiral o metal. Los tipos de cuarto y qué muebles cuentan para cada uno están en rooms.json. Los muebles de la categoría restaurant (Fase 6) son los que pide business.json para abrir el restaurante.",
 	"format_version": 1,
 	"categories": [
 		{ "id": "structure", "name": "Estructura" },
@@ -11,6 +11,7 @@
 		{ "id": "electronics", "name": "Electrónica" },
 		{ "id": "plants", "name": "Plantas" },
 		{ "id": "decor", "name": "Adornos" },
+		{ "id": "restaurant", "name": "Restaurante" },
 		{ "id": "paint", "name": "Pintura" }
 	],
 	"items": [
@@ -49,6 +50,10 @@
 		{ "id": "plant_tall", "name": "Palmera de interior", "category": "plants", "kind": "furniture", "price": 60, "unlock_level": 2, "build_seconds": 0, "footprint": [1, 1], "height": 1.6, "shape": "plant", "color": "#3f9e5a" },
 		{ "id": "lamp_floor", "name": "Lámpara de pie", "category": "decor", "kind": "furniture", "price": 70, "build_seconds": 0, "footprint": [1, 1], "height": 1.6, "shape": "lamp", "color": "#ffe08a" },
 		{ "id": "vase_basic", "name": "Florero", "category": "decor", "kind": "furniture", "price": 25, "build_seconds": 0, "footprint": [1, 1], "height": 0.6, "shape": "vase", "color": "#7fc8d6" },
+		{ "id": "counter_restaurant", "name": "Mostrador", "category": "restaurant", "kind": "furniture", "price": 250, "build_seconds": 30, "footprint": [2, 1], "height": 1.05, "shape": "box", "color": "#d98c5f" },
+		{ "id": "stove_restaurant", "name": "Plancha de restaurante", "category": "restaurant", "kind": "furniture", "price": 450, "build_seconds": 45, "footprint": [2, 1], "height": 0.95, "shape": "box", "color": "#8c96a3", "actions": ["cook"] },
+		{ "id": "table_restaurant", "name": "Mesa de restaurante", "category": "restaurant", "kind": "furniture", "price": 120, "build_seconds": 0, "footprint": [1, 1], "height": 0.75, "shape": "table", "color": "#f2c48d" },
+		{ "id": "stool_restaurant", "name": "Banquito", "category": "restaurant", "kind": "furniture", "price": 30, "build_seconds": 0, "footprint": [1, 1], "height": 0.65, "shape": "chair", "color": "#e06f5c", "actions": ["sit"] },
 
 		{ "id": "paint_cream", "name": "Crema", "category": "paint", "kind": "paint", "price": 0, "build_seconds": 0, "color": "#fff4dc" },
 		{ "id": "paint_yellow", "name": "Amarillo", "category": "paint", "kind": "paint", "price": 0, "build_seconds": 0, "color": "#ffd966" },

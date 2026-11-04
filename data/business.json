@@ -1,0 +1,44 @@
+{
+	"_ayuda": "Negocios (Fase 6). Lo lee el juego Y el servidor (reiniciá Nakama si lo cambiás). restaurant.requires = muebles que tiene que tener la casa (terminados) para abrir el restaurante: id del catálogo → cuántos. seats_item = el mueble que da lugares (cada mesa = un cliente sentado a la vez, hasta service.max_seats). daily_cap = lo máximo que se gana con el minijuego en 24 horas. passive_per_hour = lo que junta solo el restaurante abierto (clientes de paso), hasta passive_cap: nada se pierde por no entrar, solo deja de juntar. service = el minijuego 'Servicio': tiempos en milisegundos. Los ingredientes 'hot' van a la plancha: se cocinan cook_ms y hay que sacarlos en los ready_ms siguientes (después se queman). coin_per_item = pago por ingrediente servido; tip_max = propina si se sirve al instante (baja con la espera); streak_bonus = extra por cada plato bien servido seguido (hasta streak_max_bonus). OJO: el juego y el servidor tienen que tener EL MISMO archivo (el servidor repite el servicio con estos números para saber cuánto pagar).",
+	"format_version": 1,
+	"restaurant": {
+		"name": "Restaurante",
+		"requires": { "counter_restaurant": 1, "stove_restaurant": 1, "table_restaurant": 1 },
+		"seats_item": "table_restaurant",
+		"daily_cap": 600,
+		"passive_per_hour": 20,
+		"passive_cap": 160,
+		"xp_per_customer": 1,
+		"service": {
+			"duration_ms": 90000,
+			"max_seats": 3,
+			"first_arrival_ms": 1500,
+			"last_call_ms": 8000,
+			"phase_ms": 30000,
+			"gap_min_ms": 4500,
+			"gap_random_ms": 2500,
+			"gap_drop_ms": 800,
+			"patience_ms": 20000,
+			"patience_drop_ms": 3000,
+			"wrong_penalty_ms": 5000,
+			"plate_max": 4,
+			"grill_slots": 2,
+			"cook_ms": 2500,
+			"ready_ms": 3000,
+			"coin_per_item": 3,
+			"tip_max": 5,
+			"streak_bonus": 1,
+			"streak_max_bonus": 4,
+			"min_gap_ms": 70,
+			"max_actions": 400,
+			"ingredients": [
+				{ "id": "bread", "name": "Pan", "color": "#e8b46a", "shape": "square", "hot": false },
+				{ "id": "lettuce", "name": "Lechuga", "color": "#7ccf6b", "shape": "leaf", "hot": false },
+				{ "id": "tomato", "name": "Tomate", "color": "#f0614f", "shape": "circle", "hot": false },
+				{ "id": "cheese", "name": "Queso", "color": "#ffd34d", "shape": "triangle", "hot": false },
+				{ "id": "patty", "name": "Tortita", "color": "#9a5b3c", "shape": "disc", "hot": true },
+				{ "id": "egg", "name": "Huevo", "color": "#fff6e0", "shape": "egg", "hot": true }
+			]
+		}
+	}
+}

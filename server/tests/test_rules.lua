@@ -730,5 +730,199 @@ check(supported(tall, 3, "objects", "s1", { item = "stairs_basic", cell = { 1, 1
 check(not supported(tall, 4, "objects", "s2", { item = "stairs_basic", cell = { 1, 1 }, rot = 0 }), "escalera en el último piso NO")
 
 
+
+-- --- Restaurante (Fase 6): neighborhood_business.lua ---
+
+local business = require("neighborhood_business")
+local rcfg = business.new_config(read_data("business.json"))
+local svc = rcfg.service
+check(svc.duration_ms == 90000 and #svc.ingredients == 6 and rcfg.requires.counter_restaurant == 1,
+  "business.json: servicio de 90 s, 6 ingredientes, pide mostrador")
+check(svc.ingredients[5].hot and not svc.ingredients[1].hot, "la tortita va a la plancha, el pan no")
+
+-- Números al azar: los mismos que en GDScript (tests/test_business.gd).
+local rng = business.new_rng(1)
+check(business.next_int(rng, 2147483647) == 16807 and business.next_int(rng, 2147483647) == 282475249,
+  "Park-Miller: 16807, 282475249")
+check(business.new_rng(0).state == 2147483646 and business.new_rng(-5).state > 0, "semillas raras se arreglan")
+
+-- La lista de clientes sale de la semilla (comparada con GDScript).
+local cs = business.customers(svc, 4242)
+local arrive_sum = 0
+for _, c in ipairs(cs) do arrive_sum = arrive_sum + c.arrive end
+check(#cs == 17 and arrive_sum == 719677, "semilla 4242: 17 clientes, llegadas suman 719677")
+check(cs[1].arrive == 1500 and cs[1].order[1] == 1 and cs[1].order[2] == 5 and cs[1].patience == 20000,
+  "primer cliente: a los 1,5 s pide lechuga + huevo, 20 s de paciencia")
+check(cs[#cs].arrive == 78709 and cs[#cs].patience == 14000, "el último llega a los 78,7 s con menos paciencia")
+local ok_sizes = true
+for _, c in ipairs(cs) do
+  if #c.order < 2 or #c.order > svc.plate_max or c.arrive >= svc.duration_ms - svc.last_call_ms then ok_sizes = false end
+end
+check(ok_sizes, "pedidos de 2 a 4 cosas, nadie llega en los últimos 8 s")
+local cs2 = business.customers(svc, 4242)
+check(cs2[9].arrive == cs[9].arrive and cs2[9].order[1] == cs[9].order[1], "misma semilla, mismos clientes")
+check(business.customers(svc, 4243)[2].arrive ~= cs[2].arrive, "otra semilla, otros clientes")
+
+-- Un servicio jugado a mano (semilla 4242, 3 mesas).
+local T, G, S, X = business.TAKE, business.GRILL, business.SERVE, business.TRASH
+local play = {
+  { 1600, T, 1 },   -- lechuga al plato
+  { 1700, T, 5 },   -- huevo a la plancha
+  { 2000, G, 0 },   -- todavía crudo: nada
+  { 4300, G, 0 },   -- a punto: al plato
+  { 4400, S, 0 },   -- servir al primero: 3*2 + propina 4 = 10
+}
+local res = business.replay(svc, 4242, 3, play)
+check(res ~= nil and res.coins == 10 and res.served == 1 and res.tips == 4, "servir bien: 10 monedas (propina 4)")
+check(res.lost == 10 and res.skipped == 5, "los que nadie atendió se van; con las mesas llenas, siguen de largo")
+
+-- Plato equivocado: pierde paciencia y se corta la racha; quemar en la plancha.
+local wrong = {
+  { 1600, T, 0 }, { 1700, T, 0 }, { 1800, S, 0 },   -- pan + pan al de lechuga + huevo: mal
+  { 2000, T, 4 }, { 8000, G, 0 },                   -- la tortita se quemó (6 s > 2,5 + 3)
+  { 8100, T, 1 }, { 8200, X, 0 },                   -- tirar el plato
+}
+res = business.replay(svc, 4242, 3, wrong)
+check(res.coins == 0 and res.wrong == 1 and res.burned == 1 and res.trashed == 1, "mal servido, quemado y tirado")
+local sim = business.new_sim(svc, 4242, 3)
+business.act(sim, 1600, T, 0)
+business.act(sim, 1700, S, 0)
+check(sim.seats[1].deadline == 1500 + 20000 - 5000, "plato equivocado: 5 s menos de paciencia")
+check(#sim.plate == 0, "el plato equivocado se pierde")
+
+-- Una sola mesa: el que llega con la mesa ocupada sigue de largo.
+res = business.replay(svc, 4242, 1, {})
+check(res.skipped == 12 and res.lost == 4, "con una mesa, más siguen de largo (uno queda sentado al final)")
+
+-- Revisión de los toques (no se puede mandar cualquier cosa).
+check(business.validate_actions(svc, 3, play) == nil, "toques normales: bien")
+check(business.validate_actions(svc, 3, { { 100, T, 0 }, { 120, T, 1 } }) ~= nil, "dos toques en 20 ms: no")
+check(business.validate_actions(svc, 3, { { 500, T, 0 }, { 400, T, 1 } }) ~= nil, "toques desordenados: no")
+check(business.validate_actions(svc, 3, { { 95000, T, 0 } }) ~= nil, "después del final: no")
+check(business.validate_actions(svc, 3, { { 100, T, 6 } }) ~= nil, "ingrediente inexistente: no")
+check(business.validate_actions(svc, 1, { { 100, S, 1 } }) ~= nil, "mesa que no existe: no")
+check(business.validate_actions(svc, 3, { { 100.5, T, 0 } }) ~= nil, "tiempos con coma: no")
+check(business.validate_actions(svc, 3, { { 100, 9, 0 } }) ~= nil, "acción inventada: no")
+local many = {}
+for i = 1, 401 do many[i] = { i * 100, X, 0 } end
+check(business.validate_actions(svc, 3, many) ~= nil, "más de 400 toques: no")
+check(business.validate_actions(svc, 3, "basura") ~= nil, "sin lista: no")
+
+-- El restaurante de la casa.
+local function restaurant_state(money)
+  local st = new_state(money)
+  st.home = rules.normalize_home(nil, "u1")
+  st.owner_id = "u1"
+  st.actor = "u1"
+  st.business = business.normalize_record(nil)
+  return st
+end
+local function put(st, key, item, ready_at)
+  st.house.levels[1].objects[key] = { item = item, cell = { 1, 1 }, rot = 0, ready_at = ready_at }
+end
+local rs = restaurant_state()
+local missing, seats = business.requirements(rcfg, data.items, rs.house, NOW)
+check(#missing == 3 and seats == 0, "casa vacía: faltan los 3 muebles")
+r = refusal_of(business.open, rcfg, data.items, rs, NOW)
+check(r ~= nil and r.reason == "missing" and string.find(r.refusal, "Mostrador"), "no se abre sin mostrador")
+put(rs, "o1", "counter_restaurant")
+put(rs, "o2", "stove_restaurant", NOW + 30)
+put(rs, "o3", "table_restaurant")
+put(rs, "o4", "table_restaurant")
+missing, seats = business.requirements(rcfg, data.items, rs.house, NOW)
+check(#missing == 1 and missing[1].id == "stove_restaurant" and seats == 2, "la plancha en obra no cuenta; 2 mesas = 2 lugares")
+missing = business.requirements(rcfg, data.items, rs.house, NOW + 30)
+check(#missing == 0, "terminada la obra, no falta nada")
+business.open(rcfg, data.items, rs, NOW + 30)
+check(business.is_open(rs.home) and rs.home.business.opened_by == "u1", "restaurante abierto")
+check(refusal_of(business.open, rcfg, data.items, rs, NOW + 31) ~= nil, "no se abre dos veces")
+
+-- Caja del restaurante (clientes de paso): junta con el tiempo, con tope.
+local OPEN = NOW + 30
+check(business.passive_amount(rcfg, rs.home, OPEN + 1800) == 10, "media hora: $10 (20 por hora)")
+check(business.passive_amount(rcfg, rs.home, OPEN + 100 * 3600) == 160, "días sin entrar: tope $160, nada se pierde")
+r = refusal_of(business.collect, rcfg, data.items, rs, OPEN + 60)
+check(r ~= nil, "al minuto todavía no juntó nada")
+local got = business.collect(rcfg, data.items, rs, OPEN + 1800)
+check(got.coins == 10 and rs.money == 3010 and not got.to_fund, "cobrar: $10 a la billetera")
+check(business.passive_amount(rcfg, rs.home, OPEN + 1800) == 0, "después de cobrar, empieza de cero")
+
+-- Un servicio: el servidor pone la semilla y la hora.
+local START = OPEN + 2000
+local started = business.service_start(rcfg, data.items, rs, START, 4242)
+check(started.seed == 4242 and started.seats == 2 and started.duration_ms == 90000, "servicio: semilla y 2 mesas")
+r = refusal_of(business.service_start, rcfg, data.items, rs, START + 10, 99)
+check(r ~= nil and r.reason == "active", "no se empiezan dos servicios a la vez")
+r = refusal_of(business.service_finish, rcfg, data.items, rs, START + 30, play)
+check(r ~= nil and r.reason == "too_early", "no se cobra antes de que pasen los 90 s")
+local fin = business.service_finish(rcfg, data.items, rs, START + 88, play)
+check(fin.valid and fin.coins == 10 and fin.pay == 10 and rs.money == 3020, "a los 88 s (margen): cobra lo que calcula el servidor")
+check(fin.xp_gained == 1 and rs.xp == 1, "experiencia: 1 por cliente atendido")
+check(rs.business.service_started == 0 and rs.business.services == 1 and rs.business.best == 10, "servicio cerrado y anotado")
+check(refusal_of(business.service_finish, rcfg, data.items, rs, START + 89, play) ~= nil, "el mismo servicio no se cobra dos veces")
+
+-- Trampa: toques imposibles anulan el servicio (se guarda, no paga).
+business.service_start(rcfg, data.items, rs, START + 200, 4242)
+fin = business.service_finish(rcfg, data.items, rs, START + 300, { { 100, T, 0 }, { 110, T, 1 } })
+check(not fin.valid and fin.pay == 0 and rs.money == 3020 and rs.business.service_started == 0,
+  "toques de robot: no paga y se anula")
+-- Vencido (más de un día) o de otra casa: tampoco.
+business.service_start(rcfg, data.items, rs, START + 400, 4242)
+fin = business.service_finish(rcfg, data.items, rs, START + 400 + 90000, play)
+check(not fin.valid and string.find(fin.error_text, "venció"), "servicio de hace más de un día: vencido")
+business.service_start(rcfg, data.items, rs, START + 500, 4242)
+rs.owner_id = "otro"
+fin = business.service_finish(rcfg, data.items, rs, START + 600, play)
+check(not fin.valid, "servicio de otra casa: no vale")
+rs.owner_id = "u1"
+
+-- Tope diario: pasado el tope, se juega igual pero no paga más.
+rs.business.day_start = START + 700
+rs.business.day_earned = 595
+business.service_start(rcfg, data.items, rs, START + 700, 4242)
+fin = business.service_finish(rcfg, data.items, rs, START + 800, play)
+check(fin.valid and fin.coins == 10 and fin.pay == 5 and fin.capped and rs.business.day_earned == 600,
+  "tope: de 10 solo paga 5")
+business.service_start(rcfg, data.items, rs, START + 900, 4242)
+fin = business.service_finish(rcfg, data.items, rs, START + 1000, play)
+check(fin.pay == 0 and fin.xp_gained == 0 and fin.capped, "tope lleno: no paga ni da experiencia")
+local sum = business.summary(rcfg, data.items, rs, START + 1000)
+check(sum.open and sum.ready and sum.cap_left == 0 and sum.resets_in > 0, "resumen: tope lleno, cuánto falta")
+business.service_start(rcfg, data.items, rs, START + 700 + 86400, 4242)
+fin = business.service_finish(rcfg, data.items, rs, START + 800 + 86400, play)
+check(fin.pay == 10 and rs.business.day_earned == 10, "24 h después, el tope empieza de nuevo")
+
+-- Sin muebles, cerrado: no se atiende.
+rs.house.levels[1].objects.o1 = nil
+r = refusal_of(business.service_start, rcfg, data.items, rs, START + 200000, 1)
+check(r ~= nil and r.reason == "missing", "sin mostrador no se atiende")
+put(rs, "o1", "counter_restaurant")
+business.close(rs)
+check(not business.is_open(rs.home) and refusal_of(business.service_start, rcfg, data.items, rs, START + 200000, 1) ~= nil,
+  "cerrado: no se atiende")
+check(business.passive_amount(rcfg, rs.home, START + 300000) == 0, "cerrado: no junta")
+
+-- Casa compartida (Fase 5): la caja del restaurante va a la caja de la
+-- casa; lo del minijuego, a la billetera o a la caja con "unir ingresos".
+local sh = restaurant_state(100)
+sh.fund = 50
+sh.shared = true
+put(sh, "o1", "counter_restaurant")
+put(sh, "o2", "stove_restaurant")
+put(sh, "o3", "table_restaurant")
+business.open(rcfg, data.items, sh, NOW)
+got = business.collect(rcfg, data.items, sh, NOW + 3600)
+check(got.to_fund and sh.fund == 70 and sh.money == 100, "compartida: lo que juntó va a la caja")
+business.service_start(rcfg, data.items, sh, NOW + 4000, 4242)
+fin = business.service_finish(rcfg, data.items, sh, NOW + 4100, play)
+check(not fin.to_fund and sh.money == 110 and sh.fund == 70, "sin unir ingresos: a la billetera")
+sh.pool_income = true
+business.service_start(rcfg, data.items, sh, NOW + 4200, 4242)
+fin = business.service_finish(rcfg, data.items, sh, NOW + 4300, play)
+check(fin.to_fund and fin.money_change == 0 and sh.fund == 80 and sh.money == 110, "con unir ingresos: a la caja")
+check(rules.normalize_home({ business = { kind = "restaurant" } }, "u1").business.kind == "restaurant",
+  "el hogar guarda el negocio")
+check(next(rules.normalize_home(nil, "u1").business) == nil, "hogar nuevo: sin negocio")
+
 print(string.format("\nPRUEBAS LUA: %d pasaron, %d fallaron", passed, failed))
 os.exit(failed > 0 and 1 or 0)
