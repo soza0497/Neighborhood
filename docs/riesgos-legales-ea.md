@@ -276,3 +276,19 @@ que alguien con criterio lo mire antes de publicar:
 - **Visitar casas ajenas en modo solo ver**: mecánica común. Los nombres de lugares («Plazoleta», «Calle Principal»)
   son genéricos. Si se agregan sonidos (ver `data/sounds/LEEME.txt`) usar solo CC0 o propios, nunca de otros juegos.
 - **Apellidos**: son comunes del español (30 en `data/neighborhood.json`); no hay personas reales ni marcas.
+
+## Isla tropical con volcán y parcelas (2026-11-04, no es asesoría legal)
+
+Búsqueda web del dueño y del asesor antes de decidir la isla (`docs/isla.md`):
+- **The Sims 4: Island Living (Sulani)**: archipiélago tropical con **volcán activo**, playas y lotes residenciales.
+  La premisa (isla + volcán + playa) por sí sola no se protege, pero es el lugar donde más nos parecemos a EA.
+  Evitar: el nombre «Sulani», sus lugares, su cultura, los eventos de erupción que incendian personajes, sirenas.
+- **Tomodachi Life: Living the Dream (abril 2026)** y **Animal Crossing**: juegos de isla con vecinos. No usar su
+  mecánica propia (Miis, calendarios de eventos, habitantes con frases fijas).
+- **Heartopia** (móvil, vida cozy): casas, **parcelas que se desbloquean** con progreso y decoración. Nuestra
+  diferencia: isla compartida entre familias, barrio ordenado en anillos con parque central, parcela regalada y
+  compra de otras.
+- **Virtual Sim Story** (isla «Clearbell») y **Spirit of the Island**: juegos de isla en móvil/PC. Revisar nombres.
+- Mantener: nombres propios (isla, volcán, zonas), estilo toon propio, arte propio. La imagen de referencia del
+  dueño es **arte generado por IA**: solo como guía de distribución.
+- Pendiente: revisión de alguien con criterio (idealmente legal) antes de publicar en tiendas.
