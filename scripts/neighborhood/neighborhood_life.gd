@@ -484,7 +484,7 @@ func _spawn_cars() -> void:
 	var per_lane := int(ceil(count / 2.0))
 	for i in count:
 		var lane: int = lanes[i % 2]
-		var index_in_lane := i / 2
+		var index_in_lane := int(i * 0.5)
 		var node := _make_car(Color.from_string(colors[i % colors.size()], Color.RED))
 		node.name = "Car%d" % i
 		add_child(node)

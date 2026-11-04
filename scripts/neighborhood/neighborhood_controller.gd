@@ -63,7 +63,8 @@ func setup(main_node) -> void:
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if state != "" and event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+	var key := event as InputEventKey
+	if state != "" and key != null and key.pressed and key.keycode == KEY_ESCAPE:
 		return_home()
 		get_viewport().set_input_as_handled()
 

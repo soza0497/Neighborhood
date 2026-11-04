@@ -337,3 +337,8 @@ Están siempre cargados y se usan desde cualquier script por su nombre:
 - **SaveSystem**: guarda/carga `GameState` en `user://save.json` (con copia de
   respaldo y migración de versiones viejas)
   (en la PC: `~/.local/share/godot/app_userdata/Neighborhood/`).
+
+
+**Fase 8** (versión 0.11.0, barrio): `tests/test_neighborhood.tscn` (sin pantalla: mapa, casas vecinas, vida, meta),
+`lua5.1 server/tests/test_goals.lua` (meta del servidor) y `tests/neighborhood_demo.tscn` (con ventana; capturas
+`n8*.png`). En el juego: menú ☰ → **Barrio** (vista aérea, visitar casas, privacidad, meta del barrio).
