@@ -25,15 +25,17 @@ static var _quad_mesh: QuadMesh = QuadMesh.new()
 static var _materials: Dictionary = {}
 
 
-## Material de color plano (uno por color, compartido).
-static func material(color: Color) -> StandardMaterial3D:
-	var key := color.to_html()
-	if not _materials.has(key):
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = color
-		mat.roughness = 0.9
-		_materials[key] = mat
-	return _materials[key]
+## Material de una pieza: toon con contorno (uno por color, compartido).
+## Todo el arte pasa por acá y por Style: ver data/style.json.
+static func material(color: Color) -> Material:
+	return Style.toon_material(color)
+
+
+## Pulido 3C: igual pero SIN contorno propio. Lo usan los tramos de pared que
+## son parte de una pared más larga: el contorno lo dibuja una caja única que
+## envuelve toda la pared (HouseView), así no hay líneas entre tramos.
+static func material_no_outline(color: Color) -> Material:
+	return Style.toon_material(color, null, false)
 
 
 ## Material transparente (vidrios y "fantasmas" de vista previa).
@@ -91,6 +93,38 @@ static func make_ghost(node: Node, valid: bool) -> void:
 	_apply_override(node, transparent_material(color))
 
 
+## Pulido 2: deja una pieza "prevista": igual que la real pero con el color
+## aclarado y un brillo que la vista prende y apaga. Devuelve los materiales
+## (copias propias de esta pieza) para animarles el brillo ("glow").
+static func make_planned(node: Node) -> Array:
+	var result: Array = []
+	if node is MeshInstance3D:
+		var mesh_instance: MeshInstance3D = node
+		if mesh_instance.material_override is ShaderMaterial:
+			var copy := _planned_copy(mesh_instance.material_override)
+			mesh_instance.material_override = copy
+			result.append(copy)
+		elif mesh_instance.mesh != null:
+			for surface in mesh_instance.mesh.get_surface_count():
+				var source: Material = mesh_instance.mesh.surface_get_material(surface)
+				if source is ShaderMaterial:
+					var copy := _planned_copy(source)
+					mesh_instance.set_surface_override_material(surface, copy)
+					result.append(copy)
+		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for child in node.get_children():
+		result.append_array(make_planned(child))
+	return result
+
+
+static func _planned_copy(source: ShaderMaterial) -> ShaderMaterial:
+	var copy: ShaderMaterial = source.duplicate()
+	var base: Color = source.get_shader_parameter("albedo")
+	copy.set_shader_parameter("albedo", base.lerp(Color(0.72, 0.95, 1.0), 0.4))
+	copy.set_shader_parameter("glow", 0.0)
+	return copy
+
+
 static func _apply_override(node: Node, mat: Material) -> void:
 	if node is MeshInstance3D:
 		node.material_override = mat
@@ -110,12 +144,52 @@ static func add_box(parent: Node3D, center: Vector3, size: Vector3, mat: Materia
 	return box
 
 
+## La caja de cartón que deja el repartidor en el lugar de una pieza (2C).
+static func build_delivery_box(value: Dictionary) -> Node3D:
+	var footprint := HouseData.item_footprint(Catalog.get_item(value["item"]))
+	var rot := int(value.get("rot", 0))
+	var anchor := HouseData.object_anchor(value)
+	var size := HouseGrid.rotated_size(footprint, rot)
+	var node := Node3D.new()
+	node.position = Vector3(anchor.x + size.x / 2.0, 0.0, anchor.y + size.y / 2.0)
+	var side := minf(0.85, minf(size.x, size.y) * 0.85)
+	var cardboard := material(Color("#c9a06b"))
+	add_box(node, Vector3(0, side * 0.4, 0), Vector3(side, side * 0.8, side), cardboard)
+	add_box(node, Vector3(0, side * 0.8 + 0.01, 0), Vector3(side * 0.2, 0.03, side * 1.02), material(Color("#e7d7b5")))
+	return node
+
+
+# --- Modelos del catálogo (.glb) con respaldo a las figuras simples ---
+
+## Instancia el modelo de una pieza del catálogo (campo "model": ruta a un
+## .glb o a una escena) con su escala, desplazamiento y giro. Devuelve null si
+## no hay campo o el archivo no existe: entonces se usan las figuras de siempre.
+## Ver docs/estilo.md (convenciones de importación).
+static func load_model(item: Dictionary) -> Node3D:
+	# Fase 7: todo el trabajo (caja de celdas, paleta, respaldo) está en ModelLoader.
+	return ModelLoader.load_for_item(item, model_box(item))
+
+
+## Caja de celdas de un objeto del catálogo: ancho, alto y fondo en metros.
+static func model_box(item: Dictionary, rise := 0.0) -> Vector3:
+	var footprint := HouseData.item_footprint(item)
+	var height := rise if rise > 0.0 else float(item.get("height", 1.0))
+	return Vector3(footprint.x, height, footprint.y)
+
+
 # --- Piezas ---
 
 static func build_foundation(cell: Vector2i, value: Dictionary) -> Node3D:
 	var node := Node3D.new()
 	var h := HouseGrid.FOUNDATION_HEIGHT
 	add_box(node, HouseGrid.cell_center(cell) + Vector3(0, -h / 2.0, 0), Vector3(1, h, 1), material(piece_color(value)))
+	return node
+
+
+## Pulido 2C: una celda excavada (un pozo de tierra) en un sótano.
+static func build_excavation(cell: Vector2i, value: Dictionary) -> Node3D:
+	var node := Node3D.new()
+	add_box(node, HouseGrid.cell_center(cell) + Vector3(0, -0.12, 0), Vector3(1, 0.1, 1), material(piece_color(value)))
 	return node
 
 
@@ -132,7 +206,7 @@ static func build_floor(cell: Vector2i, value: Dictionary) -> Node3D:
 ## `merge_start` / `merge_end`: su ventana se une con la de la pared vecina
 ## en ese extremo (el vidrio sigue de largo, sin columna en medio).
 static func build_wall(key: String, value: Dictionary, visible_height: float, full_length := false,
-		merge_start := false, merge_end := false) -> Node3D:
+		merge_start := false, merge_end := false, flat_edges := false) -> Node3D:
 	var node := Node3D.new()
 	node.position = HouseGrid.edge_center(key)
 	var horizontal := HouseGrid.is_edge_horizontal(key)
@@ -164,16 +238,20 @@ static func build_wall(key: String, value: Dictionary, visible_height: float, fu
 			_add_window(node, opening_item, bottom, minf(hole_top, visible_height), hole_top,
 				length, join_minus, join_plus)
 
+	# Pulido 3C: con `flat_edges` el tramo no lleva contorno propio (lo lleva la
+	# caja de toda la pared; las columnas de las esquinas tapan la juntura).
 	for part in solid:
 		var bottom: float = part[0]
 		var top: float = minf(part[1], visible_height)
 		if top - bottom <= 0.01:
 			continue
+		var mat_a := material_no_outline(color_a) if flat_edges else material(color_a)
+		var mat_b := material_no_outline(color_b) if flat_edges else material(color_b)
 		if color_a == color_b:
-			add_box(node, Vector3(0, (bottom + top) / 2.0, 0), Vector3(length, top - bottom, t), material(color_a))
+			add_box(node, Vector3(0, (bottom + top) / 2.0, 0), Vector3(length, top - bottom, t), mat_a)
 		else:
-			add_box(node, Vector3(0, (bottom + top) / 2.0, -t / 4.0), Vector3(length, top - bottom, t / 2.0), material(color_a))
-			add_box(node, Vector3(0, (bottom + top) / 2.0, t / 4.0), Vector3(length, top - bottom, t / 2.0), material(color_b))
+			add_box(node, Vector3(0, (bottom + top) / 2.0, -t / 4.0), Vector3(length, top - bottom, t / 2.0), mat_a)
+			add_box(node, Vector3(0, (bottom + top) / 2.0, t / 4.0), Vector3(length, top - bottom, t / 2.0), mat_b)
 	return node
 
 
@@ -182,6 +260,13 @@ static func _add_door(node: Node3D, item: Dictionary, bottom: float, top: float,
 	var color := Color.from_string(item.get("color", "#ffffff"), Color.WHITE)
 	var height := top - bottom
 	var depth := HouseGrid.WALL_THICKNESS + 0.02
+	# Fase 7: con modelo (.glb) en el catálogo, reemplaza marco y hoja. Su caja
+	# es el hueco: ancho de la pared x alto de la puerta x grosor de la pared.
+	var door_model := ModelLoader.load_for_item(item, Vector3(length, height, depth))
+	if door_model != null:
+		door_model.position += Vector3(0, bottom, 0)
+		node.add_child(door_model)
+		return
 	var frame_mat := material(color.darkened(0.35))
 	for side in [-1, 1]:
 		add_box(node, Vector3(side * (length - DOOR_FRAME) / 2.0, bottom + height / 2.0, 0),
@@ -219,6 +304,13 @@ static func _add_window(node: Node3D, item: Dictionary, bottom: float, top: floa
 	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	node.add_child(glass)
 
+	# Fase 7: con modelo, el marco sale del .glb (el vidrio sigue siendo el plano
+	# de arriba). Caja del modelo = hueco de la ventana.
+	var window_model := ModelLoader.load_for_item(item, Vector3(width, top - bottom, HouseGrid.WALL_THICKNESS + 0.04))
+	if window_model != null:
+		window_model.position += Vector3(center_x, bottom, 0)
+		node.add_child(window_model)
+		return
 	var frame_mat := material(Color.WHITE)
 	var frame_size := Vector3(width, 0.06, HouseGrid.WALL_THICKNESS + 0.04)
 	add_box(node, Vector3(center_x, bottom + 0.03, 0), frame_size, frame_mat)
@@ -229,7 +321,7 @@ static func _add_window(node: Node3D, item: Dictionary, bottom: float, top: floa
 ## Columna que tapa la esquina donde se juntan paredes.
 ## Si está entre dos ventanas unidas (`window_item`), la columna se corta a
 ## la altura de la ventana: ahí pasan el vidrio y los marcos de las paredes.
-static func build_post(vertex: Vector2i, color: Color, visible_height: float, window_item: Dictionary = {}) -> Node3D:
+static func build_post(vertex: Vector2i, color: Color, visible_height: float, window_item: Dictionary = {}, flat_edges := false) -> Node3D:
 	var node := Node3D.new()
 	var t := HouseGrid.WALL_THICKNESS
 	var center := Vector3(vertex.x, 0, vertex.y)
@@ -241,7 +333,8 @@ static func build_post(vertex: Vector2i, color: Color, visible_height: float, wi
 		var bottom: float = part[0]
 		var top: float = minf(part[1], visible_height)
 		if top - bottom > 0.01:
-			add_box(node, center + Vector3(0, (bottom + top) / 2.0, 0), Vector3(t, top - bottom, t), material(color))
+			add_box(node, center + Vector3(0, (bottom + top) / 2.0, 0), Vector3(t, top - bottom, t),
+				material_no_outline(color) if flat_edges else material(color))
 	return node
 
 
@@ -258,6 +351,26 @@ static func build_object(value: Dictionary, ground_drop := 0.0) -> Node3D:
 	var node := Node3D.new()
 	node.position = Vector3(anchor.x + size.x / 2.0, -ground_drop, anchor.y + size.y / 2.0)
 	node.rotation.y = -deg_to_rad(HouseGrid.object_angle(rot, value.get("diag", false)))
+
+	# Pulido 2B: si el catálogo trae un modelo (.glb o escena) que existe, se
+	# usa; si no, las figuras simples de abajo (el arte se cambia sin tocar código).
+	if item.get("kind", "") == "stairs":
+		# Fase 7: las escaleras también pueden traer modelo; se estira al alto
+		# real (model_fit "stretch" en el catálogo; si no, solo se achica).
+		var stairs_model := ModelLoader.load_for_item(item, model_box(item, HouseGrid.WALL_HEIGHT + ground_drop))
+		if stairs_model != null:
+			node.add_child(stairs_model)
+			return node
+	elif item.get("kind", "") == "pillar":
+		var pillar_model := ModelLoader.load_for_item(item, Vector3(0.5, HouseGrid.WALL_HEIGHT + ground_drop, 0.5))
+		if pillar_model != null:
+			node.add_child(pillar_model)
+			return node
+	else:
+		var model := load_model(item)
+		if model != null:
+			node.add_child(model)
+			return node
 
 	var w := float(footprint.x)
 	var d := float(footprint.y)

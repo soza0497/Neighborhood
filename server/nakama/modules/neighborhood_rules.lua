@@ -32,11 +32,14 @@ local rules = {}
 local house_rules = require("neighborhood_house")
 
 -- Medidas de la casa: las mismas que scripts/house/house_grid.gd.
-rules.LOT_SIZE = 32
+rules.LOT_SIZE = 96
 rules.MAX_LEVELS = 5
-rules.LAYERS = { "foundation", "floors", "walls", "objects", "roofs" }
+-- Pulido 2C: 3 sótanos (niveles -1 a -3); house.levels[nivel + 4].
+rules.MIN_LEVEL = -3
+rules.LEVEL_COUNT = 8
+rules.LAYERS = { "foundation", "floors", "walls", "objects", "roofs", "excavation" }
 -- Capas cuyas piezas tardan en construirse (economy.gd, TIMED_LAYERS).
-local TIMED_LAYERS = { objects = true, roofs = true }
+local TIMED_LAYERS = { objects = true, roofs = true, excavation = true }
 -- Qué tipos ("kind") del catálogo van en cada capa.
 local LAYER_KINDS = {
   foundation = { foundation = true },
@@ -44,6 +47,7 @@ local LAYER_KINDS = {
   walls = { wall = true },
   objects = { furniture = true, stairs = true, pillar = true },
   roofs = { roof = true },
+  excavation = { excavation = true },
 }
 local OPENING_KINDS = { door = true, window = true }
 
@@ -204,12 +208,26 @@ rules.same_value = same_value
 -- después, no se pueden deshacer sin pisar lo que hizo el otro)
 function rules.writes_match(house, writes)
   for _, w in ipairs(writes) do
-    local current = house.levels[w.level + 1][w.layer][w.key]
+    local current = house_rules.level_table(house, w.level)[w.layer][w.key]
     if not same_value(current, w.value) then
       return false
     end
   end
   return true
+end
+
+-- ¿Esta escritura pone algo encima de un obstáculo sin limpiar?
+function rules.touches_obstacle(w)
+  if w.layer == "foundation" or w.layer == "floors" then
+    local x, z = house_rules.parse_cell(w.key)
+    return x ~= nil and house_rules.is_blocked(x, z)
+  elseif w.layer == "roofs" and type(w.value) == "table" and type(w.value.rect) == "table" then
+    local r = w.value.rect
+    return house_rules.rect_blocked(r[1], r[2], r[3], r[4])
+  elseif w.layer == "objects" and type(w.value) == "table" and type(w.value.cell) == "table" then
+    return house_rules.is_blocked(w.value.cell[1], w.value.cell[2])
+  end
+  return false
 end
 
 -- Revisa las reglas de apoyo (si el estado lo pide).
@@ -219,6 +237,12 @@ local function check_support(data, state, writes, text, house)
   end
   local ok = house_rules.check_batch(data, house or state.house, writes)
   if not ok then
+    -- Pulido 2C: si lo que falla está encima de un obstáculo, se dice.
+    for _, w in ipairs(writes) do
+      if w.value ~= nil and rules.touches_obstacle(w) then
+        refuse("Ahí hay un obstáculo (árbol, roca, laguito...): tocalo y llamá al servicio para limpiarlo.", { reason = "obstacle" })
+      end
+    end
     refuse(text or "Eso no tiene dónde apoyarse, o dejaría algo en el aire.", { reason = "support" })
   end
 end
@@ -258,13 +282,20 @@ function rules.level_for_xp(data, xp)
   return level
 end
 
--- Versión del formato de la casa (HouseData.FORMAT): 3 = Pulido 1.
-rules.HOUSE_FORMAT = 3
+-- Versión del formato de la casa (HouseData.FORMAT): 3 = Pulido 1, 4 = Pulido 2C
+-- (parcela de 96: las casas de 32 quedan en el centro).
+-- 5 = Pulido 3A (la casa pasa de estar centrada a estar CERCA de la calle:
+-- se corre rules.HOME_SHIFT_Z celdas hacia la calle).
+rules.HOUSE_FORMAT = 5
+-- Cuánto se corre hacia la calle una casa de formato < 5: es
+-- (lot - home_zone - home_street_gap) - (lot - home_zone) / 2 de data/parcel.json
+-- (96 - 32 - 6 - 32 = 26). Lo verifica test_rules.lua con el archivo real.
+rules.HOME_SHIFT_Z = 26
 
 function rules.empty_house()
   local levels = {}
-  for i = 1, rules.MAX_LEVELS do
-    levels[i] = { foundation = {}, floors = {}, walls = {}, objects = {}, roofs = {} }
+  for i = 1, rules.LEVEL_COUNT do
+    levels[i] = { foundation = {}, floors = {}, walls = {}, objects = {}, roofs = {}, excavation = {} }
   end
   return { levels = levels, next_id = 1, lot_size = { rules.LOT_SIZE, rules.LOT_SIZE }, format = rules.HOUSE_FORMAT }
 end
@@ -325,13 +356,82 @@ function rules.upgrade_legacy(data, house)
   house.format = rules.HOUSE_FORMAT
 end
 
+-- Pulido 2: saca los techos rotos que una edición vieja pudo dejar (sin
+-- medidas o fuera de la parcela: no se podían tocar ni borrar). Es la misma
+-- cuenta que HouseData.repair en el teléfono. Devuelve cuántos sacó.
+function rules.repair_house(house)
+  local removed = 0
+  for _, level in ipairs(house.levels) do
+    if type(level.roofs) == "table" then
+      for key, roof in pairs(level.roofs) do
+        local r = type(roof) == "table" and roof.rect or nil
+        local ok = type(r) == "table" and #r == 4
+        if ok then
+          for i = 1, 4 do
+            if num(r[i]) == nil then
+              ok = false
+            end
+          end
+        end
+        if ok then
+          local x, z, w, d = math.floor(r[1]), math.floor(r[2]), math.floor(r[3]), math.floor(r[4])
+          ok = w >= 1 and d >= 1 and x >= 0 and z >= 0 and x + w <= rules.LOT_SIZE and z + d <= rules.LOT_SIZE
+        end
+        if not ok then
+          level.roofs[key] = nil
+          removed = removed + 1
+        end
+      end
+    end
+  end
+  return removed
+end
+
+-- Pulido 2C: mueve toda la casa (dx, dz) celdas. Es la misma cuenta que
+-- HouseData._shift en el teléfono (las casas viejas quedan en el centro).
+function rules.shift_house(house, dx, dz)
+  for _, level in ipairs(house.levels) do
+    for _, layer in ipairs({ "foundation", "floors", "excavation" }) do
+      local moved = {}
+      for key, value in pairs(level[layer]) do
+        local x, z = house_rules.parse_cell(key)
+        moved[house_rules.cell_key(x + dx, z + dz)] = value
+      end
+      level[layer] = moved
+    end
+    local walls = {}
+    for key, value in pairs(level.walls) do
+      local x, z, horizontal = house_rules.parse_edge(key)
+      walls[house_rules.edge_key(x + dx, z + dz, horizontal)] = value
+    end
+    level.walls = walls
+    for _, value in pairs(level.objects) do
+      if type(value.cell) == "table" then
+        value.cell = { value.cell[1] + dx, value.cell[2] + dz }
+      end
+    end
+    for _, value in pairs(level.roofs) do
+      if type(value.rect) == "table" then
+        value.rect = { value.rect[1] + dx, value.rect[2] + dz, value.rect[3], value.rect[4] }
+      end
+    end
+  end
+end
+
 -- Completa una casa leída (le pueden faltar niveles o capas vacías).
 function rules.normalize_house(house)
   if type(house) ~= "table" then
     return rules.empty_house()
   end
   house.levels = type(house.levels) == "table" and house.levels or {}
-  for i = 1, rules.MAX_LEVELS do
+  -- Pulido 2C: las casas de antes tienen 5 niveles (0 a 4): los 3 sótanos
+  -- (vacíos) van al principio.
+  if #house.levels <= rules.MAX_LEVELS then
+    for _ = 1, rules.LEVEL_COUNT - rules.MAX_LEVELS do
+      table.insert(house.levels, 1, {})
+    end
+  end
+  for i = 1, rules.LEVEL_COUNT do
     house.levels[i] = type(house.levels[i]) == "table" and house.levels[i] or {}
     for _, layer in ipairs(rules.LAYERS) do
       if type(house.levels[i][layer]) ~= "table" then
@@ -340,10 +440,24 @@ function rules.normalize_house(house)
     end
   end
   house.next_id = math.floor(num(house.next_id) or 1)
-  house.lot_size = house.lot_size or { rules.LOT_SIZE, rules.LOT_SIZE }
-  if (num(house.format) or 1) < rules.HOUSE_FORMAT then
+  house.lot_size = type(house.lot_size) == "table" and house.lot_size or { rules.LOT_SIZE, rules.LOT_SIZE }
+  rules.repair_house(house)
+  local old_format = num(house.format) or 1
+  -- Pulido 2C: si la parcela era más chica, la casa se centra en la nueva.
+  local saved = num(house.lot_size[1]) or rules.LOT_SIZE
+  if saved ~= rules.LOT_SIZE then
+    local offset = math.floor((rules.LOT_SIZE - saved) / 2)
+    rules.shift_house(house, offset, offset)
+    house.lot_size = { rules.LOT_SIZE, rules.LOT_SIZE }
+  end
+  if old_format < 3 then
     rules.upgrade_legacy(rules.data, house)
   end
+  -- Pulido 3A: la casa se acerca a la calle (después de centrarla).
+  if old_format < 5 then
+    rules.shift_house(house, 0, rules.HOME_SHIFT_Z)
+  end
+  house.format = rules.HOUSE_FORMAT
   return house
 end
 
@@ -421,7 +535,7 @@ local function check_key(layer, key)
   if type(key) ~= "string" or #key > 16 then
     return false
   end
-  if layer == "foundation" or layer == "floors" then
+  if layer == "foundation" or layer == "floors" or layer == "excavation" then
     return check_cell_key(key)
   elseif layer == "walls" then
     return check_edge_key(key)
@@ -503,11 +617,14 @@ end
 
 -- Revisa una escritura {level, layer, key, value} y la devuelve limpia.
 local function clean_write(data, w)
-  if type(w) ~= "table" or not in_range(w.level, 0, rules.MAX_LEVELS - 1) or LAYER_KINDS[w.layer] == nil then
+  if type(w) ~= "table" or not in_range(w.level, rules.MIN_LEVEL, rules.MAX_LEVELS - 1) or LAYER_KINDS[w.layer] == nil then
     refuse("Cambio inválido.")
   end
-  if w.layer == "foundation" and w.level ~= 0 then
-    refuse("Los cimientos van solo en la planta baja.")
+  if w.layer == "foundation" and w.level > 0 then
+    refuse("Los cimientos van solo en la planta baja o en un sótano.")
+  end
+  if w.layer == "excavation" and w.level >= 0 then
+    refuse("Solo se excava en un sótano.")
   end
   if not check_key(w.layer, w.key) then
     refuse("Lugar inválido: " .. tostring(w.key))
@@ -523,7 +640,7 @@ end
 -- --- Casa ---
 
 local function get_piece(house, w)
-  return house.levels[w.level + 1][w.layer][w.key]
+  return house_rules.level_table(house, w.level)[w.layer][w.key]
 end
 
 -- Aplica escrituras a la casa y devuelve las que la deshacen (al revés,
@@ -533,7 +650,7 @@ function rules.apply_writes(house, writes)
   for _, w in ipairs(writes) do
     local previous = get_piece(house, w)
     table.insert(inverse, 1, { level = w.level, layer = w.layer, key = w.key, value = copy(previous) })
-    house.levels[w.level + 1][w.layer][w.key] = copy(w.value)
+    house_rules.level_table(house, w.level)[w.layer][w.key] = copy(w.value)
   end
   return inverse
 end
@@ -713,9 +830,9 @@ end
 -- Obras en marcha: lista de {level, layer, key, ready_at}.
 function rules.pending_construction(house, now)
   local result = {}
-  for level = 0, rules.MAX_LEVELS - 1 do
+  for level = rules.MIN_LEVEL, rules.MAX_LEVELS - 1 do
     for layer in pairs(TIMED_LAYERS) do
-      for key, value in pairs(house.levels[level + 1][layer]) do
+      for key, value in pairs(house_rules.level_table(house, level)[layer]) do
         local ready_at = num(value.ready_at) or 0
         if ready_at > now then
           table.insert(result, { level = level, layer = layer, key = key, ready_at = ready_at })
@@ -744,7 +861,7 @@ function rules.accelerate_builds(data, state, now)
   end
   local writes = {}
   for _, p in ipairs(pending) do
-    local value = copy(state.house.levels[p.level + 1][p.layer][p.key])
+    local value = copy(house_rules.level_table(state.house, p.level)[p.layer][p.key])
     value.ready_at = nil
     table.insert(writes, { level = p.level, layer = p.layer, key = p.key, value = value })
   end
@@ -952,7 +1069,8 @@ rules.MAX_REQUESTS = 10
 function rules.empty_home(owner_id)
   -- business: el negocio de la casa (Fase 6, neighborhood_business.lua);
   -- vacío = ninguno.
-  return { rev = 0, fund = 0, members = { owner_id }, log = {}, requests = {}, next_id = 1, business = {} }
+  -- parcel: obstáculos limpiados y servicios en camino (Pulido 2C).
+  return { rev = 0, fund = 0, members = { owner_id }, log = {}, requests = {}, next_id = 1, business = {}, parcel = {} }
 end
 
 -- Completa un hogar leído (le pueden faltar campos).

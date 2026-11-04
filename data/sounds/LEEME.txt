@@ -1,0 +1,15 @@
+Sonidos del barrio (Fase 8C) — carpeta para los archivos FUTUROS.
+
+El barrio avisa cada evento con una señal (EventBus.neighborhood_sound) y busca un
+archivo con el nombre que dice "sounds" en data/neighborhood.json:
+
+  greet     dos vecinos se saludan
+  door      un vecino entra o sale de su casa
+  car_pass  un auto pasa cerca de la cámara
+  step      pasos (todavía no se usa)
+
+Para ponerle sonido a un evento, copiá acá un archivo con ese nombre (.ogg, .wav o
+.mp3), por ejemplo data/sounds/greet.ogg. Si no hay archivo, no pasa nada (se prueba
+también en assets/audio/, donde Sound.play busca los demás sonidos del juego).
+No hay ningún archivo de audio todavía: se agregan cuando el dueño los elija (CC0 o
+propios; ver docs/riesgos-legales-ea.md antes de usar sonidos de otros juegos).

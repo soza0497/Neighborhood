@@ -21,6 +21,9 @@ var playing := false
 
 var _sending := false
 var _retry_timer := 0.0
+## Pulido 2B: la caja se cobra sola cada tanto (el servidor calcula por tiempo).
+const AUTO_COLLECT_SECONDS := 90.0
+var _auto_timer := AUTO_COLLECT_SECONDS
 
 
 func _ready() -> void:
@@ -31,6 +34,10 @@ func _ready() -> void:
 ## Un servicio sin cobrar se manda solo al volver la conexión (cada 10 s
 ## lo intenta, cuando el juego ya terminó de entrar con el servidor).
 func _process(delta: float) -> void:
+	_auto_timer -= delta
+	if _auto_timer <= 0.0:
+		_auto_timer = AUTO_COLLECT_SECONDS
+		_auto_collect()
 	_retry_timer -= delta
 	if _retry_timer > 0.0:
 		return
@@ -132,8 +139,21 @@ func set_open(open: bool) -> bool:
 	return true
 
 
-## Cobrar lo que juntó solo (clientes de paso).
-func collect() -> int:
+## Pulido 2B: cobro automático. El jugador no aprieta nada: si el restaurante
+## está abierto y ya juntó algo, se pide el cobro (el servidor decide cuánto
+## por tiempo) y se avisa con un cartelito.
+func _auto_collect() -> void:
+	if summary.is_empty() or not summary.get("open", false) or int(summary.get("passive", 0)) < 5:
+		return
+	if not _online() or Economy.busy or not Economy.settled or playing:
+		return
+	var coins := await collect(true)
+	if coins > 0:
+		Sound.play("coin")
+
+
+## Cobrar lo que juntó solo (clientes de paso). `auto` = lo pidió el juego.
+func collect(auto := false) -> int:
 	if not Economy.can_request():
 		return 0
 	var result := await Economy.request("restaurant_collect")
@@ -144,7 +164,7 @@ func collect() -> int:
 	_take_summary(data)
 	var coins := int(data.get("coins", 0))
 	var where := " a la caja de la casa" if data.get("to_fund", false) else ""
-	EventBus.toast.emit("Cobraste $%d del restaurante%s." % [coins, where])
+	EventBus.toast.emit(("El restaurante te dio $%d%s." if auto else "Cobraste $%d del restaurante%s.") % [coins, where])
 	return coins
 
 

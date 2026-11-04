@@ -14,6 +14,7 @@ var _failed := 0
 
 
 func _ready() -> void:
+	HouseGrid.use_test_lot()  # Estas pruebas arman casas en un lote de 32 (la parcela real, desde el Pulido 2C, es de 96).
 	_test_normalize()
 	_test_texts()
 	_test_status()
@@ -90,9 +91,9 @@ func _test_diff() -> void:
 	# Lo que manda el servidor: los números como decimales (JSON).
 	var server: Dictionary = JSON.parse_string(JSON.stringify(local.to_dict()))
 	_check(CoupleState.diff_writes(local.to_dict(), server).is_empty(), "casa igual (con decimales): nada que cambiar")
-	server["levels"][0]["objects"]["o1"]["cell"] = [5.0, 5.0]
-	server["levels"][0]["objects"].erase("o2")
-	server["levels"][0]["walls"]["h:1,1"] = {"item": "wall_basic"}
+	server["levels"][3]["objects"]["o1"]["cell"] = [5.0, 5.0]
+	server["levels"][3]["objects"].erase("o2")
+	server["levels"][3]["walls"]["h:1,1"] = {"item": "wall_basic"}
 	var writes := CoupleState.diff_writes(local.to_dict(), server)
 	_check(writes.size() == 3, "tres cambios: mover, quitar y poner (%d)" % writes.size())
 	local.apply(writes)
@@ -178,7 +179,10 @@ func _test_partner_character() -> void:
 	partner.follow_intention(true, {"state": "working", "action": "", "key": ""})
 	_check(partner.state == Character.State.WORKING, "si trabaja, se va de la casa")
 	partner.follow_intention(true, {"state": "idle", "action": "", "key": ""})
-	_check(partner.state == Character.State.IDLE and partner.cell == Character.WORK_CELL, "vuelve del trabajo por la acera")
+	# Pulido 2B: vuelve de la calle caminando (con saco y maleta) hasta la casa.
+	_check(partner.cell == Character.work_cell() and (partner._returning or partner.state == Character.State.IDLE),
+		"vuelve del trabajo por la acera (caminando hasta la puerta, o ya en casa si no hay puerta)")
+	partner._arrive_home()
 	partner.follow_intention(true, {"state": "acting", "action": "cook", "key": "o99"})
 	_check(partner.state == Character.State.IDLE, "un mueble que no está en mi casa: pasea")
 	partner.follow_intention(false, {})

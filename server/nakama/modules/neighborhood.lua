@@ -51,6 +51,10 @@ RPC (el teléfono las llama con GameServer.call_rpc):
   service_start       empezar el minijuego: el servidor da la semilla
   service_finish      {actions}  los toques del jugador; el servidor repite
                       el servicio y paga lo que calcula él (tope diario)
+  -- Fase 8D: meta del barrio por participación (neighborhood_goals.lua) --
+  goal_load           la meta: el servidor cuenta las plantas de TU casa y acredita
+                      (tope diario); los vecinos aportan un valor simulado
+  goal_claim          retirar la recompensa (opcional, una sola vez)
 
 Toda respuesta es {ok, error?, state, ...}. ok = false con un texto para el
 jugador cuando una regla no lo deja (no alcanza el dinero, nivel...).
@@ -64,6 +68,7 @@ Dónde se guarda cada cosa (storage de Nakama, por usuario):
                   pertenecen)                       (solo el servidor)
   game/relation   relación con la pareja            (solo el servidor)
   game/business   servicio en marcha y tope diario del restaurante (solo el servidor)
+  game/goal       aporte del jugador a la meta del barrio  (solo el servidor)
   cloud/character personaje                         (lo escribe el teléfono)
   cloud/settings  opciones del menú                 (lo escribe el teléfono)
   wallet "coins"  dinero (billetera de Nakama, con historial de movimientos)
@@ -89,6 +94,8 @@ local rules = require("neighborhood_rules")
 local house_rules = require("neighborhood_house")
 local couple = require("neighborhood_couple")
 local business = require("neighborhood_business")
+local parcel = require("neighborhood_parcel")
+local goals = require("neighborhood_goals")
 
 local STARTING_MONEY = 3000
 local GAME = "game"
@@ -136,6 +143,56 @@ nk.logger_info(string.format("Catálogo del juego leído: %d piezas, %d empleos,
 local restaurant = business.new_config(read_game_data("business.json"))
 nk.logger_info(string.format("Restaurante: servicio de %d s, tope diario $%d",
   restaurant.service.duration_ms / 1000, restaurant.daily_cap))
+-- Pulido 2C: la parcela y sus obstáculos (data/parcel.json, el mismo del juego).
+local parcel_cfg = read_game_data("parcel.json")
+local parcel_cache = {}
+-- Fase 8D: la meta del barrio (data/neighborhood.json, sección "goal").
+local goal_cfg = goals.new_config(read_game_data("neighborhood.json"))
+nk.logger_info(string.format("Meta del barrio: %s (%d), tope diario %d", goal_cfg.name, goal_cfg.target, goal_cfg.daily_cap))
+nk.logger_info(string.format("Parcela: %d x %d celdas, %d tipos de obstáculo", parcel_cfg.lot or 0, parcel_cfg.lot or 0,
+  #(parcel_cfg.order or {})))
+
+-- Los obstáculos de la parcela del dueño de la casa (se generan de su id y se
+-- guardan en memoria: son siempre los mismos).
+local function parcel_obstacles(owner_id)
+  local seed = parcel.seed_from_text(owner_id)
+  if parcel_cache[seed] == nil then
+    local size = 0
+    for _ in pairs(parcel_cache) do size = size + 1 end
+    if size > 40 then
+      parcel_cache = {}
+    end
+    local started = os.clock()
+    parcel_cache[seed] = parcel.generate(parcel_cfg, seed)
+    nk.logger_info(string.format("Parcela generada: %d obstáculos en %.0f ms", #parcel_cache[seed], (os.clock() - started) * 1000))
+  end
+  return parcel_cache[seed], seed
+end
+
+-- Pulido 3A: celdas bloqueadas = obstáculos sin limpiar + zona todavía cerrada
+-- (se abre por nivel, data/parcel.json "unlocks"). Se guardan las celdas de
+-- cada nivel de zona porque son siempre las mismas.
+local locked_cache = {}
+local function parcel_locked(level)
+  if locked_cache[level] == nil then
+    locked_cache[level] = parcel.locked_cells(parcel_cfg, level)
+  end
+  return locked_cache[level]
+end
+
+local function parcel_blocked(state, obstacles, cleared)
+  return (parcel.blocked_cells(obstacles, cleared, parcel_locked(rules.level_for_xp(data, state.xp))))
+end
+
+-- Lo que el hogar guarda de la parcela: limpiados, en camino y cuántos van.
+local function parcel_state(state)
+  local p = state.home.parcel
+  if type(p.cleared) ~= "table" then p.cleared = {} end
+  if type(p.pending) ~= "table" then p.pending = {} end
+  p.count = math.floor(rules.num(p.count) or 0)
+  return p
+end
+
 -- Semillas de los servicios: al azar (cada máquina de Lua empieza distinto).
 math.randomseed(nk.time())
 
@@ -263,7 +320,7 @@ end
 
 local OWN_KEYS = {
   { GAME, "house" }, { GAME, "home" }, { GAME, "progress" }, { GAME, "work" }, { GAME, "history" },
-  { GAME, "relation" }, { GAME, "business" },
+  { GAME, "relation" }, { GAME, "business" }, { GAME, "goal" },
 }
 local HOME_KEYS = { { GAME, "house" }, { GAME, "home" } }
 
@@ -307,6 +364,7 @@ local function load_state(user_id)
     discovered = {},
     work = rules.normalize_work(value_of(objects, "game/work")),
     business = business.normalize_record(value_of(objects, "game/business")),
+    goal = goals.normalize_record(value_of(objects, "game/goal"), goal_cfg),
     history = { undo = history.undo or {}, redo = history.redo or {} },
     imported_unix = progress and progress.imported_unix or 0,
     check_support = true,
@@ -318,6 +376,8 @@ local function load_state(user_id)
   state.start_money = state.money
   state.start_fund = state.fund
   state.start_xp = state.xp
+  -- Pulido 2C: lo que no se limpió bloquea construir (reglas de apoyo).
+  house_rules.blocked_cells = parcel_blocked(state, parcel_obstacles(owner_id), parcel_state(state).cleared)
   return state
 end
 
@@ -360,6 +420,9 @@ local function save_state(state, changed, reason)
   end
   if changed.business then
     table.insert(writes, versioned_write(state.objects, state.user_id, GAME, "business", state.business))
+  end
+  if changed.goal then
+    table.insert(writes, versioned_write(state.objects, state.user_id, GAME, "goal", state.goal))
   end
   if changed.history then
     table.insert(writes, versioned_write(state.objects, state.user_id, GAME, "history",
@@ -857,7 +920,7 @@ local function imported_house(text)
     return ""
   end
   house = rules.normalize_house(house)
-  for level = 1, rules.MAX_LEVELS do
+  for level = 1, rules.LEVEL_COUNT do
     for _, layer in ipairs(rules.LAYERS) do
       for key, value in pairs(house.levels[level][layer]) do
         if type(value) ~= "table" or data.items[value.item] == nil then
@@ -1195,15 +1258,34 @@ local function shift_complete(state, _input, now)
   return { changed = { work = true, progress = result.xp_gained > 0 }, result = result }
 end
 
+-- Pulido 2B: la caja del restaurante se cobra SOLA (cálculo por tiempo del
+-- servidor, como los turnos). Devuelve true si cobró algo.
+local function restaurant_auto(state, result, now)
+  local auto = business.auto_collect(restaurant, data.items, state, now)
+  if auto == nil then
+    return false
+  end
+  result.restaurant_pay = auto.coins
+  result.to_fund = result.to_fund or auto.to_fund
+  if auto.to_fund then
+    log_and_notify(state, { kind = "fund", text = string.format("el restaurante juntó $%d para la caja", auto.coins) })
+  end
+  return true
+end
+
 local function work_settle(state, _input, now)
   local result = rules.settle(data, state, now)
   note_income(state, result, result.pending_pay + result.offline_pay, "sus sueldos ($%d) fueron a la caja")
-  return { changed = { work = true, progress = result.xp_gained > 0 }, result = result }
+  local paid = restaurant_auto(state, result, now)
+  return { changed = { work = true, home = paid, progress = result.xp_gained > 0 }, result = result }
 end
 
+-- "Sigo jugando": además de anotar la hora, cobra lo que juntó el restaurante.
 local function game_heartbeat(state, _input, now)
   state.work.last_seen_unix = now
-  return { changed = { work = true } }
+  local result = {}
+  local paid = restaurant_auto(state, result, now)
+  return { changed = { work = true, home = paid }, result = result }
 end
 
 
@@ -1271,6 +1353,137 @@ local function service_finish(state, input, now)
 end
 
 
+-- --- Parcela y servicios (Pulido 2C) ---
+
+-- --- Fase 8D: meta del barrio ---
+
+-- Pone al día el aporte del jugador con lo que hay en SU casa (si vive en la
+-- casa de su pareja, esas plantas no son suyas y no cuentan). Devuelve lo acreditado.
+local function goal_refresh(state, now)
+  local counted = state.goal.credited
+  if not state.shared or state.owner_id == state.user_id then
+    counted = goals.count_items(goal_cfg, state.house, data.items, now)
+  end
+  local gained, dirty = goals.update(goal_cfg, state.goal, now, counted)
+  return gained, dirty
+end
+
+-- Ver la meta: el servidor cuenta lo que hay en la casa y acredita (con tope diario).
+local function goal_load(state, _input, now)
+  local gained, dirty = goal_refresh(state, now)
+  return { changed = { goal = dirty }, result = { goal = goals.summary(goal_cfg, state.goal, now), gained = gained } }
+end
+
+-- Retirar la recompensa (opcional, una vez).
+local function goal_claim(state, _input, now)
+  local _, dirty = goal_refresh(state, now)
+  local reward, why = goals.claim(goal_cfg, state.goal, now)
+  if reward == nil then
+    rules.refuse(why)
+  end
+  state.money = state.money + reward.money
+  state.xp = state.xp + reward.xp
+  return { changed = { goal = true, progress = true },
+    result = { goal = goals.summary(goal_cfg, state.goal, now), reward = reward, money_change = reward.money } }
+end
+
+local function parcel_summary(state, now)
+  local p = parcel_state(state)
+  local _, seed = parcel_obstacles(state.owner_id)
+  local cleared = {}
+  for id in pairs(p.cleared) do
+    table.insert(cleared, id)
+  end
+  table.sort(cleared)
+  local pending = {}
+  for id, job in pairs(p.pending) do
+    pending[id] = { ready_at = job.ready_at, service = job.service, seconds_left = math.max(0, job.ready_at - now) }
+  end
+  return { seed = seed, lot = parcel_cfg.lot, cleared = cleared, pending = pending, count = p.count, server_unix = now,
+    level = rules.level_for_xp(data, state.xp) }
+end
+
+-- ¿Puede llegar el servicio hasta el obstáculo? (con la casa y lo que no se limpió)
+local function parcel_access(state, obstacles, target, def)
+  local p = parcel_state(state)
+  local blocked = parcel_blocked(state, obstacles, p.cleared)
+  for cx = target.x, target.x + target.w - 1 do
+    for cz = target.z, target.z + target.d - 1 do
+      blocked[cx .. "," .. cz] = nil
+    end
+  end
+  local house_cells = {}
+  for key in pairs(house_rules.level_table(state.house, 0).foundation) do
+    house_cells[key] = true
+  end
+  return parcel.can_reach(parcel_cfg, blocked, house_cells, target, def.vehicle ~= "")
+end
+
+local function parcel_load(state, _input, now)
+  return { changed = {}, result = { parcel = parcel_summary(state, now) } }
+end
+
+-- Llamar al servicio: cobra el servidor y arranca la espera REAL.
+local function parcel_clear_start(state, input, now)
+  local id = tostring(input.id or "")
+  local obstacles = parcel_obstacles(state.owner_id)
+  local target = parcel.find(obstacles, id)
+  if target == nil then
+    rules.refuse("Ese obstáculo no existe.")
+  end
+  local p = parcel_state(state)
+  if p.cleared[id] then
+    rules.refuse("Eso ya está limpio.")
+  end
+  if p.pending[id] then
+    rules.refuse("Ya viene un servicio para eso.")
+  end
+  local def = parcel_cfg.obstacles[target.kind]
+  if not parcel.in_zone(parcel.zone_rects(parcel_cfg, rules.level_for_xp(data, state.xp)), target.x, target.z, target.w, target.d) then
+    rules.refuse("Ese terreno todavía no es tuyo: se abre al subir de nivel.")
+  end
+  local ok, why = parcel_access(state, obstacles, target, def)
+  if not ok then
+    rules.refuse(why)
+  end
+  local cost = parcel.cost(parcel_cfg, target.kind, p.count)
+  if state.money < cost then
+    rules.refuse(string.format("Te faltan $%d para llamar al servicio.", cost - state.money))
+  end
+  state.money = state.money - cost
+  p.pending[id] = { ready_at = now + def.seconds, service = def.service, vehicle = def.vehicle, cost = cost, by = state.actor }
+  log_and_notify(state, { kind = "parcel", text = string.format("llamó al servicio para limpiar: %s ($%d)", def.name, cost) })
+  return { changed = { home = true }, result = { cost = cost, money_change = -cost, parcel = parcel_summary(state, now) } }
+end
+
+-- El servicio llegó (pasó la espera): limpia, si el vehículo puede entrar.
+local function parcel_clear_finish(state, input, now)
+  local id = tostring(input.id or "")
+  local p = parcel_state(state)
+  local job = p.pending[id]
+  if job == nil then
+    rules.refuse("No hay un servicio en camino para eso.")
+  end
+  if now < job.ready_at then
+    rules.refuse(string.format("El servicio todavía no llegó (faltan %d s).", job.ready_at - now))
+  end
+  local obstacles = parcel_obstacles(state.owner_id)
+  local target = parcel.find(obstacles, id)
+  local def = parcel_cfg.obstacles[target.kind]
+  local ok, why = parcel_access(state, obstacles, target, def)
+  if not ok then
+    -- El servicio avisa que no puede entrar y se queda esperando (no se cobra de nuevo).
+    return { changed = {}, result = { blocked = true, reason = why, parcel = parcel_summary(state, now) } }
+  end
+  p.pending[id] = nil
+  p.cleared[id] = true
+  p.count = p.count + 1
+  state.xp = state.xp + def.xp
+  house_rules.blocked_cells = parcel_blocked(state, obstacles, p.cleared)
+  log_and_notify(state, { kind = "parcel", text = string.format("quedó limpio: %s", def.name) })
+  return { changed = { home = true, progress = true }, result = { cleared = id, xp_gained = def.xp, parcel = parcel_summary(state, now) } }
+end
+
 nk.register_rpc(game_load, "game_load")
 nk.register_rpc(game_import, "game_import")
 nk.register_rpc(game_rpc("build_apply", build_apply), "build_apply")
@@ -1304,5 +1517,10 @@ nk.register_rpc(game_rpc("restaurant_load", restaurant_load), "restaurant_load")
 nk.register_rpc(game_rpc("restaurant_open", restaurant_switch("open")), "restaurant_open")
 nk.register_rpc(game_rpc("restaurant_close", restaurant_switch("close")), "restaurant_close")
 nk.register_rpc(game_rpc("restaurant_collect", restaurant_collect), "restaurant_collect")
+nk.register_rpc(game_rpc("goal_load", goal_load), "goal_load")
+nk.register_rpc(game_rpc("goal_claim", goal_claim), "goal_claim")
+nk.register_rpc(game_rpc("parcel_load", parcel_load), "parcel_load")
+nk.register_rpc(game_rpc("parcel_clear_start", parcel_clear_start), "parcel_clear_start")
+nk.register_rpc(game_rpc("parcel_clear_finish", parcel_clear_finish), "parcel_clear_finish")
 nk.register_rpc(game_rpc("service_start", service_start), "service_start")
 nk.register_rpc(game_rpc("service_finish", service_finish), "service_finish")

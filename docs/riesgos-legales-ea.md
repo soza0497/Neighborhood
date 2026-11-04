@@ -262,3 +262,17 @@ somos chibi, lejos). Evitar el nombre "Zoi" y sus marcas de funciones (como
 
 **Supercell (Clash of Clans, Hay Day).** Quitar árboles y rocas para ganar
 terreno es una mecánica común de muchos juegos. Usar arte y nombres propios.
+
+## Fase 8 (barrio): puntos a revisar (2026-11-04, no es asesoría legal)
+
+Dudas anotadas al diseñar el barrio. Nada de esto copia nombres, formas ni íconos de otros juegos, pero conviene
+que alguien con criterio lo mire antes de publicar:
+- **Vecinos que caminan, se saludan y entran a sus casas** (8C): es una mecánica de género (como las necesidades).
+  Lo concreto que se evitó: nada de «aldeanos» con personalidad y catchphrases (Animal Crossing), ni «Miis» ni
+  habitantes con ventanas (Tomodachi), ni la mudanza de vecinos por un menú de «visitas» al estilo de The Sims.
+  Nuestros vecinos son figuras chibi propias con apellidos genéricos y no tienen diálogos.
+- **Metas del barrio por participación** (8D): idea genérica (metas comunitarias). Nombre y premio propios.
+  Revisar patentes de «metas cooperativas con vecinos simulados» antes de publicar (Nintendo patenta mecánicas).
+- **Visitar casas ajenas en modo solo ver**: mecánica común. Los nombres de lugares («Plazoleta», «Calle Principal»)
+  son genéricos. Si se agregan sonidos (ver `data/sounds/LEEME.txt`) usar solo CC0 o propios, nunca de otros juegos.
+- **Apellidos**: son comunes del español (30 en `data/neighborhood.json`); no hay personas reales ni marcas.

@@ -1,9 +1,465 @@
 {
-	"_ayuda": "Opciones del editor de personaje (colores provisionales hasta la Fase 7). default = cómo empieza un personaje nuevo.",
+	"_ayuda": "Opciones del editor de personaje y de la pantalla de creación (Pulido 3B). El personaje se arma con PIEZAS intercambiables: 'hairstyles', 'eyes' y 'mouths' son listas de opciones y cada una tiene 'parts' (formas simples: shape = sphere o capsule; pos = posición [x,y,z] en metros con los pies en y=0 y la cara hacia +z; radius, height, scale y rot [grados] son opcionales; color = '#rrggbb' fijo, si no se pinta del color del pelo o de la piel). Los colores de piel, pelo, camisa y pantalón son listas de '#rrggbb'. default = cómo empieza un personaje nuevo. Para agregar un peinado, ojos o boca: sumá un bloque a la lista, no hace falta tocar el código.",
 	"format_version": 1,
-	"skin": ["#ffe0c7", "#f5c9a6", "#e0a67c", "#c68657", "#9c6440", "#6e4429"],
-	"hair": ["#2b1d14", "#5a3a22", "#a8693a", "#e8c36a", "#d9573c", "#9a9aa8", "#6f5bd6", "#ff8fb8"],
-	"shirt": ["#ff8f6b", "#ffd966", "#7fd18b", "#6fb7ff", "#b48cff", "#ff9db5", "#f2f2f2", "#3b4a5e"],
-	"pants": ["#3b4a5e", "#5577aa", "#7a5a3e", "#2f2f35", "#c9b48a", "#8f4a6a"],
-	"default": { "name": "Alex", "skin": "#f5c9a6", "hair": "#5a3a22", "shirt": "#6fb7ff", "pants": "#3b4a5e", "traits": ["chef", "lazy"] }
+	"skin": [
+		"#ffe0c7",
+		"#f5c9a6",
+		"#e0a67c",
+		"#c68657",
+		"#9c6440",
+		"#6e4429"
+	],
+	"hair": [
+		"#2b1d14",
+		"#5a3a22",
+		"#a8693a",
+		"#e8c36a",
+		"#d9573c",
+		"#9a9aa8",
+		"#6f5bd6",
+		"#ff8fb8"
+	],
+	"shirt": [
+		"#ff8f6b",
+		"#ffd966",
+		"#7fd18b",
+		"#6fb7ff",
+		"#b48cff",
+		"#ff9db5",
+		"#f2f2f2",
+		"#3b4a5e"
+	],
+	"pants": [
+		"#3b4a5e",
+		"#5577aa",
+		"#7a5a3e",
+		"#2f2f35",
+		"#c9b48a",
+		"#8f4a6a"
+	],
+	"default": {
+		"name": "Alex",
+		"skin": "#f5c9a6",
+		"hair": "#5a3a22",
+		"shirt": "#6fb7ff",
+		"pants": "#3b4a5e",
+		"traits": [
+			"chef",
+			"lazy"
+		],
+		"hairstyle": "cap",
+		"eyes": "dots",
+		"mouth": "smile"
+	},
+	"hairstyles": [
+		{
+			"id": "cap",
+			"name": "Gorro",
+			"parts": [
+				{
+					"shape": "sphere",
+					"pos": [
+						0,
+						1.09,
+						-0.03
+					],
+					"radius": 0.31,
+					"scale": [
+						1,
+						0.75,
+						1
+					]
+				}
+			]
+		},
+		{
+			"id": "short",
+			"name": "Corto",
+			"parts": [
+				{
+					"shape": "sphere",
+					"pos": [
+						0,
+						1.12,
+						-0.04
+					],
+					"radius": 0.3,
+					"scale": [
+						1,
+						0.55,
+						1
+					]
+				}
+			]
+		},
+		{
+			"id": "long",
+			"name": "Largo",
+			"parts": [
+				{
+					"shape": "sphere",
+					"pos": [
+						0,
+						1.09,
+						-0.03
+					],
+					"radius": 0.31,
+					"scale": [
+						1,
+						0.75,
+						1
+					]
+				},
+				{
+					"shape": "capsule",
+					"pos": [
+						0,
+						0.86,
+						-0.21
+					],
+					"radius": 0.2,
+					"height": 0.7
+				}
+			]
+		},
+		{
+			"id": "bun",
+			"name": "Rodete",
+			"parts": [
+				{
+					"shape": "sphere",
+					"pos": [
+						0,
+						1.1,
+						-0.04
+					],
+					"radius": 0.3,
+					"scale": [
+						1,
+						0.62,
+						1
+					]
+				},
+				{
+					"shape": "sphere",
+					"pos": [
+						0,
+						1.4,
+						-0.06
+					],
+					"radius": 0.14
+				}
+			]
+		},
+		{
+			"id": "spiky",
+			"name": "Puntas",
+			"parts": [
+				{
+					"shape": "sphere",
+					"pos": [
+						0,
+						1.12,
+						-0.04
+					],
+					"radius": 0.3,
+					"scale": [
+						1,
+						0.55,
+						1
+					]
+				},
+				{
+					"shape": "sphere",
+					"pos": [
+						-0.15,
+						1.36,
+						0
+					],
+					"radius": 0.09
+				},
+				{
+					"shape": "sphere",
+					"pos": [
+						0,
+						1.42,
+						0
+					],
+					"radius": 0.1
+				},
+				{
+					"shape": "sphere",
+					"pos": [
+						0.15,
+						1.36,
+						0
+					],
+					"radius": 0.09
+				}
+			]
+		}
+	],
+	"eyes": [
+		{
+			"id": "dots",
+			"name": "Puntitos",
+			"parts": [
+				{
+					"shape": "sphere",
+					"pos": [
+						-0.1,
+						1.0,
+						0.27
+					],
+					"radius": 0.045,
+					"color": "#1f1a20"
+				},
+				{
+					"shape": "sphere",
+					"pos": [
+						0.1,
+						1.0,
+						0.27
+					],
+					"radius": 0.045,
+					"color": "#1f1a20"
+				}
+			]
+		},
+		{
+			"id": "big",
+			"name": "Grandes",
+			"parts": [
+				{
+					"shape": "sphere",
+					"pos": [
+						-0.11,
+						1.0,
+						0.26
+					],
+					"radius": 0.07,
+					"scale": [
+						1,
+						1.1,
+						0.6
+					],
+					"color": "#1f1a20"
+				},
+				{
+					"shape": "sphere",
+					"pos": [
+						0.11,
+						1.0,
+						0.26
+					],
+					"radius": 0.07,
+					"scale": [
+						1,
+						1.1,
+						0.6
+					],
+					"color": "#1f1a20"
+				}
+			]
+		},
+		{
+			"id": "sleepy",
+			"name": "Dormilones",
+			"parts": [
+				{
+					"shape": "sphere",
+					"pos": [
+						-0.1,
+						1.0,
+						0.27
+					],
+					"radius": 0.06,
+					"scale": [
+						1,
+						0.3,
+						0.8
+					],
+					"color": "#1f1a20"
+				},
+				{
+					"shape": "sphere",
+					"pos": [
+						0.1,
+						1.0,
+						0.27
+					],
+					"radius": 0.06,
+					"scale": [
+						1,
+						0.3,
+						0.8
+					],
+					"color": "#1f1a20"
+				}
+			]
+		},
+		{
+			"id": "wide",
+			"name": "Separados",
+			"parts": [
+				{
+					"shape": "sphere",
+					"pos": [
+						-0.14,
+						1.0,
+						0.25
+					],
+					"radius": 0.04,
+					"color": "#1f1a20"
+				},
+				{
+					"shape": "sphere",
+					"pos": [
+						0.14,
+						1.0,
+						0.25
+					],
+					"radius": 0.04,
+					"color": "#1f1a20"
+				}
+			]
+		}
+	],
+	"mouths": [
+		{
+			"id": "smile",
+			"name": "Sonrisa",
+			"parts": [
+				{
+					"shape": "sphere",
+					"pos": [
+						-0.055,
+						0.905,
+						0.285
+					],
+					"radius": 0.016,
+					"color": "#a33d4a"
+				},
+				{
+					"shape": "sphere",
+					"pos": [
+						0,
+						0.885,
+						0.292
+					],
+					"radius": 0.016,
+					"color": "#a33d4a"
+				},
+				{
+					"shape": "sphere",
+					"pos": [
+						0.055,
+						0.905,
+						0.285
+					],
+					"radius": 0.016,
+					"color": "#a33d4a"
+				}
+			]
+		},
+		{
+			"id": "open",
+			"name": "Abierta",
+			"parts": [
+				{
+					"shape": "sphere",
+					"pos": [
+						0,
+						0.88,
+						0.285
+					],
+					"radius": 0.04,
+					"scale": [
+						1,
+						1.1,
+						0.5
+					],
+					"color": "#7a2733"
+				}
+			]
+		},
+		{
+			"id": "flat",
+			"name": "Seria",
+			"parts": [
+				{
+					"shape": "capsule",
+					"pos": [
+						0,
+						0.885,
+						0.292
+					],
+					"radius": 0.014,
+					"height": 0.1,
+					"rot": [
+						0,
+						0,
+						90
+					],
+					"color": "#a33d4a"
+				}
+			]
+		},
+		{
+			"id": "grin",
+			"name": "Sonrisón",
+			"parts": [
+				{
+					"shape": "sphere",
+					"pos": [
+						-0.085,
+						0.915,
+						0.275
+					],
+					"radius": 0.016,
+					"color": "#a33d4a"
+				},
+				{
+					"shape": "sphere",
+					"pos": [
+						-0.04,
+						0.89,
+						0.29
+					],
+					"radius": 0.016,
+					"color": "#a33d4a"
+				},
+				{
+					"shape": "sphere",
+					"pos": [
+						0,
+						0.882,
+						0.293
+					],
+					"radius": 0.016,
+					"color": "#a33d4a"
+				},
+				{
+					"shape": "sphere",
+					"pos": [
+						0.04,
+						0.89,
+						0.29
+					],
+					"radius": 0.016,
+					"color": "#a33d4a"
+				},
+				{
+					"shape": "sphere",
+					"pos": [
+						0.085,
+						0.915,
+						0.275
+					],
+					"radius": 0.016,
+					"color": "#a33d4a"
+				}
+			]
+		}
+	]
 }

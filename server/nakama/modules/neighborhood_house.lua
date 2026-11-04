@@ -38,8 +38,41 @@ empiezan en 0, como en el juego.
 
 local M = {}
 
-M.LOT_SIZE = 32
+M.LOT_SIZE = 96
+
+-- Pulido 2C: celdas con un obstáculo sin limpiar ("x,z" → id). Lo pone
+-- neighborhood.lua en cada pedido (según la parcela del dueño de la casa) y
+-- lo borra al terminar; nada se guarda con la casa.
+M.blocked_cells = nil
+
+-- ¿Algún obstáculo sin limpiar dentro del rectángulo?
+function M.rect_blocked(x, z, w, d)
+  if M.blocked_cells == nil then
+    return false
+  end
+  for cx = x, x + w - 1 do
+    for cz = z, z + d - 1 do
+      if M.blocked_cells[cx .. "," .. cz] ~= nil then
+        return true
+      end
+    end
+  end
+  return false
+end
+
+-- ¿La celda (x, z) tiene un obstáculo sin limpiar?
+function M.is_blocked(x, z)
+  return M.blocked_cells ~= nil and M.blocked_cells[x .. "," .. z] ~= nil
+end
 M.MAX_LEVELS = 5
+-- Pulido 2C: hasta 3 sótanos (niveles -1, -2 y -3). house.levels[nivel - MIN_LEVEL + 1].
+M.MIN_LEVEL = -3
+M.LEVEL_COUNT = 8
+
+-- La tabla de un nivel de la casa (nil si no existe).
+function M.level_table(house, level)
+  return house.levels[level - M.MIN_LEVEL + 1]
+end
 -- Hasta cuántas celdas sostiene un pilar al piso de arriba.
 M.PILLAR_REACH = 2
 -- Muebles en diagonal: los mismos números que HouseGrid (house_grid.gd).
@@ -191,7 +224,7 @@ end
 -- --- Leer la casa ---
 
 function M.get_piece(house, level, layer, key)
-  local lvl = house.levels[level + 1]
+  local lvl = M.level_table(house, level)
   if lvl == nil or lvl[layer] == nil then
     return nil
   end
@@ -219,7 +252,7 @@ end
 -- siempre igual).
 function M.objects_at(data, house, level, x, z)
   local result = {}
-  local lvl = house.levels[level + 1]
+  local lvl = M.level_table(house, level)
   if lvl == nil then
     return result
   end
@@ -242,7 +275,7 @@ M.kind_of = kind_of
 
 -- ¿Hay un pilar de ese nivel a PILLAR_REACH celdas o menos de (x, z)?
 function M.has_pillar_near(data, house, level, x, z)
-  local lvl = house.levels[level + 1]
+  local lvl = M.level_table(house, level)
   if lvl == nil then
     return false
   end
@@ -271,7 +304,7 @@ end
 
 -- ¿Todas esas celdas ({{x, z}, ...}) quedan adentro de un techo de ese nivel?
 function M.is_under_roof(house, level, cells)
-  local lvl = house.levels[level + 1]
+  local lvl = M.level_table(house, level)
   if level < 0 or lvl == nil then
     return false
   end
@@ -294,7 +327,7 @@ end
 
 -- Por qué no va un techo ahí (nil = sí va): pared o piso de arriba adentro.
 function M.roof_blocker(house, level, x, z, w, d)
-  local above = house.levels[level + 2]
+  local above = M.level_table(house, level + 1)
   if above == nil then
     return nil
   end
@@ -340,7 +373,7 @@ local function is_object_supported(data, house, level, key, value)
   local on_ground = level == 0 and item.outdoor == true
   for _, cell in ipairs(M.object_cells(item, value)) do
     if on_ground then
-      if not M.is_cell_in_lot(cell[1], cell[2]) then
+      if not M.is_cell_in_lot(cell[1], cell[2]) or M.is_blocked(cell[1], cell[2]) then
         return false
       end
     elseif not has_piece(house, level, "floors", M.cell_key(cell[1], cell[2])) then
@@ -364,14 +397,27 @@ end
 function M.is_supported(data, house, level, layer, key, value)
   if layer == "foundation" then
     local x, z = M.parse_cell(key)
-    return level == 0 and x ~= nil and M.is_cell_in_lot(x, z)
-  elseif layer == "floors" then
-    local x, z = M.parse_cell(key)
-    if x == nil or not M.is_cell_in_lot(x, z) then
+    if level > 0 or level < M.MIN_LEVEL or x == nil or not M.is_cell_in_lot(x, z) or M.is_blocked(x, z) then
       return false
     end
+    -- Pulido 2C: en un sótano, antes hay que excavar esa celda.
+    return level == 0 or has_piece(house, level, "excavation", key)
+  elseif layer == "excavation" then
+    local x, z = M.parse_cell(key)
+    if level >= 0 or level < M.MIN_LEVEL or x == nil or not M.is_cell_in_lot(x, z) or M.is_blocked(x, z) then
+      return false
+    end
+    return level == -1 or has_piece(house, level + 1, "excavation", key)
+  elseif layer == "floors" then
+    local x, z = M.parse_cell(key)
+    if x == nil or not M.is_cell_in_lot(x, z) or M.is_blocked(x, z) then
+      return false
+    end
+    if level < 0 then
+      return has_piece(house, level, "foundation", key)
+    end
     if level == 0 then
-      return has_piece(house, 0, "foundation", key)
+      return has_piece(house, 0, "foundation", key) and not M.is_stairs_cell(data, house, -1, x, z)
     end
     if M.is_stairs_cell(data, house, level - 1, x, z) or M.is_under_roof(house, level - 1, { { x, z } }) then
       return false
@@ -393,7 +439,7 @@ function M.is_supported(data, house, level, layer, key, value)
     if level > 0 and M.is_under_roof(house, level - 1, M.edge_cells(key)) then
       return false
     end
-    local support_layer = level == 0 and "foundation" or "floors"
+    local support_layer = level <= 0 and "foundation" or "floors"
     for _, cell in ipairs(M.edge_cells(key)) do
       if has_piece(house, level, support_layer, M.cell_key(cell[1], cell[2])) then
         return true
@@ -408,8 +454,9 @@ function M.is_supported(data, house, level, layer, key, value)
       return false
     end
     local x, z, w, d = num(r[1]), num(r[2]), num(r[3]), num(r[4])
-    return x ~= nil and z ~= nil and w ~= nil and d ~= nil and x >= 0 and z >= 0 and w >= 1 and d >= 1
+    return level >= 0 and x ~= nil and z ~= nil and w ~= nil and d ~= nil and x >= 0 and z >= 0 and w >= 1 and d >= 1
       and x + w <= M.LOT_SIZE and z + d <= M.LOT_SIZE and M.roof_blocker(house, level, x, z, w, d) == nil
+      and not M.rect_blocked(x, z, w, d)
   end
   return false
 end
@@ -426,12 +473,22 @@ function M.dependents(data, house, level, layer, key)
   end
   if layer == "foundation" then
     local x, z = M.parse_cell(key)
-    add(0, "floors", key)
+    add(level, "floors", key)
     for _, edge in ipairs(M.cell_edges(x, z)) do
-      add(0, "walls", edge)
+      add(level, "walls", edge)
     end
-    for _, object_key in ipairs(M.objects_at(data, house, 0, x, z)) do
-      add(0, "objects", object_key)
+    for _, object_key in ipairs(M.objects_at(data, house, level, x, z)) do
+      add(level, "objects", object_key)
+    end
+  elseif layer == "excavation" then
+    local x, z = M.parse_cell(key)
+    add(level, "foundation", key)
+    add(level, "floors", key)
+    for _, edge in ipairs(M.cell_edges(x, z)) do
+      add(level, "walls", edge)
+    end
+    if level > M.MIN_LEVEL then
+      add(level - 1, "excavation", key)
     end
   elseif layer == "floors" then
     local x, z = M.parse_cell(key)
@@ -488,7 +545,7 @@ end
 function M.check_batch(data, house, writes)
   local sim = copy(house)
   for _, w in ipairs(writes) do
-    local lvl = sim.levels[w.level + 1]
+    local lvl = M.level_table(sim, w.level)
     if lvl == nil or lvl[w.layer] == nil then
       return false, { w.level, w.layer, w.key }
     end

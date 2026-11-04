@@ -45,11 +45,20 @@ var _partner_saved_unix := -1
 ## Pulido 1: hay que volver a revisar "lo que falta" (se hace como mucho
 ## cada PROBLEMS_INTERVAL segundos, y solo en modo construir).
 var _problems_dirty := true
+## Pulido 2C: obstáculos de la parcela, servicios que llegan y entrega de compras.
+var _parcel_view: ParcelView
+var _services: Services
+var _delivery: Delivery
 var _problems_timer := 0.0
+var _neighborhood: NeighborhoodController
 const PROBLEMS_INTERVAL := 0.4
 
 
 func _ready() -> void:
+	# Pulido 2B: estilo (contorno) y volúmenes guardados en las opciones.
+	Style.set_outline(GameState.settings.get("outline_enabled", true))
+	ModelLoader.enabled = GameState.settings.get("use_models", true)
+	Sound.apply_volumes()
 	# SaveSystem ya cargó la partida antes de que exista esta escena.
 	if not GameState.camera.is_empty():
 		_camera_rig.set_state(GameState.camera)
@@ -59,9 +68,12 @@ func _ready() -> void:
 	history = UndoHistory.new(house)
 	history.remote = Economy.server_mode
 	nav = HouseNav.new(house)
+	# Pulido 2C: la parcela mide 96 x 96; el origen del mundo es su centro.
+	_house_view.position = Vector3(-HouseGrid.LOT_SIZE.x / 2.0, 0.0, -HouseGrid.LOT_SIZE.y / 2.0)
 	_house_view.setup(house)
 	_builder.setup(house, history, _house_view, _camera_rig)
 	_live.view = _house_view
+	_setup_parcel_nodes()
 	_load_character()
 
 	_autosave_timer = Timer.new()
@@ -90,6 +102,12 @@ func _ready() -> void:
 	EventBus.build_context_action_requested.connect(_builder.context_action)
 	EventBus.build_erase_multi_toggled.connect(_builder.set_erase_multi)
 	EventBus.build_copy_outline_requested.connect(_builder.copy_outline)
+	EventBus.build_add_floor_requested.connect(_builder.add_floor)
+	EventBus.build_add_basement_requested.connect(_builder.add_basement)
+	EventBus.plan_confirm_requested.connect(_builder.confirm_plan)
+	EventBus.plan_discard_requested.connect(_builder.discard_draft)
+	EventBus.camera_pitch_requested.connect(_camera_rig.set_pitch)
+	EventBus.camera_pitch_step_requested.connect(_camera_rig.step_pitch)
 	EventBus.proposal_send_requested.connect(_builder.send_draft)
 	EventBus.proposal_discard_requested.connect(_builder.discard_draft)
 	EventBus.proposal_review_requested.connect(_on_proposal_review_requested)
@@ -116,6 +134,12 @@ func _ready() -> void:
 	house.rev = Economy.house_rev
 	Economy.own_rev = -1
 
+	# Fase 8: el barrio (vista aérea, visitas, vida y metas).
+	_neighborhood = NeighborhoodController.new()
+	_neighborhood.name = "NeighborhoodController"
+	add_child(_neighborhood)
+	_neighborhood.setup(self)
+
 	set_mode("live")
 	_update_partner_character()
 	_emit_view()
@@ -123,6 +147,61 @@ func _ready() -> void:
 		$HUD.setup_house(house, _character, _builder)
 	_set_level(_character.level)  # Se empieza viendo el piso del personaje.
 	history.refresh()
+
+
+## Obstáculos, servicios y entregas (Pulido 2C): cuelgan de la casa (celdas).
+func _setup_parcel_nodes() -> void:
+	Parcel.refresh_config()
+	_parcel_view = ParcelView.new()
+	_parcel_view.name = "ParcelView"
+	_house_view.add_child(_parcel_view)
+	_services = Services.new()
+	_services.name = "Services"
+	_services.world = get_node_or_null("World") as WorldBuilder
+	_services.house = house
+	_house_view.add_child(_services)
+	_delivery = Delivery.new()
+	_delivery.name = "Delivery"
+	_house_view.add_child(_delivery)
+	_delivery.setup(house, nav, _house_view, _services)
+	_live.parcel_view = _parcel_view
+	_live.builder = _builder
+	Parcel.service_due.connect(_on_service_due)
+	EventBus.ambulance_requested.connect(func(patient: Node3D) -> void: _services.run_ambulance(patient))
+	EventBus.boxes_open_all_requested.connect(func() -> void: _character.open_all_boxes())
+	EventBus.box_tapped.connect(func(box_level: int, key: String) -> void: _character.open_box_order(box_level, key))
+	# Servicios que ya estaban en camino al abrir el juego.
+	Parcel.check_now()
+
+
+## Pasó la espera de un servicio de limpieza: llega. Si solo hace falta una
+## persona, el personaje del jugador va a abrirle la puerta; si hace falta un
+## vehículo y no hay camino libre, avisa que no puede entrar.
+func _on_service_due(id: String) -> void:
+	var def := Parcel.definition(id)
+	var obstacle := Parcel.obstacle(id)
+	if def.is_empty() or obstacle.is_empty():
+		return
+	var route := Parcel.access(id, house)
+	var needs_vehicle := str(def.get("vehicle", "")) != ""
+	if not needs_vehicle and route["ok"]:
+		_character.go_open_gate()
+		await _character.gate_opened
+	_services.run_clear(obstacle, def, route, not route["ok"])
+	var result: Dictionary = await _services.finished
+	while str(result.get("id", "")) != id:
+		result = await _services.finished
+	if result.get("blocked", false):
+		EventBus.toast.emit("El servicio no pudo entrar: %s" % str(result.get("reason", "")))
+		return
+	var done: Dictionary = await Parcel.finish(id, house)
+	if done["ok"]:
+		EventBus.toast.emit("Listo: quedó limpio (%s)." % str(def.get("name", "")).to_lower())
+		_problems_dirty = true
+	elif done["blocked"]:
+		EventBus.toast.emit("El servicio no pudo entrar: %s" % done["reason"])
+	else:
+		EventBus.toast.emit(str(done["reason"]))
 
 
 func _process(delta: float) -> void:
@@ -179,6 +258,9 @@ func set_mode(new_mode: String) -> void:
 		if _builder.draft_mode() == "own":
 			EventBus.toast.emit("Primero mandá o descartá la propuesta.")
 			return
+		if _builder.draft_mode() == "plan":
+			EventBus.toast.emit("Tenés obras previstas: tocá Factura para construirlas o descartalas.")
+			return
 		_builder.close_review()
 	mode = new_mode
 	_builder.set_active(mode == "build")
@@ -211,6 +293,12 @@ func _on_level_change_requested(delta: int) -> void:
 func _set_level(level: int) -> void:
 	var new_level := _builder.set_level(level)
 	_house_view.set_top_visible_level(new_level)
+	# Pulido 2C: en un sótano se esconde el terreno (se ve la casa "cortada").
+	var world := get_node_or_null("World")
+	if world != null:
+		world.visible = new_level >= 0
+	if _parcel_view != null:
+		_parcel_view.visible = new_level >= 0
 	# La cámara mira a la altura de ese piso (la planta baja queda igual).
 	_camera_rig.set_floor_height(new_level * HouseGrid.WALL_HEIGHT)
 	EventBus.build_level_changed.emit(new_level)
@@ -258,7 +346,7 @@ func _load_character() -> void:
 	var saved := GameState.character
 	if not saved.is_empty():
 		character_data.from_dict(saved.get("data", {}))
-		var cell_array: Array = saved.get("cell", [Character.SPAWN_CELL.x, Character.SPAWN_CELL.y])
+		var cell_array: Array = saved.get("cell", [Character.spawn_cell().x, Character.spawn_cell().y])
 		_character.level = int(saved.get("level", 0))
 		_character.cell = Vector2i(int(cell_array[0]), int(cell_array[1])) + house.migrated_offset
 		var away_seconds := Time.get_unix_time_from_system() - float(saved.get("saved_unix", 0))
@@ -442,7 +530,7 @@ func _on_home_reload_requested() -> void:
 	house.rev = Economy.house_rev
 	Couple.apply_answer(result["data"])
 	# En otra casa, el personaje entra por el frente.
-	_character.place_at(0, Character.SPAWN_CELL)
+	_character.place_at(0, Character.spawn_cell())
 	_character.reset_after_build()
 	_update_partner_character()
 	history.refresh()
@@ -473,7 +561,7 @@ func _update_partner_character() -> void:
 		partner_character.name = "PartnerCharacter"
 		partner_character.is_partner = true
 		_house_view.add_child(partner_character)
-		var cell_array: Array = saved.get("cell", [Character.SPAWN_CELL.x + 1, Character.SPAWN_CELL.y])
+		var cell_array: Array = saved.get("cell", [Character.spawn_cell().x + 1, Character.spawn_cell().y])
 		partner_character.level = int(saved.get("level", 0))
 		partner_character.cell = Vector2i(int(cell_array[0]), int(cell_array[1]))
 		partner_character.setup(partner_data, house, nav, _house_view)

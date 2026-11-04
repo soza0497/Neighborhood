@@ -14,6 +14,8 @@ extends RefCounted
 ##   objects:    "o7" → {item, cell: [x, z], rot, diag?, color?}   (muebles,
 ##               escaleras, pilares; diag = 45° más, ver HouseGrid)
 ##   roofs:      "o8" → {item, rect: [x, z, ancho, fondo], color?}
+##   excavation: "x,z" → {item}   (solo sótanos, niveles -1 a -3: la celda que se
+##               excavó; hace falta antes de los cimientos de ese sótano)
 ##
 ## TODO cambio pasa por apply(), con una lista de "escrituras":
 ##   {level, layer, key, value}   (value = null significa "quitar")
@@ -28,10 +30,17 @@ signal piece_changed(level: int, layer: String, key: String)
 ## Se reemplazó toda la casa (por ejemplo, al cargar).
 signal reloaded
 
-const LAYERS := ["foundation", "floors", "walls", "objects", "roofs"]
+const LAYERS := ["foundation", "floors", "walls", "objects", "roofs", "excavation"]
 ## Versión del formato de la casa. 3 = Pulido 1 (pintura por cara de pared y
-## unión de ventanas en la juntura). Las casas sin número son de antes.
-const FORMAT := 3
+## unión de ventanas en la juntura), 4 = Pulido 2C (parcela de 96), 5 = Pulido 3A
+## (la casa va cerca de la calle). Las casas sin número son de antes.
+const FORMAT := 5
+## Casas con formato menor a este vienen de antes del Pulido 1 (pintura y ventanas).
+const LEGACY_FORMAT := 3
+
+## Pulido 2C: celdas con un obstáculo sin limpiar ("x,z" → id). Lo pone Parcel;
+## es de todas las casas (como la parcela) y no se guarda con la casa.
+static var blocked_cells: Dictionary = {}
 
 ## levels[nivel][capa][clave] = valor
 var levels: Array = []
@@ -43,6 +52,20 @@ var rev := 0
 ## Si al cargar se movió la casa (parcela de otro tamaño), cuánto se movió.
 ## Quien guarda posiciones aparte (el personaje) debe moverse igual.
 var migrated_offset := Vector2i.ZERO
+## Pulido 2: cuántos pisos tiene la casa porque el jugador los agregó con
+## "Agregar piso" (mínimo 1). Nunca hay un piso "de regalo": ver floors_total.
+var floor_count := 1
+## Pulido 2C: cuántos sótanos agregó el jugador con «Agregar sótano» (0 a 3).
+var basement_count := 0
+## Cuántas piezas rotas se sacaron al cargar (ver repair).
+var repaired_count := 0
+## Pulido 3B: el tipo que el JUGADOR le puso a un cuarto ("nivel:x,z" de cada
+## celda del cuarto → id del tipo, por ejemplo "bedroom"). Lo asignado manda
+## sobre lo que el juego deduce por los muebles (ver HouseRooms). Se guarda con
+## la casa en el teléfono; el servidor no lo usa (no calcula nada con esto).
+var room_types: Dictionary = {}
+## Una celda ("nivel:x,z") de adentro del dormitorio PRINCIPAL ("" = ninguno).
+var main_bedroom_cell := ""
 
 
 func _init() -> void:
@@ -52,19 +75,54 @@ func _init() -> void:
 ## Deja la casa vacía.
 func clear() -> void:
 	levels = []
-	for i in HouseGrid.MAX_LEVELS:
+	for i in HouseGrid.LEVEL_COUNT:
 		var level := {}
 		for layer in LAYERS:
 			level[layer] = {}
 		levels.append(level)
 	next_id = 1
+	floor_count = 1
+	basement_count = 0
+	room_types = {}
+	main_bedroom_cell = ""
+
+
+## Piso más alto con algo construido (cualquier capa: techos y muebles
+## también cuentan). 0 si la casa está vacía.
+func used_top_level() -> int:
+	for level in range(HouseGrid.MAX_LEVELS - 1, -1, -1):
+		for layer in LAYERS:
+			if not levels[HouseGrid.level_index(level)][layer].is_empty():
+				return level
+	return 0
+
+
+## Sótano más bajo con algo construido (0 si no hay ninguno).
+func used_bottom_level() -> int:
+	for level in range(HouseGrid.MIN_LEVEL, 0):
+		for layer in LAYERS:
+			if not levels[HouseGrid.level_index(level)][layer].is_empty():
+				return level
+	return 0
+
+
+## El nivel más bajo al que se puede ir: los sótanos agregados o con algo.
+func lowest_level() -> int:
+	return -clampi(maxi(basement_count, -used_bottom_level()), 0, HouseGrid.MAX_BASEMENTS)
+
+
+## Cuántos pisos hay: los que agregó el jugador o los que tienen algo
+## construido (lo que sea más alto). Así ninguna pieza queda en un piso al
+## que no se puede ir, y no aparece un piso vacío "de regalo".
+func floors_total() -> int:
+	return clampi(maxi(floor_count, used_top_level() + 1), 1, HouseGrid.MAX_LEVELS)
 
 
 ## Devuelve la pieza (un diccionario) o null si no hay nada.
 func get_piece(level: int, layer: String, key: String) -> Variant:
-	if level < 0 or level >= levels.size():
+	if not HouseGrid.is_valid_level(level):
 		return null
-	return levels[level][layer].get(key)
+	return levels[HouseGrid.level_index(level)][layer].get(key)
 
 
 func has_piece(level: int, layer: String, key: String) -> bool:
@@ -73,9 +131,9 @@ func has_piece(level: int, layer: String, key: String) -> bool:
 
 ## Todas las piezas de una capa: clave → valor. No modificar lo que devuelve.
 func get_layer(level: int, layer: String) -> Dictionary:
-	if level < 0 or level >= levels.size():
+	if not HouseGrid.is_valid_level(level):
 		return {}
-	return levels[level][layer]
+	return levels[HouseGrid.level_index(level)][layer]
 
 
 ## Nombre nuevo para un objeto o techo.
@@ -99,10 +157,10 @@ func apply(writes: Array) -> Array:
 		var previous: Variant = get_piece(level, layer, key)
 		inverse.push_front(write(level, layer, key, previous))
 		if w["value"] == null:
-			levels[level][layer].erase(key)
+			levels[HouseGrid.level_index(level)][layer].erase(key)
 		else:
 			# Se guarda una copia para que nadie cambie los datos "por la espalda".
-			levels[level][layer][key] = (w["value"] as Dictionary).duplicate(true)
+			levels[HouseGrid.level_index(level)][layer][key] = (w["value"] as Dictionary).duplicate(true)
 		piece_changed.emit(level, layer, key)
 	return inverse
 
@@ -116,10 +174,10 @@ static func is_under_construction(value: Variant) -> bool:
 func pending_construction() -> Array:
 	var result: Array = []
 	var now := Economy.now()
-	for level in HouseGrid.MAX_LEVELS:
+	for level in HouseGrid.level_range():
 		for layer in Economy.TIMED_LAYERS:
-			for key in levels[level][layer]:
-				var ready_at := int(levels[level][layer][key].get("ready_at", 0))
+			for key in levels[HouseGrid.level_index(level)][layer]:
+				var ready_at := int(levels[HouseGrid.level_index(level)][layer][key].get("ready_at", 0))
 				if ready_at > now:
 					result.append([level, layer, key, ready_at])
 	return result
@@ -180,27 +238,86 @@ func to_dict() -> Dictionary:
 		"next_id": next_id,
 		"lot_size": [HouseGrid.LOT_SIZE.x, HouseGrid.LOT_SIZE.y],
 		"format": FORMAT,
+		"floor_count": floor_count,
+		"basement_count": basement_count,
+		"room_types": room_types.duplicate(),
+		"main_bedroom": main_bedroom_cell,
 	}
 
 
 ## Llena la casa a partir de un diccionario leído del archivo.
 func from_dict(data: Dictionary) -> void:
+	# El servidor no guarda "floor_count": si falta, se conserva lo que había.
+	var kept_floors := floor_count
+	var kept_basements := basement_count
+	# El servidor no guarda los tipos de cuarto (solo viven en el teléfono): si
+	# no vienen, se conservan los que había.
+	var kept_room_types := room_types
+	var kept_main_bedroom := main_bedroom_cell
 	clear()
+	room_types = kept_room_types
+	main_bedroom_cell = kept_main_bedroom
 	var saved_levels: Array = data.get("levels", [])
+	# Pulido 2C: las casas de antes tienen 5 niveles (0 a 4): los 3 sótanos
+	# (vacíos) van al principio de la lista.
+	if saved_levels.size() <= HouseGrid.MAX_LEVELS:
+		var padded: Array = []
+		for i in HouseGrid.MAX_BASEMENTS:
+			padded.append({})
+		padded.append_array(saved_levels)
+		saved_levels = padded
 	for i in mini(saved_levels.size(), levels.size()):
 		for layer in LAYERS:
 			levels[i][layer] = (saved_levels[i] as Dictionary).get(layer, {}).duplicate(true)
 	next_id = int(data.get("next_id", 1))
-	if int(data.get("format", 1)) < FORMAT:
+	if int(data.get("format", 1)) < LEGACY_FORMAT:
 		upgrade_legacy(levels)
 
 	# Migración: las casas guardadas antes tenían un lote de 12x12. Si la
 	# parcela cambió de tamaño, la casa se centra en la nueva.
 	var saved_lot: Array = data.get("lot_size", [12, 12])
 	migrated_offset = (HouseGrid.LOT_SIZE - Vector2i(int(saved_lot[0]), int(saved_lot[1]))) / 2
+	# Pulido 3A (formato 5): la casa de antes estaba centrada; ahora va CERCA de
+	# la calle. Se corre hacia el frente lo mismo que el servidor
+	# (rules.HOME_SHIFT_Z). Una casa ya migrada (formato 5) no se toca.
+	if int(data.get("format", 1)) < 5:
+		migrated_offset += Vector2i(0, HouseGrid.home_origin().y - (HouseGrid.LOT_SIZE.y - HouseGrid.HOME_ZONE) / 2)
 	if migrated_offset != Vector2i.ZERO:
 		_shift(migrated_offset)
+	if data.has("room_types") and data["room_types"] is Dictionary:
+		room_types = (data["room_types"] as Dictionary).duplicate()
+		main_bedroom_cell = str(data.get("main_bedroom", ""))
+	floor_count = clampi(int(data.get("floor_count", kept_floors)), 1, HouseGrid.MAX_LEVELS)
+	basement_count = clampi(int(data.get("basement_count", kept_basements)), 0, HouseGrid.MAX_BASEMENTS)
+	repaired_count = repair()
 	reloaded.emit()
+
+
+## Saca las piezas rotas que una edición vieja pudo dejar (por ejemplo un
+## techo sin medidas o fuera de la parcela, que no se podía tocar ni borrar).
+## Devuelve cuántas sacó. El servidor hace lo mismo al leer la casa
+## (neighborhood_rules.lua, normalize_house).
+func repair() -> int:
+	var removed := 0
+	for level in levels:
+		for key in level["roofs"].keys():
+			if not _roof_is_sane(level["roofs"][key]):
+				level["roofs"].erase(key)
+				removed += 1
+	return removed
+
+
+static func _roof_is_sane(value: Variant) -> bool:
+	if typeof(value) != TYPE_DICTIONARY or not value.has("rect") or typeof(value["rect"]) != TYPE_ARRAY:
+		return false
+	var r: Array = value["rect"]
+	if r.size() != 4:
+		return false
+	for n in r:
+		if typeof(n) != TYPE_FLOAT and typeof(n) != TYPE_INT:
+			return false
+	var rect := Rect2i(int(r[0]), int(r[1]), int(r[2]), int(r[3]))
+	return rect.size.x >= 1 and rect.size.y >= 1 and Rect2i(Vector2i.ZERO, HouseGrid.LOT_SIZE).encloses(rect)
 
 
 ## Casas de antes del Pulido 1 (sin "format"): la misma cuenta que
@@ -268,3 +385,17 @@ func _shift(offset: Vector2i) -> void:
 						value["rect"] = [rect.position.x + offset.x, rect.position.y + offset.y, rect.size.x, rect.size.y]
 						moved[key] = value
 			level[layer] = moved
+	# Pulido 3B: los tipos de cuarto se mueven con la casa ("nivel:x,z").
+	var moved_types := {}
+	for key in room_types:
+		moved_types[_shift_room_key(str(key), offset)] = room_types[key]
+	room_types = moved_types
+	if main_bedroom_cell != "":
+		main_bedroom_cell = _shift_room_key(main_bedroom_cell, offset)
+
+
+static func _shift_room_key(key: String, offset: Vector2i) -> String:
+	var parts := key.split(":")
+	if parts.size() != 2:
+		return key
+	return "%s:%s" % [parts[0], HouseGrid.cell_key(HouseGrid.key_to_cell(parts[1]) + offset)]

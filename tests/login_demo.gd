@@ -48,6 +48,19 @@ func _run() -> void:
 	login.get_node("%PasswordEdit").text = "demo-clave-123"
 	await _shot("login_1_formulario.png")
 	login.get_node("%RegisterButton").pressed.emit()
+	# Pulido 3B: la primera vez se pide crear el personaje antes de entrar.
+	var found: Array = []
+	await _wait_until(func() -> bool:
+		var button := login.find_child("DoneButton", true, false) as Button
+		if button != null and button.is_visible_in_tree():
+			found.append(button)
+		return not found.is_empty())
+	var done: Button = found[0] if not found.is_empty() else null
+	_check(done != null, "al crear la cuenta pide crear el personaje")
+	if done != null:
+		await _frames(10)
+		await _shot("login_1b_crear_personaje.png")
+		done.pressed.emit()
 	var main := await _wait_for_main()
 	_check(main != null, "se creó la cuenta y se abrió el juego")
 	if main != null:
@@ -58,7 +71,7 @@ func _run() -> void:
 		await _build_with_server(main)
 
 	print("2) Abrir otra vez: entra solo")
-	var built: Dictionary = main.house.to_dict()["levels"][0]["foundation"] if main != null else {}
+	var built: Dictionary = main.house.to_dict()["levels"][3]["foundation"] if main != null else {}
 	GameState.house = {}  # Como si el teléfono hubiera perdido la casa.
 	login = await _open_login()
 	await _frames(2)
@@ -140,6 +153,7 @@ func _wait_until(condition: Callable, seconds := 15.0) -> bool:
 func _build_with_server(main: Node) -> void:
 	print("1b) Construir con el servidor")
 	var builder: HouseBuilder = main.get_node("House/Builder")
+	builder.plan_enabled = false
 	var camera := get_viewport().get_camera_3d()
 	var to_screen := func(cell: Vector2) -> Vector2:
 		return camera.unproject_position(main.get_node("House").to_global(Vector3(cell.x, 0.3, cell.y)))
@@ -149,16 +163,17 @@ func _build_with_server(main: Node) -> void:
 	_check(main.mode == "build", "con conexión se puede construir")
 	# Un rincón de la parcela (lejos de la casa de las otras demos). Se cuentan
 	# las celdas que estaban libres: esas son las que se cobran.
+	var o := HouseGrid.home_origin()  # Pulido 2C: la parcela es de 96; se construye en la zona del centro.
 	var free := 0
-	for x in range(24, 28):
-		for z in range(2, 5):
+	for x in range(24 + o.x, 28 + o.x):
+		for z in range(2 + o.y, 5 + o.y):
 			if not main.house.has_piece(0, "foundation", "%d,%d" % [x, z]):
 				free += 1
 	var before: int = main.house.get_layer(0, "foundation").size()
 	var money := Economy.money
 	EventBus.build_item_selected.emit("foundation_basic")
-	builder._begin(to_screen.call(Vector2(24.5, 2.5)))
-	builder._update(to_screen.call(Vector2(27.5, 4.5)))
+	builder._begin(to_screen.call(Vector2(24.5 + o.x, 2.5 + o.y)))
+	builder._update(to_screen.call(Vector2(27.5 + o.x, 4.5 + o.y)))
 	builder._release()
 	builder.confirm_pending()
 	_check(free == 0 or Economy.busy, "esperando la respuesta del servidor (botones apagados)")

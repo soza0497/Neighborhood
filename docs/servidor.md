@@ -274,6 +274,25 @@ no cobra) y, viviendo juntos, cerrar el restaurante pide permiso. Guarda
 capturas `restaurante_*.png`. Tiene que terminar con
 `DEMO RESTAURANTE: N pasaron, 0 fallaron`.
 
+```bash
+godot --headless --path . res://tests/parcel_server_demo.tscn
+```
+
+La del **Pulido 2C**: la parcela de 96 × 96 contra el servidor. Una casa vieja
+(parcela de 32) queda en el centro, el servidor genera los mismos obstáculos que
+el teléfono, **no deja construir encima de un obstáculo**, y llamar al servicio de
+limpieza **cobra el servidor** y tiene espera real (~25 s): terminar antes de
+tiempo se rechaza, al pasar la espera limpia y da experiencia, y el lugar queda libre
+para construir. Tiene que terminar con `DEMO PARCELA EN EL SERVIDOR: N pasaron, 0 fallaron`.
+
+**RPC de la parcela (Pulido 2C):** `parcel_load` (semilla, obstáculos limpiados y servicios
+en camino), `parcel_clear_start` (llamar al servicio: valida el acceso, **cobra** y guarda
+la hora de llegada) y `parcel_clear_finish` (pasó la espera: revisa el acceso, limpia y da
+experiencia; si el vehículo no puede entrar, responde `blocked` y el servicio sigue en
+camino). Lo guardado va en `game/home.parcel`. Los precios, tiempos y la cantidad de cada
+obstáculo están en `data/parcel.json` (**reiniciá Nakama si lo cambiás**). La **caja del
+restaurante** (Pulido 2B) se cobra sola: al entrar (`work_settle`) y con `game_heartbeat`.
+
 Ninguna de estas demos toca tu partida (la apartan y la devuelven).
 
 Las cuentas demo quedan en el servidor: se pueden borrar desde la consola.
@@ -304,3 +323,17 @@ fish: `env NEIGHBORHOOD_SERVER=http://127.0.0.1:7350 godot --headless --path . r
 | La pareja no aparece "en línea" | Los dos tienen que estar en pareja y con el juego abierto y conectado. Si el teléfono estuvo en segundo plano, vuelve a conectarse solo en unos segundos |
 | Un cambio de la pareja no aparece | Llega por el WebSocket; si se cortó, el juego se pone al día solo al reconectar. Abrir Menú → Casa también vuelve a preguntar |
 | Olvidaste la contraseña de una cuenta | Por ahora no hay "recuperar contraseña". No borres la cuenta (se pierde su partida del servidor): pedile a Claude que la cambie desde el servidor |
+
+
+## Meta del barrio (Fase 8D)
+
+Módulo `neighborhood_goals.lua` (reglas puras, sin Nakama; se prueba con `lua5.1 server/tests/test_goals.lua`) y dos RPC
+en `neighborhood.lua`:
+- `goal_load`: el servidor cuenta las plantas **terminadas** de TU casa (categorías de `data/neighborhood.json` →
+  `goal.categories`), acredita hasta `daily_cap` por día (lo que sobra cuenta al día siguiente; lo acreditado nunca baja,
+  así sacar y volver a poner una planta no suma dos veces) y devuelve la meta: aporte propio, vecinos simulados
+  (determinista según los días desde que empezaste, máximo el 60 % de la meta) y total. Si vivís en la casa de tu pareja,
+  esas plantas no cuentan para vos.
+- `goal_claim`: retira la recompensa (una vez, solo con la meta cumplida y con aporte propio): `reward.money` y `reward.xp`.
+Se guarda en `game/goal` (solo el servidor escribe). Sin fecha límite y sin castigo por no jugar. Después de actualizar:
+`docker compose restart nakama` (lee `neighborhood.json` de `data/`).

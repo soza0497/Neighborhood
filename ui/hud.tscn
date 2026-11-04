@@ -48,7 +48,12 @@ content_margin_right = 14.0
 content_margin_bottom = 6.0
 
 [sub_resource type="StyleBoxFlat" id="Style_map"]
-bg_color = Color(0.13, 0.17, 0.25, 0.35)
+bg_color = Color(0.04, 0.16, 0.32, 0.5)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.4, 0.8, 1, 0.45)
 corner_radius_top_left = 18
 corner_radius_top_right = 18
 corner_radius_bottom_right = 18
@@ -72,9 +77,9 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 12
+theme_override_constants/margin_top = 34
 theme_override_constants/margin_right = 16
-theme_override_constants/margin_bottom = 12
+theme_override_constants/margin_bottom = 22
 
 [node name="Layout" type="VBoxContainer" parent="Root"]
 layout_mode = 2
@@ -259,9 +264,9 @@ theme_override_styles/panel = SubResource("Style_map")
 
 [node name="FloorMap" type="SubViewportContainer" parent="Root/Layout/Middle/LeftColumn/MapPanel"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(150, 190)
+custom_minimum_size = Vector2(176, 190)
 layout_mode = 2
-tooltip_text = "Pisos: tocá uno para ir"
+tooltip_text = "Frente de la casa: tocá un piso para ir"
 script = ExtResource("9_map")
 
 [node name="LevelLabel" type="Label" parent="Root/Layout/Middle/LeftColumn"]
@@ -381,7 +386,7 @@ layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 0
 mouse_filter = 2
-theme_override_constants/margin_top = 130
+theme_override_constants/margin_top = 152
 
 [node name="ToastLabel" type="Label" parent="Root/ToastBox"]
 unique_name_in_owner = true
@@ -398,7 +403,7 @@ visible = false
 layout_mode = 2
 size_flags_horizontal = 8
 size_flags_vertical = 0
-theme_override_constants/margin_top = 76
+theme_override_constants/margin_top = 98
 
 [node name="NoticePanel" type="PanelContainer" parent="Root/NoticeBox"]
 layout_mode = 2
@@ -441,7 +446,7 @@ size_flags_horizontal = 0
 size_flags_vertical = 0
 mouse_filter = 2
 theme_override_constants/margin_left = 200
-theme_override_constants/margin_top = 76
+theme_override_constants/margin_top = 98
 
 [node name="Panel" type="PanelContainer" parent="Root/MoodCard"]
 custom_minimum_size = Vector2(400, 0)
@@ -593,6 +598,14 @@ custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 19
 text = "Casa"
+alignment = 0
+
+[node name="NeighborhoodButton" type="Button" parent="Root/SideMenu/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 19
+text = "Barrio"
 alignment = 0
 
 [node name="InfoButton" type="Button" parent="Root/SideMenu/Rows"]

@@ -11,6 +11,7 @@ var _log: Array[String] = []
 
 
 func _ready() -> void:
+	HouseGrid.use_test_lot()  # Estas pruebas arman casas en un lote de 32 (la parcela real, desde el Pulido 2C, es de 96).
 	_shot_dir = OS.get_environment("SHOT_DIR")
 	if _shot_dir == "":
 		_shot_dir = OS.get_user_data_dir()

@@ -18,6 +18,7 @@ const O := Vector2(10, 10)
 
 
 func _ready() -> void:
+	HouseGrid.use_test_lot()  # Estas pruebas arman casas en un lote de 32 (la parcela real, desde el Pulido 2C, es de 96).
 	_shot_dir = OS.get_environment("SHOT_DIR")
 	if _shot_dir == "":
 		_shot_dir = OS.get_user_data_dir()
@@ -25,6 +26,7 @@ func _ready() -> void:
 	add_child(_main)
 	Economy.debug_unlock_all()  # Sin límites de dinero ni de nivel.
 	_builder = _main.get_node("House/Builder")
+	_builder.plan_enabled = false  # Estas pruebas construyen de una (sin plan ni factura).
 	_house = _main.get_node("House")
 	_camera = get_viewport().get_camera_3d()
 	_run.call_deferred()

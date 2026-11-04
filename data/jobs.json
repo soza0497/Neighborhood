@@ -4,6 +4,8 @@
 	"jobs": [
 		{ "id": "courier", "name": "Repartidor", "description": "Entrega paquetes por el barrio.", "level": 1, "pay_per_hour": 30, "start_hour": 9, "shift_hours": 4, "resume_minutes": 5, "xp_per_shift": 20 },
 		{ "id": "cashier", "name": "Cajero", "description": "Atiende la caja de una tienda.", "level": 2, "pay_per_hour": 45, "start_hour": 10, "shift_hours": 6, "resume_minutes": 10, "xp_per_shift": 40 },
+		{ "id": "waiter", "name": "Mesero en un restaurante", "description": "Atiende mesas en un restaurante de la ciudad. No hace falta tener uno propio.", "level": 2, "pay_per_hour": 40, "start_hour": 12, "shift_hours": 5, "resume_minutes": 8, "xp_per_shift": 35 },
+		{ "id": "restaurant_cook", "name": "Cocinero en un restaurante", "description": "Cocina en un restaurante de la ciudad. No hace falta tener uno propio.", "level": 3, "pay_per_hour": 60, "start_hour": 11, "shift_hours": 6, "resume_minutes": 20, "xp_per_shift": 60 },
 		{ "id": "office", "name": "Oficinista", "description": "Trabajo de escritorio, con buen sueldo.", "level": 3, "pay_per_hour": 70, "start_hour": 8, "shift_hours": 8, "resume_minutes": 30, "xp_per_shift": 80 }
 	]
 }

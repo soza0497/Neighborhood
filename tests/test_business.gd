@@ -15,6 +15,7 @@ var _svc: Dictionary
 
 
 func _ready() -> void:
+	HouseGrid.use_test_lot()  # Estas pruebas arman casas en un lote de 32 (la parcela real, desde el Pulido 2C, es de 96).
 	_svc = RestaurantSim.normalize_service(Catalog.business["restaurant"]["service"])
 	_test_data()
 	_test_random()

@@ -87,9 +87,9 @@ func _setup_players() -> void:
 	_check(result["ok"], "crear la cuenta de A")
 	# La casa de A: cimientos y piso de 10 x 10, y un sofá.
 	var local_a := {
-		"house": {"levels": [{"foundation": _cells(0, 0, 10, 10, "foundation_basic"),
-			"floors": _cells(0, 0, 10, 10, "floor_basic"),
-			"objects": {"o1": {"item": "sofa_basic", "cell": [2, 2], "rot": 0}}}], "next_id": 2},
+		"house": {"levels": [{"foundation": _cells(32, 32, 10, 10, "foundation_basic"),
+			"floors": _cells(32, 32, 10, 10, "floor_basic"),
+			"objects": {"o1": {"item": "sofa_basic", "cell": [34, 34], "rot": 0}}}], "next_id": 2},
 		"economy": {"xp": 2000, "discovered": ["foundation_basic", "floor_basic", "sofa_basic"]},
 	}
 	result = await GameServer.load_game(local_a)
@@ -115,7 +115,7 @@ func _setup_players() -> void:
 	_b.start()
 	result = await _b.register(_user_b, PASSWORD)
 	_check(result["ok"], "crear la cuenta de B")
-	var local_b := {"house": {"levels": [{"foundation": _cells(20, 20, 3, 3, "foundation_basic")}], "next_id": 1},
+	var local_b := {"house": {"levels": [{"foundation": _cells(52, 52, 3, 3, "foundation_basic")}], "next_id": 1},
 		"economy": {"xp": 2000}}
 	result = await _b.load_game(local_b)
 	_check(result["ok"] and _b.user_id() != GameServer.user_id(), "B entra con su propia casa")
@@ -192,15 +192,15 @@ func _test_minor_changes() -> void:
 	print("\n4) Cambios menores: al instante, con aviso y \"Deshacer\"")
 	_a_notices.clear()
 	var result: Dictionary = await _b.call_rpc("build_apply", {"writes": [
-		HouseData.write(0, "objects", "o1", {"item": "sofa_basic", "cell": [5, 5], "rot": 1})]})
+		HouseData.write(0, "objects", "o1", {"item": "sofa_basic", "cell": [37, 37], "rot": 1})]})
 	_check(result["data"].get("ok", false) and not result["data"].get("requested", false), "B mueve el sofá: al instante (sin permiso)")
-	_check(await _wait_until(func() -> bool: return _cell_of("o1") == Vector2i(5, 5)),
+	_check(await _wait_until(func() -> bool: return _cell_of("o1") == Vector2i(37, 37)),
 		"en la pantalla de A el sofá se movió solo (la casa se puso al día)")
 	_check(await _wait_until(func() -> bool: return not _a_notices.is_empty()) and _a_notices[0]["text"].contains("movió")
 		and _a_notices[0]["entry"] > 0, "a A le aparece el aviso: \"%s\" con Deshacer" % (_a_notices[0]["text"] if not _a_notices.is_empty() else ""))
 	var b_money := int((await _b.call_rpc("game_load", {}))["data"]["money"])
 	result = await _b.call_rpc("build_apply", {"writes": [
-		HouseData.write(0, "objects", "o50", {"item": "chair_basic", "cell": [8, 8], "rot": 0})]})
+		HouseData.write(0, "objects", "o50", {"item": "chair_basic", "cell": [40, 40], "rot": 0})]})
 	_check(result["data"].get("ok", false) and int(result["data"]["state"]["money"]) == b_money - 40,
 		"B pone una silla: le cobra a B ($40, la caja está vacía)")
 	_check(await _wait_until(func() -> bool: return _main.house.get_piece(0, "objects", "o50") != null), "A ve la silla")
@@ -220,45 +220,45 @@ func _test_minor_changes() -> void:
 
 func _test_structural_changes() -> void:
 	print("\n5) Cambios estructurales: piden aprobación")
-	var walls := [HouseData.write(0, "walls", "h:0,0", {"item": "wall_basic"}),
-		HouseData.write(0, "walls", "h:1,0", {"item": "wall_basic"})]
+	var walls := [HouseData.write(0, "walls", "h:32,32", {"item": "wall_basic"}),
+		HouseData.write(0, "walls", "h:33,32", {"item": "wall_basic"})]
 	var result: Dictionary = await _b.call_rpc("build_apply", {"writes": walls})
 	_check(result["data"].get("ok", false) and result["data"].get("requested", false), "B levanta 2 paredes: queda como pedido")
 	_check(await _wait_until(func() -> bool: return Couple.home["requests"].size() == 1), "A ve el pedido: \"%s\"" %
 		(Couple.home["requests"][0]["text"] if not Couple.home["requests"].is_empty() else ""))
-	_check(_main.house.get_piece(0, "walls", "h:0,0") == null, "todavía no está construido")
+	_check(_main.house.get_piece(0, "walls", "h:32,32") == null, "todavía no está construido")
 	var b_money := int((await _b.call_rpc("game_load", {}))["data"]["money"])
 	result = await Couple.answer_request(Couple.home["requests"][0]["id"], true)
 	_check(result["ok"], "A aprueba")
-	_check(await _wait_until(func() -> bool: return _main.house.get_piece(0, "walls", "h:0,0") != null), "las paredes aparecen en la casa de A")
+	_check(await _wait_until(func() -> bool: return _main.house.get_piece(0, "walls", "h:32,32") != null), "las paredes aparecen en la casa de A")
 	result = await _b.call_rpc("game_load", {})
 	_check(int(result["data"]["money"]) == b_money - 40 and result["data"].get("can_undo", false),
 		"lo pagó B ($40) y le queda en su Deshacer")
 	_b_notes.clear()
-	result = await _b.call_rpc("build_apply", {"writes": [HouseData.write(0, "walls", "h:2,0", {"item": "wall_basic"})]})
+	result = await _b.call_rpc("build_apply", {"writes": [HouseData.write(0, "walls", "h:34,32", {"item": "wall_basic"})]})
 	await _wait_until(func() -> bool: return Couple.home["requests"].size() == 1)
 	result = await Couple.answer_request(Couple.home["requests"][0]["id"], false)
-	_check(result["ok"] and Couple.home["requests"].is_empty() and _main.house.get_piece(0, "walls", "h:2,0") == null,
+	_check(result["ok"] and Couple.home["requests"].is_empty() and _main.house.get_piece(0, "walls", "h:34,32") == null,
 		"A rechaza otro pedido: no se construye")
 	_check(await _wait_until(func() -> bool: return _b_has_note(104)), "a B le avisan que no se aprobó")
-	result = await _b.call_rpc("build_apply", {"writes": [HouseData.write(0, "walls", "h:20,1", {"item": "wall_basic"})]})
+	result = await _b.call_rpc("build_apply", {"writes": [HouseData.write(0, "walls", "h:52,33", {"item": "wall_basic"})]})
 	_check(not result["data"].get("ok", true) and str(result["data"].get("error", "")).contains("apoyarse"),
 		"una pared en el aire: el servidor la rechaza (reglas de apoyo)")
 	# Pulido 1: A arma una PROPUESTA con varios cambios y la manda entera.
 	var builder: HouseBuilder = _main.get_node("House/Builder")
 	_main.set_mode("build")
-	var asked: bool = await builder._apply([HouseData.write(0, "walls", "v:0,0", {"item": "wall_basic"})])
-	await builder._apply([HouseData.write(0, "walls", "v:0,1", {"item": "wall_basic"})])
+	var asked: bool = await builder._apply([HouseData.write(0, "walls", "v:32,32", {"item": "wall_basic"})])
+	await builder._apply([HouseData.write(0, "walls", "v:32,33", {"item": "wall_basic"})])
 	_check(asked and builder.draft_mode() == "own" and builder.draft_writes().size() == 2
-		and _main.house.get_piece(0, "walls", "v:0,0") != null, "A arma una propuesta de 2 cambios (se ven en su casa)")
+		and _main.house.get_piece(0, "walls", "v:32,32") != null, "A arma una propuesta de 2 cambios (se ven en su casa)")
 	_check(Couple.home["requests"].is_empty(), "todavía no se mandó nada")
 	_main._on_game_saving()
-	_check(not GameState.house["levels"][0]["walls"].has("v:0,0"), "la propuesta no se guarda como si estuviera construida")
+	_check(not GameState.house["levels"][3]["walls"].has("v:32,32"), "la propuesta no se guarda como si estuviera construida")
 	_check(await builder.send_draft(), "A manda la propuesta")
 	await _wait_until(func() -> bool: return not Economy.busy)
 	await Couple.refresh()
 	_check(Couple.home["requests"].size() == 1 and Couple.home["requests"][0]["by_me"]
-		and str(Couple.home["requests"][0]["text"]).contains("x2") and _main.house.get_piece(0, "walls", "v:0,0") == null,
+		and str(Couple.home["requests"][0]["text"]).contains("x2") and _main.house.get_piece(0, "walls", "v:32,32") == null,
 		"un solo pedido con todo (\"%s\"); en la casa todavía no está" % (Couple.home["requests"][0]["text"] if not Couple.home["requests"].is_empty() else ""))
 	result = await _b.call_rpc("couple_load", {})
 	var pending: Array = CoupleState.normalize_home(result["data"]["home"])["requests"]
@@ -268,17 +268,17 @@ func _test_structural_changes() -> void:
 	_check(result["data"].get("ok", false) and preview is Array and preview.size() == 2,
 		"B la puede previsualizar entera (2 piezas)")
 	result = await _b.call_rpc("home_answer", {"id": pending[0]["id"], "approve": true})
-	var both_built := func() -> bool: return _main.house.get_piece(0, "walls", "v:0,0") != null and _main.house.get_piece(0, "walls", "v:0,1") != null
+	var both_built := func() -> bool: return _main.house.get_piece(0, "walls", "v:32,32") != null and _main.house.get_piece(0, "walls", "v:32,33") != null
 	_check(result["data"].get("ok", false) and await _wait_until(both_built), "B la aprueba entera: aparece en la pantalla de A")
 
 	# Y al revés: B propone, A la ve en su casa y la aprueba desde la barra.
-	result = await _b.call_rpc("build_apply", {"writes": [HouseData.write(0, "walls", "h:3,0", {"item": "wall_basic"})]})
+	result = await _b.call_rpc("build_apply", {"writes": [HouseData.write(0, "walls", "h:35,32", {"item": "wall_basic"})]})
 	_check(await _wait_until(func() -> bool: return Couple.home["requests"].size() == 1), "B propone otra pared")
 	EventBus.proposal_review_requested.emit(Couple.home["requests"][0]["id"])
 	_check(await _wait_until(func() -> bool: return builder.draft_mode() == "review"), "A la previsualiza en su casa")
-	_check(_main.house.get_piece(0, "walls", "h:3,0") != null, "se ve la pared propuesta")
+	_check(_main.house.get_piece(0, "walls", "h:35,32") != null, "se ve la pared propuesta")
 	EventBus.proposal_answer_requested.emit(true)
-	var approved := func() -> bool: return not builder.has_draft() and Couple.home["requests"].is_empty() and _main.house.get_piece(0, "walls", "h:3,0") != null
+	var approved := func() -> bool: return not builder.has_draft() and Couple.home["requests"].is_empty() and _main.house.get_piece(0, "walls", "h:35,32") != null
 	_check(await _wait_until(approved, 10.0), "A la aprueba: queda construida")
 	_main.set_mode("live")
 
@@ -293,7 +293,7 @@ func _test_fund() -> void:
 	_check(await _wait_until(func() -> bool: return Economy.fund == 500), "A ve la caja: $%d" % Economy.fund)
 	var a_money := Economy.money
 	var ok: bool = await _main.get_node("House/Builder")._apply([HouseData.write(0, "objects", _main.house.new_id(),
-		{"item": "tv_basic", "cell": [0, 9], "rot": 0})])
+		{"item": "tv_basic", "cell": [32, 41], "rot": 0})])
 	_check(ok and Economy.fund == 100 and Economy.money == a_money, "A pone una tele ($400): sale de la caja, no de su billetera")
 	result = await Couple.contribute(99999999)
 	_check(not result["ok"], "no se puede aportar más de lo que se tiene")
@@ -316,13 +316,13 @@ func _test_conflicts() -> void:
 	var move := func(client: Node, cell: Array) -> void:
 		answers.append(await client.call_rpc("build_apply", {"writes": [
 			HouseData.write(0, "objects", "o1", {"item": "sofa_basic", "cell": cell, "rot": 0})]}))
-	move.call(GameServer, [1, 6])
-	move.call(_b, [6, 1])
+	move.call(GameServer, [33, 38])
+	move.call(_b, [38, 33])
 	await _wait_until(func() -> bool: return answers.size() == 2)
 	_check(answers.all(func(a: Dictionary) -> bool: return a["data"].get("ok", false)), "los dos mueven el mismo sofá a la vez: los dos se aceptan")
 	var server := _house_of((await _b.call_rpc("home_load", {}))["data"]["house"])
 	var final_cell := HouseData.object_anchor(server.get_piece(0, "objects", "o1"))
-	_check(final_cell in [Vector2i(1, 6), Vector2i(6, 1)], "queda donde lo dejó el último (%s)" % final_cell)
+	_check(final_cell in [Vector2i(33, 38), Vector2i(38, 33)], "queda donde lo dejó el último (%s)" % final_cell)
 	_main.call("_on_home_remote_changed", {"rev": Economy.house_rev + 100})
 	_check(await _wait_until(func() -> bool: return _cell_of("o1") == final_cell), "A queda igual que el servidor")
 
@@ -330,8 +330,8 @@ func _test_conflicts() -> void:
 	var build := func(client: Node, key: String, cell: Array) -> void:
 		answers.append(await client.call_rpc("build_apply", {"writes": [
 			HouseData.write(0, "objects", key, {"item": "chair_basic", "cell": cell, "rot": 0})]}))
-	build.call(GameServer, "o60", [3, 8])
-	build.call(_b, "o61", [4, 8])
+	build.call(GameServer, "o60", [35, 40])
+	build.call(_b, "o61", [36, 40])
 	await _wait_until(func() -> bool: return answers.size() == 2)
 	server = _house_of((await _b.call_rpc("home_load", {}))["data"]["house"])
 	_check(server.get_piece(0, "objects", "o60") != null and server.get_piece(0, "objects", "o61") != null,
@@ -339,13 +339,13 @@ func _test_conflicts() -> void:
 
 	# A pone una biblioteca; B la mueve; el Deshacer de A no pisa lo de B.
 	await _main.get_node("House/Builder")._apply([HouseData.write(0, "objects", "o70",
-		{"item": "bookshelf_basic", "cell": [7, 3], "rot": 0})])
+		{"item": "bookshelf_basic", "cell": [39, 35], "rot": 0})])
 	await _b.call_rpc("build_apply", {"writes": [HouseData.write(0, "objects", "o70",
-		{"item": "bookshelf_basic", "cell": [7, 4], "rot": 0})]})
+		{"item": "bookshelf_basic", "cell": [39, 36], "rot": 0})]})
 	var undo: Dictionary = await Economy.request("build_undo")
 	_check(undo["ok"] and undo["data"].get("skipped", false), "A deshace la biblioteca que B movió: se descarta (\"%s\")" % undo["data"].get("message", ""))
 	server = _house_of((await _b.call_rpc("home_load", {}))["data"]["house"])
-	_check(server.get_piece(0, "objects", "o70") != null and HouseData.object_anchor(server.get_piece(0, "objects", "o70")) == Vector2i(7, 4),
+	_check(server.get_piece(0, "objects", "o70") != null and HouseData.object_anchor(server.get_piece(0, "objects", "o70")) == Vector2i(39, 36),
 		"la biblioteca sigue donde la dejó B")
 	await Couple.refresh()
 	var log: Array = Couple.home["log"]
@@ -378,7 +378,7 @@ func _test_separation() -> void:
 	_check(await _wait_until(func() -> bool: return not Couple.in_couple()), "A se entera solo")
 	result = await _b.call_rpc("game_load", {})
 	var b_house := _house_of(result["data"]["house"])
-	_check(b_house.get_layer(0, "foundation").has("20,20") and b_house.get_piece(0, "objects", "o1") == null,
+	_check(b_house.get_layer(0, "foundation").has("52,52") and b_house.get_piece(0, "objects", "o1") == null,
 		"B vuelve a su propia casa (que quedó guardada)")
 	_check(int(result["data"]["money"]) == b_money + fund / 2, "B se lleva la mitad de la caja ($%d)" % (fund / 2))
 	await _wait_until(func() -> bool: return not Economy.busy)

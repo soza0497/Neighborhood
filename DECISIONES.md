@@ -797,3 +797,473 @@ demo con capturas).
   para el teléfono); panel `ui/restaurant_panel.gd` (Menú → Restaurante).
 - `tests/restaurant_bot.gd`: jugador automático **solo para pruebas y demos**.
 - **Versión 0.8.0.**
+
+
+## Pulido 2A — errores y claridad (2026-11-04, nube, rama `pulido-2`)
+
+Decisiones menores tomadas por el desarrollador (el dueño no las pidió una por una):
+
+### Techos y pisos
+- **Causa real del techo "trabado"**: el selector de pisos ofrecía solo "lo
+  construido + 1", y un techo (o un mueble) en un piso más alto quedaba en un
+  piso al que no se podía ir; además un techo roto (sin medidas o fuera de la
+  parcela) no se podía tocar. Arreglo: **todo piso que tiene algo (en cualquier
+  capa, incluidos techos) existe** (`HouseData.floors_total`), y **al cargar se
+  sacan los techos rotos** (`HouseData.repair`, y lo mismo en el servidor,
+  `rules.repair_house`). Prueba que lo reproduce: `test_house.gd`
+  `_test_pulido2_roofs_and_floors` y la demo `polish2a_demo` (techo en el piso 3).
+- Los techos del piso de abajo también se pueden tocar desde el piso actual
+  (se ven desde ahí).
+- **No hay piso "de regalo"**: la cantidad de pisos = el más alto con algo, o
+  los que se agregan con **Agregar piso** (Obra). `floor_count` se guarda en
+  la casa del teléfono; el servidor no lo guarda (un piso agregado y vacío se
+  pierde al recargar desde el servidor: no pasa nada, no tiene nada).
+- **Agregar piso** pide algo construido en el piso de arriba y una parte sin
+  techo (el techo no sostiene nada). Mensajes en `HouseRules.add_floor_problem`.
+
+### Basurero
+- **Borra TODO** (techo, pared, cimiento, piso, mueble). Si algo se apoyaba solo
+  en la pieza, se borra **con ella en cascada** (`HouseRules.removal_closure`):
+  la pregunta lo dice ("¿Borrar la pared y 1 pieza que se apoya?"), todo se ve
+  en rojo y hay que confirmar. Ya no hay "no se puede borrar, tiene algo
+  encima". El servidor no cambia: ya revisa el pedido entero (`check_batch`).
+  Mover con las flechas sigue sin permitir lo que deja algo en el aire.
+
+### Interfaz
+- **Obra** tiene tres modos con ícono: **Construir** (llave y martillo),
+  **Modificar** (cruz de flechas) y **Borrar** (basurero). "Borrar" ya no es una
+  herramienta aparte de la barra. **Agregar piso** es un botón al lado de los modos.
+- **Menú hamburguesa**: el mismo botón lo abre y lo cierra, y tocar afuera lo cierra
+  (comparte el velo transparente de la tarjeta del ánimo).
+- **Márgenes**: arriba 34 px, abajo 22 px (en el menú de construir se siente
+  un poco menos); los costados siguen en 16.
+- **Cámara**: 5 inclinaciones (`CameraRig.PITCH_PRESETS`: de frente −8°, baja
+  −25°, normal −50° [la de antes], alta −70°, desde arriba −89°). Un botón
+  (ícono de ángulo, a la izquierda) las recorre; se guarda con la cámara.
+- **Selector de pisos de frente** (`ui/floor_map.gd`, reemplaza la maqueta
+  vista desde arriba): holograma azul semitransparente, solo paredes de afuera
+  con puerta y ventanas dibujadas (las que miran hacia la cámara), techo, un color
+  por piso, punto parpadeante del personaje, flechas arriba/abajo y botones para
+  girar de a 45° (8 ángulos; se recuerda en `settings.floor_front_angle`).
+  Colores, grosor y alto se cambian en las constantes de la clase.
+
+### Construcción planificada y factura
+- En **Construir/Tienda**, lo que se agrega **no se paga ni se pone de una**: queda
+  como **plan** (se ve tal cual, un poco transparente, y **brilla 0,8 s cada
+  3 s**). Aparece arriba "Obra prevista: N pasos · $X" con **Factura** y
+  **Descartar**; Deshacer saca el último paso del plan.
+- **Factura** = lista agrupada por pieza, total y espera. **Confirmar** quita lo
+  previsto y construye de verdad con el flujo de siempre (cobra, temporizador,
+  y en pareja pide la aprobación de la Fase 5). Si falta plata o no hay conexión,
+  el plan queda como estaba.
+- Mover, pintar y borrar siguen siendo inmediatos (no son "agregar"). No se puede
+  pasar a Vivir con un plan abierto (hay que confirmar o descartar).
+- En casa compartida, un cambio estructural convierte el plan en la
+  **propuesta** de siempre (misma barra, misma aprobación).
+- `HouseBuilder.plan_enabled` lo apaga (las demos viejas construyen de una).
+- La **entrega con camión** de lo comprado va en 2C.
+
+### Técnica
+- Íconos nuevos en `assets/icons/` (build_tools, move, add_floor, invoice,
+  camera_angle, truck, sound). Señales nuevas en `EventBus`.
+- Versión **0.9.0** (`project.godot` y `export_presets.cfg`, código 9).
+
+
+## Pulido 2B — estilo y vida (2026-11-04, nube, rama `pulido-2`)
+
+### Estilo toon con contorno (`data/style.json`, autoload `Style`)
+- **Contorno por geometría invertida** (`assets/shaders/outline.gdshader`): la
+  malla se dibuja otra vez, con las caras al revés y empujada hacia afuera, como
+  segunda pasada (`next_pass`) de cada material. **El grosor es en píxeles**
+  (2,2 px) y la dirección mezcla la normal con la dirección desde el centro de
+  la malla, así las cajas (casi todo el juego) no se abren en las esquinas. Se
+  aleja 4 cm de la cámara para no «pelear» con la cara de adelante.
+- **Sombras duras en 3 tonos** (`toon.gdshader`, función `light()`): tonos
+  0,5 / 0,78 / 1,0 y cortes en 0,28 y 0,7. **Luz alegre**: sol cálido
+  (`#fff4dc`, energía 0,45 del toon + ambiente 0,3: con el shader toon la luz se
+  suma distinto que en el material normal; los números de `style.json` ya están
+  calibrados).
+- **Todo pasa por `Style.toon_material(color)`** (un material por color, compartido):
+  casa, muebles, personaje (`CharacterLook` ya usaba `HousePieces.material`),
+  vecinos, bosque, autos. **El suelo, la calle y la acera van sin contorno** (planos
+  grandes). Fantasmas, rojo de problemas, obra naranja y vidrios siguen con
+  materiales transparentes simples (son estados temporales).
+- **Parámetros editables**: `data/style.json` (contorno, tonos, luz, niebla,
+  paleta) y los dos `.gdshader`. Una paleta fija con nombre (`Style.color("ground")`).
+- **Apagar el contorno** (calidad): Menú → Info → «Contorno (calidad)»; se guarda en
+  `settings.outline_enabled`. Apagarlo saca la pasada de todos los materiales.
+- **`docs/estilo.md`** empezada: idea, dónde se cambia cada cosa, paleta y
+  convenciones de importación de modelos.
+- El selector de pisos (holograma azul) y la interfaz no usan el shader toon.
+
+### Preparar el cambio de arte (modelos `.glb` intercambiables)
+- Una pieza del catálogo puede tener `model` (ruta a un `.glb` o escena),
+  `model_scale`, `model_offset`, `model_rotation` y `model_keep_materials`.
+  Si el archivo **no existe, se usan las figuras de siempre** (nunca se rompe).
+  El modelo se pasa solo al estilo toon (`Style.toonify`) conservando color y
+  textura. Aplica a todo lo que se coloca como objeto (muebles, plantas,
+  adornos); las **escaleras** siguen con figuras porque su forma define por dónde
+  se camina. Paredes, puertas, ventanas y techos: en la Fase 7.
+- Probado con una escena generada (`polish2b_demo`, sección 3).
+
+### Entorno (`data/world.json`, `scripts/world/world_builder.gd`)
+- Sale de `main.tscn` el terreno, la parcela clara, la calle y los 6 árboles
+  puestos a mano: ahora un nodo **World** los arma por código desde la
+  **medida de la parcela** (cuando 2C la agrande, el mundo la sigue).
+- **Un solo color de suelo** (la parcela ya no se ve más clara; la grilla del
+  constructor marca el lote).
+- **Niebla de profundidad** (70 → 190 m) del **mismo color que el cielo**: los
+  bordes del mapa, el final de la calle y los costados «azules» se disuelven.
+  La cámara ve hasta 320 m.
+- **Bosque** atrás y a los costados con **MultiMesh** (≈580 árboles en 3 llamadas
+  de dibujo; sin sombras) y **7 casas de vecinos** estáticas atrás (cajas con el
+  techo a dos aguas de las casas del juego).
+- Todo es decoración local: no toca el servidor ni la casa.
+
+### Vida
+- **Autos (3) y gente (3)** en la calle y la acera: solo local, sin servidor,
+  figuras simples con el mismo estilo; cantidad y velocidad en `world.json`.
+- **Reposo del personaje**: respira, se balancea y de vez en cuando mira
+  alrededor (animación «idle»); nuevas «arrive» (saltito al llegar) y «wave».
+- **Partículas** (CPUParticles3D, andan en cualquier teléfono): hojitas que caen
+  sobre la parcela y un soplido de humo blanco (`Fx.puff`) cuando alguien
+  desaparece o aparece en la calle. El humo se reusa en 2C (cajas).
+- **Ganchos de sonido** (autoload `Sound`): se pide por nombre (`Sound.play("build")`);
+  si hay un archivo en `assets/audio/<nombre>.ogg|wav|mp3` suena, si no, no pasa
+  nada. Volúmenes general / efectos / música en Info (se guardan). **No se
+  bajaron sonidos**: no hay una fuente CC0 a la que se pueda llegar desde la
+  nube con una dirección verificable (Kenney publica en su página, sin enlace
+  directo estable). Queda como pendiente del dueño (ver PROGRESO): bajar un
+  paquete CC0, ponerlo en `assets/audio/` con esos nombres y anotar la licencia
+  en `docs/`. Nombres que ya se piden: `build, cancel, coin, level_up`.
+
+### Trabajo como título
+- Al empezar el turno el personaje **sale por la puerta con saco y maleta**
+  (utilería: una cápsula y una caja, colores de la paleta), camina a la acera,
+  **se despide con una nubecita de humo y desaparece del lote**. Mientras tanto no
+  está en la casa. Al terminar el turno **aparece en la acera con saco y maleta,
+  camina hasta la puerta y hace un saltito de llegada** («¡Ya volví!»).
+- **La pareja se ve igual usando su intención**: «yendo a trabajar» → sale con
+  saco y maleta; «trabajando» → no está en el lote; al volver o desconectarse se
+  ve regresar de la calle. No se agregó nada al protocolo.
+- Sin minijuego. El sueldo y el turno son los de la Fase 3 (servidor).
+
+### Restaurante: ingresos automáticos
+- La caja del restaurante abierto **se cobra sola**: el servidor la calcula por
+  tiempo ($20/h, tope $160, sin cambios) y la acredita (a) al entrar
+  (`work_settle`: «Tu restaurante trabajó solo: $X») y (b) cuando el teléfono
+  avisa que sigue jugando (`game_heartbeat`) y (c) el teléfono lo pide cada
+  90 s si ya juntó $5 o más (`Restaurant._auto_collect`). En casa compartida va a
+  la caja de la casa. El botón pasa a «Cobrar ya» (solo para apurarla).
+- **El minijuego «Servicio» queda como «Reto» opcional con premio extra**: mismo
+  juego, mismo tope diario ($600) y misma validación (el servidor repite el
+  servicio). No cambió ningún número.
+- **Trabajar en un restaurante no exige tener uno propio**: dos empleos nuevos en
+  `data/jobs.json` (**Mesero** nivel 2, $40/h, y **Cocinero** nivel 3, $60/h),
+  con el mismo mecanismo de turnos de la Fase 3.
+- **No se hizo** contratar personal ni sueldos: el diseño quedó en `VISION.md`
+  («Restaurante: personal y sueldos»).
+
+
+## Pulido 2C — parcela, servicios y entregas (2026-11-04, nube, rama `pulido-2`)
+
+### Parcela de 96 × 96 que se gana limpiando
+- **La parcela crece 100 % hacia cada lado**: de 32 × 32 a **96 × 96** (`HouseGrid.LOT_SIZE`).
+  La casa de antes queda en el **centro** (la «zona de la casa», 32 × 32, siempre libre).
+  **Migración (guardado v4)**: al cargar, `HouseData.from_dict` mueve la casa
+  `(96 − lote guardado) / 2` celdas (32) y el personaje se mueve igual; el servidor
+  hace lo mismo (`rules.shift_house`, formato de casa 4) y no mueve dos veces una casa
+  ya migrada. Probado en `test_parcel`, `test_rules.lua` y `parcel_server_demo`.
+- `HouseGrid.LOT_SIZE` es `static var` (no `const`) **solo** para que las pruebas viejas,
+  que arman casas con coordenadas chicas, usen `HouseGrid.use_test_lot()` (lote de 32
+  sin obstáculos). El juego real usa 96.
+- **Obstáculos** (`data/parcel.json`, lo leen el juego Y el servidor): **Maleza** (2,5 % de las
+  celdas), **Tocón** (0,8 %), **Árbol** (3,5 %), **Roca grande** 2×2 (60) y **Laguito** 5×4 (2):
+  ≈ 540 en total. Se generan desde una **semilla** (la del dueño) con un generador
+  Park–Miller que da **exactamente lo mismo en GDScript y en Lua** (probado: misma
+  cantidad, mismos lugares). El servidor solo guarda **cuáles se limpiaron**
+  (`game/home.parcel`) y cuáles están **en camino**.
+- **Bloquean construir**: cimientos, pisos, techos y objetos al aire libre no se pueden
+  poner encima (las reglas de apoyo del teléfono y del servidor). Si algo sale en rojo
+  sobre un obstáculo, el aviso lo dice. El personaje tampoco los pisa (la red de
+  caminos los evita).
+- **Rendimiento** (medido): los obstáculos van en **MultiMesh** (árboles, tocones, maleza y
+  rocas: 5-7 llamadas de dibujo) y la **red de caminos solo cubre la zona útil** (la casa,
+  8 celdas de margen y la franja hasta la calle: ≈ 3800 celdas en vez de 9216; armarla
+  tarda ~100 ms en esta máquina). Las cámaras llegan hasta los bordes de la parcela.
+  **Falta medir los 30 FPS en el teléfono del dueño** (en la nube no hay GPU).
+- Se arregló de paso un choque de ids en la red de caminos (los escalones usaban
+  `id + 5000` y con 96 de ancho pisaban a otro nivel): ahora van en otro rango.
+
+### Limpiar obstáculos (servidor cobra, espera real, servicio que llega)
+- Tocar un obstáculo → ventana con **qué servicio lo limpia, cuánto cuesta y cuánto
+  espera** → **Llamar servicio**. RPC nuevas: `parcel_load`, `parcel_clear_start`
+  (**cobra el servidor**, valida el acceso y guarda la hora de llegada) y
+  `parcel_clear_finish` (revisa que pasó la espera y el acceso, limpia y da experiencia).
+  Sin cuenta (partida local) las mismas reglas corren en el teléfono (`Parcel`).
+- **Quién viene** (`data/parcel.json`): **jardinero** (maleza), **leñador** (tocón, árbol), **cuadrilla con
+  tractor** (roca) y **cuadrilla con retroexcavadora** (laguito). Modelos y animación
+  simples (cajas y la figura chibi con colores de la paleta).
+- **Reglas de acceso** (idénticas en teléfono y servidor, `find_path` / `can_reach`):
+  un **vehículo** ocupa un bloque de 2×2 y necesita un **camino libre desde la calle**;
+  una **persona**, de 1 celda. Los cimientos de la casa y los obstáculos sin limpiar
+  no se cruzan. Si no hay camino, **no se puede llamar** (no se cobra) y, si el camino se
+  cierra mientras espera, el vehículo llega, **avisa «No puedo entrar: no hay camino libre»,
+  se va y el servicio queda en espera** (no se cobra de nuevo; se puede «Reintentar» al despejar).
+  Si **solo hace falta la persona**, el **personaje del jugador va a abrirle la puerta**
+  (si trabaja o está lastimado, espera hasta 25 s y el portón se abre solo).
+- **Balance**: el costo **sube con lo ya limpiado** (`× (1 + 0,02 × limpiados)`, tope ×3):
+  la maleza arranca en $15, el árbol $90, la roca $250 y el laguito $900; con el tope, una
+  roca llega a $750. Nunca es imposible: se puede ir limpiando de a poco y la zona de la casa
+  (1024 celdas) ya está libre; expandirse cuesta más cuanto más se limpia, pero cada
+  limpieza da experiencia (2 a 40). Todo se ajusta en `data/parcel.json` (reiniciar Nakama).
+
+### Servicios genéricos (`scripts/world/services.gd`)
+- Un solo sistema (vehículo o persona, ruta por la calle y por la parcela, acceso, animación de
+  trabajo, humo) que usan la **limpieza**, la **entrega** y la **ambulancia**. Cuelga de la casa
+  (coordenadas en celdas). `speed_scale` solo lo usan las demos.
+
+### Entrega de compras (`scripts/world/delivery.gd`)
+- Cuando una pieza **comprada** (mueble o aparato) **termina de construirse**, llega un
+  **camión** por la calle y el **repartidor** baja las cajas (hasta 5 apiladas por viaje; las
+  compras que terminan juntas comparten camión). **En la puerta se le caen** (se inclina, dice
+  «¡Ay!», las cajas salen volando), las junta y **deja una caja en el lugar de cada cosa**.
+- La pieza **ya está en la casa** (y pagada por el servidor): la caja es solo cómo se ve y se
+  usa. **Una pieza en caja no se usa** (la IA no la elige). Hasta que el repartidor la deja
+  no se ve. Las cajas sin abrir **se guardan** en la partida (`GameState.delivery`).
+- **«Abrir todas las cajas»** (botón abajo a la izquierda): el personaje va a cada caja, **sale
+  humo blanco, tose** y aparece el mueble. Tocar una caja manda a abrir solo esa. **Si no se lo
+  ordenan, las abre solo** (su IA: cada vez que piensa, 40 % de abrir una caja).
+
+### Ambulancia (ejemplo de servicio)
+- Como todavía **no hay lesiones**, el disparador de ejemplo es **una caída por una puerta al
+  vacío de un piso alto** (una puerta cuyo otro lado no tiene piso): el personaje, de a ratos,
+  se asoma y **se cae** (queda lastimado en el suelo de afuera, pierde un poco de energía; **sin
+  muerte ni pérdida de progreso**, la experiencia no cambia). Llega la **ambulancia** (sirena,
+  cruz roja), un **paramédico camina hasta él, lo revisa y lo cura**. Es gratis. Queda anotado
+  en el diario. `Character.fall_to(celda)` lo dispara directo (lo usa la demo).
+
+### Sótanos (hasta 3 niveles hacia abajo; 5 arriba, 8 en total)
+- **Niveles de −3 a 4.** `HouseGrid.MIN_LEVEL = -3`, `LEVEL_COUNT = 8`, `level_range()` y
+  `level_index()` (el nivel −3 es la posición 0 de la lista de la casa). **Migración**: una
+  casa con la lista de 5 niveles (la de antes) recibe 3 sótanos vacíos al principio, en el teléfono
+  (`HouseData.from_dict`) y en el servidor (`rules.normalize_house`: la planta baja pasa a ser
+  `levels[4]`). Todo el código del servidor usa `house_rules.level_table(house, nivel)`.
+- **Excavar antes de los cimientos** (pedido del dueño): capa nueva **`excavation`** (una celda
+  excavada por sótano), pieza del catálogo **«Excavación (sótano)»**: **$30 por celda y 90 s de espera**
+  (como una obra: se ve naranja hasta que termina; nivel 4). Reglas (teléfono y servidor, con
+  pruebas): solo en sótanos; el primero se excava desde la superficie y cada uno de abajo **sobre el
+  de arriba**; no donde hay un obstáculo. **Cimientos** de un sótano solo sobre una celda excavada;
+  el **piso** y las **paredes** del sótano se apoyan en esos cimientos (igual que la planta baja);
+  **sin techos** en un sótano. Quitar una excavación se lleva todo lo de adentro y la de abajo.
+- **Acceso**: a un sótano se baja por una **escalera que está en ese sótano** (une el sótano con el
+  nivel de arriba); sin escalera, «Lo que falta» avisa «Sótano 1: sin acceso». El piso de la planta
+  baja no puede taparle el hueco a la escalera del sótano.
+- **Interfaz**: Obra tiene **«Agregar sótano»** (al lado de «Agregar piso»; pide algo construido en
+  el nivel de arriba); la flecha de abajo y el selector de frente bajan hasta el sótano; el nivel
+  se llama «Sótano 1/2/3». Con un sótano a la vista **se esconde el terreno** (se ve la casa «cortada»).
+- **El servicio de excavación es la espera de la obra** (con su costo); **no se dibujó una
+  retroexcavadora trabajando en la excavación** (los servicios genéricos ya existen: queda como mejora).
+- El servidor sigue sin guardar cuántos sótanos «agregó» el jugador (como los pisos): un sótano agregado
+  y todavía vacío se pierde al recargar desde el servidor; uno con algo construido, no.
+
+## Pulido 3A — parcela, camino y obstáculos (2026-11-04, nube, rama `pulido-3`)
+
+### Medidas (la cuenta)
+- **«La parcela original de la Fase 1» no es 200 × 200.** En la Fase 1 el lote era de
+  12 × 12, y tras probar la Fase 2 el dueño pasó a **32 × 32** (esa es la parcela que
+  tuvo hasta el Pulido 2). Se toma **32** como la original (con 12 el doble sería 24,
+  más chico que la casa de antes). Entonces: **zona inicial = el doble = 64 × 64**
+  (`start_zone` en `data/parcel.json`) y **máximo con desbloqueos = el triple = 96 × 96**
+  (toda la parcela de siempre, `HouseGrid.LOT_SIZE`). Lo que no se usa se ve pero no se pisa.
+- La zona inicial va **pegada a la calle y centrada** (x 16–79, z 32–95). Se abre más por
+  **nivel del jugador** (`unlocks`, en `data/parcel.json`): nivel 4 el terreno de atrás
+  (64 × 32) y nivel 6 los dos costados (16 × 96 cada uno) → toda la parcela. Es
+  cuenta del **servidor** también (`parcel.zone_rects` / `locked_cells` en
+  `neighborhood_parcel.lua`, con el nivel que sale de la experiencia del servidor): construir
+  o llamar a un servicio en zona cerrada se rechaza. Las celdas cerradas se tratan como
+  «bloqueadas» con id `"zone"` (igual que un obstáculo): construir, caminar y llegar con un
+  vehículo ya las respetan sin código extra.
+
+### La casa, cerca de la calle
+- `home_street_gap = 6` (`data/parcel.json`): la zona de la casa (32 × 32) queda **centrada
+  de izquierda a derecha y a 6 celdas de la calle** → esquina en (32, 58)
+  (`ParcelRules.home_origin`, `HouseGrid.home_origin()`). Entre la casa y la calle **no hay
+  obstáculos** (franja libre de 32 + margen de ancho hasta la acera); los obstáculos quedan
+  en la zona inicial a los costados y atrás, y en lo por desbloquear. La generación sigue
+  desde la misma semilla (cambia qué celdas se saltea, así que cambian los obstáculos: 546).
+- **Migración** (formato de casa **5**, guardado sin cambio de versión): una casa de formato < 5
+  se corre **26 celdas hacia la calle** (después de centrarla si venía de un lote más chico),
+  junto con muebles, techos y el personaje (`HouseData.migrated_offset`). Servidor igual
+  (`rules.HOME_SHIFT_Z = 26`, formato 5). Probado con una copia de una partida del
+  Pulido 2 armada en la demo (no se toca ningún archivo del dueño), en `test_parcel` y en Lua.
+  Una casa ya migrada no se vuelve a mover.
+
+### Vallas y vecinos de los costados (`WorldBuilder._build_zone_decor`)
+- **Valla de madera** (postes + 2 barandas, cajas simples: reemplazable por un `.glb`) en
+  los dos costados de la zona abierta, de la zona hasta la acera; **sigue a la zona** cuando se
+  abre terreno. Detrás de cada valla, **una casa de vecino al azar** (tamaño, colores y lugar
+  desde la semilla del mundo, `side_neighbors` en `data/world.json`): solo decoración y silueta.
+  Lo cerrado se ve con una **sombra verde translúcida**. Pasada la valla de los costados no se
+  dibujan obstáculos (es el terreno del vecino).
+
+### Esquivar obstáculos
+- La red de caminos ya excluía las celdas ocupadas, pero **no se regeneraba al limpiar** un
+  obstáculo ni cuando se abría terreno, y las copas de los árboles (más anchas que la celda)
+  hacían ver al personaje «pegado». Ahora (1) `HouseNav` escucha `Parcel.changed` y se
+  regenera, y (2) las celdas **vecinas de un obstáculo cuestan ×3** (`NEAR_OBSTACLE_COST`):
+  el camino los rodea con aire cuando hay lugar. Prueba: `test_parcel` y `polish3a_demo`
+  (el personaje llega al otro lado de un árbol sin pisarlo y, al limpiarlo, el camino se acorta).
+
+## Pulido 3B — interfaz y personaje (2026-11-04, nube, rama `pulido-3`)
+
+### Pantalla cortada → área segura
+- **Causa real**: la columna izquierda (íconos + selector de pisos + brújula, ≈ 370 de alto) le exigía
+  altura a la pantalla; con la barra de la Tienda abierta y un mueble elegido (fila de acciones) la suma
+  pasaba de los 720 de alto de la interfaz y **todo el `Root` se agrandaba más allá de los bordes**.
+  Ahora esa columna va dentro de un contenedor que **no exige altura** y **se achica** (hasta 45 %)
+  si no cabe (`HUD._fit_to_screen`).
+- **Área segura**: `SafeArea` (`ui/safe_area.gd`) lee `DisplayServer.get_display_safe_area()` (solo en
+  Android/iOS; en la PC no aplica) y la pasa a unidades de la interfaz; los márgenes del HUD son el mayor
+  entre el normal (16 / 34 / 16 / 22) y el del área segura + 8. Se vuelve a calcular al cambiar el tamaño.
+  Probado con áreas inventadas en 1920×1080, 1080×2400 y 2400×1080 (`polish3b_demo`): la interfaz mide
+  lo que la pantalla y las barras caben dentro del área segura.
+
+### Colocar un mueble y girarlo antes de confirmar
+- Antes, soltar el dedo ponía el mueble ya mismo y el botón de girar solo servía para el siguiente. Ahora
+  un mueble (o escalera o pilar) **queda «sostenido»** al soltar (fantasma + ✓/✗), el botón de **girar 45°**
+  lo gira en el momento, tocar otro lugar lo mueve y **Confirmar** lo pone. Reusa la espera de Confirmar
+  de las herramientas de arrastre (`_pending_plain`). Con la obra planificada sigue yendo a la factura.
+
+### Techo: rejilla flotante
+- Con la herramienta de techo la rejilla, el cursor, las manijas y lo que se toca **suben a la altura de
+  las paredes del piso actual** (`HouseBuilder.pick_height()`): se toca desde arriba sin que la pared tape.
+
+### Barra del ángulo de la cámara
+- `PitchSlider` (`ui/pitch_slider.gd`): barra vertical a la derecha, **debajo del menú**, con perilla central.
+  Arriba sube el ángulo (hasta -89°, de cielo), abajo lo baja (hasta -5°); la velocidad depende de cuánto
+  se desvía (hasta 60°/s); al soltar **vuelve sola al centro y el ángulo se queda**. Mouse y dedo (el toque
+  llega como clic). **Se quitó el botón viejo** de 5 saltos. `CameraRig.step_pitch`.
+
+### Maqueta de pisos
+- Las **flechas (subir, bajar, girar) salen de la caja** y van a su lado/abajo con color azul/verde
+  translúcido (`HUD._tint_like_map`). **Sin aristas del fondo**: solo se dibujan las aristas de las paredes
+  (y del techo) cuya cara mira hacia la cámara de la maqueta (`FloorMap.FACING_MIN`); el relleno tenue
+  se deja para poder tocar el piso.
+
+### Cuartos elegidos por el jugador
+- `HouseData.room_types` (`"nivel:x,z"` de **cada celda del cuarto** → tipo) y `main_bedroom_cell`
+  se guardan con la casa (y se mueven con las migraciones). Guardar todas las celdas hace que el tipo
+  sobreviva si el cuarto se agranda o se achica. **Lo asignado manda sobre lo deducido**
+  (`HouseRooms._classify`); si dos cuartos se unen con tipos distintos gana el de la celda más
+  «arriba a la izquierda». **Servidor: no se guarda** (no calcula nada con esto); si el servidor manda
+  una casa sin tipos, el teléfono conserva los que tenía.
+- Menú: **Modificar → tocar el piso de un cuarto → «Tipo de cuarto»** o el botón **«Cuartos»** (etiqueta,
+  junto a techo y paredes) que lista los del piso. Tipos: los de `data/rooms.json` (sin «restaurante»,
+  que es del negocio). Si es **dormitorio**: **★ Principal** o **Secundario** (solo hay un principal).
+  «Que decida el juego» saca lo elegido.
+- **`HouseRooms.main_bedroom(house)`** devuelve el dormitorio principal (el marcado; si no hay marcado,
+  el primer dormitorio) con `level`, `cells`, `type`. Es la «`Rooms.main_bedroom()`» del brief (lleva la
+  casa como parámetro porque no hay una casa global).
+- **«Multiuso» desapareció**: el tipo mixto se llama **«Sin tipo»** (sigue el id `mixed`). La pestaña de la
+  Tienda es **«★ Recomendado»** y, abajo, el tipo del cuarto (**«★ Recomendado / Dormitorio»**); sin tipo,
+  solo «★ Recomendado» con lo más común del cuarto.
+
+### Creación de personaje
+- Se **amplió `ui/character_editor`** (no hay pantalla nueva): vista previa 3D que **gira sola** (y se gira
+  arrastrando), **nombre, peinado (5), ojos (4), boca (4), piel, pelo, ropa (camisa) y pantalón**, más los
+  rasgos de antes. Modo creación (`open_for_creation`): sin «Cancelar», «Listo» emite `created`.
+- Después de **crear la cuenta por primera vez** (`LoginScreen.create_character`) se abre antes de entrar al
+  juego; lo elegido va a `GameState.character`. Desde el menú → Personaje se sigue pudiendo cambiar.
+- **Piezas intercambiables en datos** (`data/character_options.json`): `hairstyles`, `eyes`, `mouths`; cada
+  opción es una lista de formas simples (esfera o cápsula con posición, escala y giro). `CharacterLook.build`
+  las arma; una opción que no existe usa la primera (las partidas viejas no se rompen). Para sumar un peinado
+  se edita el JSON. Al personaje se le agregó **boca**.
+
+## Pulido 3C — contorno sin costuras (2026-11-04)
+- **Causa**: cada tramo (1 m) de pared y cada columna de esquina eran mallas con su propio contorno
+  (casco invertido); en las junturas el contorno de un tramo asomaba sobre el vecino (rayitas).
+- **Arreglo**: los tramos **macizos** (sin puerta ni ventana, que se ven normales: no en obra, ni previstos,
+  ni en rojo) y las columnas entre ellos **ya no llevan contorno propio**. En su lugar, por cada **tramo recto de
+  paredes contiguas** (misma línea y alto) una **caja invisible** (`invisible.gdshader`, descarta todo y solo lleva
+  el contorno como `next_pass`; `Style.outline_only_material`) envuelve la silueta completa: la pared se ve
+  continua. Se rearma una vez por cuadro cuando cambia una pared (`HouseView._rebuild_outlines`). Lo que tiene
+  puerta o ventana conserva su contorno de antes. «Contorno» en Info apaga también estas cajas.
+- **Medido** (`polish3c_demo`, 4 ángulos): píxeles oscuros en la juntura de dos tramos **22 → 0**; pasadas de
+  contorno de la casa de prueba **260 → 194** (menos llamadas de dibujo, no más). En la nube no hay GPU: el
+  cuadro sin y con contorno se compara pero **los 30 FPS siguen por medir en el teléfono del dueño**.
+
+## Fase 7 — preparación de arte y estilo (2026-11-04, nube, rama `fase-7`, versión 0.11.0)
+Criterios del dueño: formas redondeadas, pocos polígonos, materiales planos con nombre, `.glb`, 1 celda = 1 m,
+pivote en el centro de la base, **contorno por shader (no modelado)**; el arte se cambia muchas veces, pieza por pieza.
+- **Un solo cargador, `ModelLoader`** (clase estática en `scripts/art/`, no un autoload nuevo, para no tocar `project.godot` y
+  evitar choques con la Fase 8). Reemplaza al `load_model` de la 2B (que sigue existiendo y delega). Nunca rompe: ante cualquier
+  falla (no existe, roto, sin mallas, apagado) devuelve `null` y se usa la figura simple. Las rutas rotas se recuerdan para no repetir
+  el aviso. Se lee primero la escena **importada** (lo que viaja en el APK) y, si no hay, el `.glb` crudo con `GLTFDocument` (PC).
+- **Caja de celdas**: por defecto se **confía en el pivote** del archivo (convención) y solo se **achica parejo** si se pasa más de un 5 %
+  de `footprint × height`. `model_fit: "stretch"` para escaleras; `model_pivot: "auto"` recoloca la base (salida de emergencia para
+  arte que viene mal). No se agranda nunca solo (un objeto pequeño es una decisión de arte).
+- **Materiales con nombre → paleta**: el nombre del material del `.glb` (minúsculas, sin `.001` de Blender) se busca en
+  `data/palette.json` → `materials`; si está, manda el color de la paleta; si no, queda el de Blender. Siempre pasa al toon + contorno de
+  `Style`. Recolorear = volver a llamar `apply_materials` (parte del material original de la malla, nunca del ya pintado).
+- **Luz y sombras en un solo lugar**: `toon` y `light` se **movieron** de `style.json` a `palette.json → lighting` (`style.json` quedó con
+  contorno, niebla y colores del mundo). `Style` lee ambos; si falta `palette.json` usa valores de respaldo del código. Dos tonos = repetir
+  el segundo valor.
+- **Qué lleva modelo**: muebles, escaleras (se estiran al alto del piso), pilares, **puertas** (reemplazan marco y hoja) y **ventanas**
+  (reemplazan el marco; el vidrio sigue siendo del juego). **Techos NO**: se arman a medida de cada casa; piezas modulares quedan para el arte.
+- **Interruptor** «Usar modelos 3D (arte)» en Info (`GameState.settings["use_models"]`, señal `EventBus.models_toggled`): la casa
+  (`HouseView.rebuild_all`) y los personajes (`Character.refresh_look`) se arman de nuevo. Es para comparar y para teléfonos lentos.
+- **Personaje modular**: `data/character_slots.json` define **un esqueleto** (15 huesos en inglés/minúsculas), **9 slots** y los nombres
+  alternativos de los ganchos de animación. `CharacterAssembler` parte de `CharacterLook` (la figura simple siempre existe) y pone cada pieza
+  `.glb` encima, escondiendo las figuras que reemplaza (`hides`, con comodines). Piezas **rígidas** pegadas a un hueso (`BoneAttachment3D`) o a
+  una posición fija; cuerpo completo con `Skeleton3D` + `AnimationPlayer` soportado. **Ropa deformable (skinning compartido) NO**: sin esqueleto real
+  no se puede probar; queda anotado. Las opciones de pelo/ojos/boca apuntan al modelo con un campo `model` en `character_options.json`.
+- **Ganchos de animación por nombre** (`CharacterAnimator.bind_model`): idle, walk, sleep, sit, cook, eat, shower, use, arrive, wave,
+  cough, hurt. Se emparejan sin distinguir mayúsculas y con alias (`walking`, `caminar`...). Sin clip → la animación simple de código.
+- **Los `.glb` de ejemplo se generan con Python** (`tools/make_sample_models.py`, solo biblioteca estándar) y no con `GLTFDocument`: en esta
+  sesión no había Godot y Python sí; el resultado es un `.glb` estándar y sirve igual de ejemplo. Verificado por script: cabecera y largo,
+  caras hacia afuera (0 invertidas), cajas dentro de 1×0,9×1 / 2×0,78×1 y materiales con nombre.
+- **Se bajó el supuesto de pintar muebles**: un mueble con modelo ignora el color de pintura (`piece_color`); sus colores salen de la paleta
+  o de `model_colors`. Anotado como pendiente en PROGRESO (el dueño decide).
+- **`chair_basic` y `table_basic` usan ya los `.glb` de ejemplo** (para ver el interruptor funcionando en el teléfono). `polish2b_demo`
+  se ajustó (guarda y devuelve el `model` de la silla). El dueño puede quitar esas dos líneas `model` del catálogo en cualquier momento.
+- **Versión 0.11.0** (`project.godot`, `export_presets.cfg` code 11). No se exportó APK.
+- **Sin ejecutar**: esta nube no tenía Godot ni Lua y el brief prohíbe bajar binarios. Todo el GDScript está **sin correr**; ver PROGRESO.
+
+
+## Fase 8A/8B — Barrio (versión 0.11.0)
+
+- **Mapa en datos** (`data/neighborhood.json`): coordenadas del MUNDO (origen = centro de tu parcela de 96×96, la
+  calle principal por el eje X al frente). 24 lotes de 24×36 m: tu parcela, 5+5 a los lados en tu fila, 12 enfrente y
+  una plazoleta (2 lotes). Para agregar lotes basta sumar filas. Solo se dibuja con la parcela de 96 (las pruebas con
+  la parcela chica de 32 no ven el barrio: `NeighborhoodMap.enabled()`).
+- **Vecinos = generados, no jugadores.** Todo sale de la semilla + el id del lote (`String.hash()` → `RandomNumberGenerator`),
+  así es igual en todos los teléfonos sin guardar ni sincronizar nada. Apellido distinto por casa (30 apellidos
+  genéricos hispanos, barajados con la semilla). Más adelante, un lote ocupado por un jugador real reemplaza al generado.
+- **Casa vecina** = `HouseData` armada con piezas del catálogo (cimientos, piso, paredes con puerta y ventanas, techo,
+  4–9 muebles sin encimarse). De lejos se dibuja la **silueta** (cajas + techo; barato) y recién al visitarla se arma
+  el interior con `HouseView` (techo fuera, paredes bajas). Así 23 casas no cuestan 23 casas completas.
+- **La casa detrás de la valla** = la del lote vecino de verdad; las dos casas pegadas a tu parcela se arriman a 3 m
+  de su borde. El bosque de decoración no planta árboles dentro de los lotes. Los autos/gente viejos de `WorldLife`
+  se apagan (cars/pedestrians = 0) cuando hay barrio: los reemplaza la vida del barrio (8C).
+- **Modo «visit»** en `main.gd` (reusa `set_mode`): ni constructor ni personaje controlable, interfaz normal escondida,
+  una barrita con «Volver / Vista aérea / Casas». La cámara es la MISMA (`CameraRig`), solo con límites más amplios
+  (`enter_neighborhood_view`) y un viaje suave (`fly_to`). Esc también vuelve. La niebla se amplía mientras se está en el barrio.
+- **Privacidad:** `house_visitable` (apagado por defecto) en `GameState.settings`; hoy nadie puede entrar a tu casa,
+  queda listo para cuando haya visitantes reales. Las casas generadas siempre se pueden ver (solo ver).
+- **Calles:** una sola calle principal (la de `world.json`) con 2 aceras. Una calle transversal queda para después.
+- Paleta/estilo (`style.json`) NO se tocó (es de la Fase 7): los colores propios del barrio están en `neighborhood.json`.
+
+## Fase 8C — Vida del barrio
+
+- **Local y sin servidor:** los vecinos y los autos solo existen en cada teléfono (`NeighborhoodLife`); no se guardan.
+- **Rutas por puntos, no HouseNav:** el interior de las casas vecinas solo se arma al visitar, así que «entrar a casa»
+  es: caminar hasta la puerta, desaparecer unos segundos (adentro) y volver a salir. HouseNav para vecinos queda pendiente.
+- **Autos sin choques:** dos carriles (uno por sentido); cada auto mira al de adelante en su carril (en círculo) y
+  nunca avanza más de lo que le deja libre (distancia mínima 4,6 m entre centros). Frenan si alguien cruza. Con 4 autos
+  no hace falta más lógica; una calle transversal con giros queda para después.
+- **Rendimiento:** máximo 10 vecinos y 4 autos (`data/neighborhood.json`, `life`); LOD de 3 niveles (cerca: animados;
+  medio: se mueven sin animar el cuerpo; lejos: escondidos y su lógica corre cada 0,5 s); si los FPS están bajo 24 durante
+  3 s, hay un vecino activo menos (mínimo 3). Hay que medirlo en el teléfono (meta: 30 FPS).
+- **Sonido:** solo la señal `EventBus.neighborhood_sound(evento, posición)` (`greet`, `door`, `car_pass`); si existe
+  `data/sounds/<nombre>.ogg|wav|mp3` suena en 3D, si no se prueba `assets/audio/`, y si no hay nada, no pasa nada.

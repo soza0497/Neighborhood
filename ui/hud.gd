@@ -5,7 +5,8 @@ extends CanvasLayer
 ##   tarjeta con las necesidades), la pareja (punto + nombre) y las obras.
 ## Arriba a la derecha: deshacer/rehacer (construir), velocidad (vivir),
 ##   construir/vivir y el menú.
-## Izquierda: íconos de techo y paredes, la maqueta de pisos y la brújula.
+## Izquierda: íconos de techo, paredes y ángulo de cámara, el selector de pisos
+##   (el frente de la casa, con flechas y botones de girar) y la brújula.
 ## Abajo (modo construir): las herramientas y sus piezas.
 ## Menú lateral: personaje, diario, empleos, pareja, casa e Info (FPS,
 ##   versión, conexión, día y hora, caja de la casa).
@@ -77,12 +78,27 @@ const NEED_COLORS := {
 @onready var _fund_label: Label = %FundLabel
 @onready var _couple_button: Button = %CoupleButton
 @onready var _home_button: Button = %HomeButton
+@onready var _neighborhood_button: Button = %NeighborhoodButton
 @onready var _notice_box: Control = %NoticeBox
 @onready var _notice_label: Label = %NoticeLabel
 @onready var _notice_undo_button: Button = %NoticeUndoButton
 @onready var _notice_close_button: Button = %NoticeCloseButton
 
 var _mode := "build"
+var _builder: Node
+var _house_data: HouseData
+var _boxes_button: Button
+## Pulido 3B: barra vertical del ángulo de la cámara (debajo del menú).
+var _pitch_slider: PitchSlider
+var _rooms_button: Button
+## Márgenes normales de la interfaz (izquierda, arriba, derecha, abajo).
+const BASE_MARGINS := Vector4(16, 34, 16, 22)
+## Cuántos grados por segundo cambia el ángulo con la perilla al tope.
+const PITCH_RATE := 60.0
+## Contenedor de la columna izquierda: así la columna no empuja la pantalla
+## fuera de sus bordes (si no cabe, se achica).
+var _left_holder: Control
+var _plan_bar: Control
 var _last_save_text := "sin guardar todavía"
 ## Lo que falta en la casa (HouseRules.problems) y los paneles que se
 ## arman por código: menú de una pieza, lista de "lo que falta" y la barra
@@ -108,6 +124,15 @@ var _notice_tween: Tween
 
 func _ready() -> void:
 	_setup_icons()
+	_build_floor_selector()
+	_build_pitch_slider()
+	_build_rooms_button()
+	_build_left_holder()
+	get_viewport().size_changed.connect(_fit_to_screen)
+	_fit_to_screen.call_deferred()
+	_build_boxes_button()
+	EventBus.parcel_obstacle_tapped.connect(_show_obstacle)
+	EventBus.boxes_changed.connect(_on_boxes_changed)
 
 	_undo_button.pressed.connect(EventBus.undo_requested.emit)
 	_redo_button.pressed.connect(EventBus.redo_requested.emit)
@@ -118,6 +143,7 @@ func _ready() -> void:
 	_problems_button.pressed.connect(_show_problems)
 	EventBus.house_problems_changed.connect(_on_problems_changed)
 	EventBus.build_context_menu.connect(_show_context_menu)
+	EventBus.room_menu_requested.connect(_show_room_menu)
 	EventBus.proposal_changed.connect(_on_proposal_changed)
 
 	EventBus.game_saved.connect(_on_game_saved)
@@ -128,8 +154,8 @@ func _ready() -> void:
 	EventBus.history_changed.connect(_on_history_changed)
 
 	_speed_button.pressed.connect(GameClock.cycle_speed)
-	_menu_button.pressed.connect(_side_menu.show)
-	_side_close_button.pressed.connect(_side_menu.hide)
+	_menu_button.pressed.connect(_toggle_side_menu)
+	_side_close_button.pressed.connect(_close_side_menu)
 	_character_button.pressed.connect(_open_from_menu.bind(EventBus.character_editor_requested))
 	_diary_button.pressed.connect(_open_from_menu.bind(EventBus.journal_requested))
 	_jobs_button.pressed.connect(_open_from_menu.bind(EventBus.jobs_requested))
@@ -151,6 +177,7 @@ func _ready() -> void:
 	_fps_check.button_pressed = GameState.settings.get("show_fps_overlay", false)
 	_hints_check.button_pressed = GameState.settings.get("show_hints", true)
 	_fps_check.toggled.connect(_on_setting_toggled.bind("show_fps_overlay"))
+	_build_info_extras()
 	_hints_check.toggled.connect(_on_setting_toggled.bind("show_hints"))
 	_menu_close_button.pressed.connect(_action_menu.hide)
 	_logout_button.pressed.connect(_open_from_menu.bind(EventBus.logout_requested))
@@ -164,6 +191,7 @@ func _ready() -> void:
 	# Fase 5
 	_couple_button.pressed.connect(_open_from_menu.bind(EventBus.couple_panel_requested))
 	_home_button.pressed.connect(_open_from_menu.bind(EventBus.home_panel_requested))
+	_neighborhood_button.pressed.connect(_open_from_menu.bind(EventBus.neighborhood_panel_requested))
 	EventBus.couple_changed.connect(_update_partner_label)
 	EventBus.partner_presence_changed.connect(func(_online: bool, _intention: Dictionary) -> void: _update_partner_label())
 	EventBus.fund_changed.connect(_on_fund_changed)
@@ -182,10 +210,291 @@ func _ready() -> void:
 ## La escena principal pasa la casa, el personaje y el constructor (la
 ## maqueta de pisos y la brújula solo los leen).
 func setup_house(house: HouseData, character: Node3D, builder: Node) -> void:
+	_builder = builder
+	_house_data = house
 	_floor_map.setup(house, character)
 	$RestaurantPanel.house = house
 	_compass_button.target = character
 	_bottom_bar.setup(_action_row, builder, character)
+
+
+## Pulido 2: el selector de pisos es el frente de la casa. Al lado van las
+## flechas de arriba y abajo y, debajo, los botones para girarlo (8 ángulos).
+func _build_floor_selector() -> void:
+	# Pulido 3B: la CAJA (el cuadro translúcido) es solo para la casa en 3D; las
+	# flechas de subir y bajar y los botones de girar van FUERA de ella, con un
+	# color azul/verde translúcido parecido al de la caja.
+	var panel: Control = _floor_map.get_parent()
+	var column: Control = panel.get_parent()
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 6)
+	column.add_child(outer)
+	column.move_child(outer, panel.get_index())
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	outer.add_child(row)
+	panel.reparent(row, false)
+	var arrows := VBoxContainer.new()
+	arrows.alignment = BoxContainer.ALIGNMENT_CENTER
+	arrows.add_theme_constant_override("separation", 10)
+	for entry in [["Subir un piso", 1, 0], ["Bajar un piso", -1, 2]]:
+		var button := Icons.make_button("arrow", entry[0], 48)
+		button.icon = Icons.rotated("arrow", entry[2])
+		button.pressed.connect(EventBus.build_level_change_requested.emit.bind(entry[1]))
+		_tint_like_map(button)
+		arrows.add_child(button)
+	row.add_child(arrows)
+	var turn := HBoxContainer.new()
+	turn.alignment = BoxContainer.ALIGNMENT_CENTER
+	turn.add_theme_constant_override("separation", 10)
+	for entry in [["Girar la fachada a la izquierda", -1, "left"], ["Girar la fachada a la derecha", 1, "right"]]:
+		var button := Icons.make_button(entry[2], entry[0], 44)
+		button.pressed.connect(_floor_map.turn.bind(entry[1]))
+		_tint_like_map(button)
+		turn.add_child(button)
+	outer.add_child(turn)
+	_floor_map.owner = self  # Para que %FloorMap siga encontrándose.
+
+
+## Botón del color de la caja del selector de pisos (azul/verde translúcido).
+func _tint_like_map(button: Button) -> void:
+	for state in ["normal", "hover", "pressed", "disabled", "hover_pressed"]:
+		var style := button.get_theme_stylebox(state).duplicate() as StyleBoxFlat
+		var color := Color(0.2, 0.62, 0.66, 0.5)
+		if state == "hover":
+			color = Color(0.27, 0.72, 0.74, 0.6)
+		elif state == "pressed" or state == "hover_pressed":
+			color = Color(0.35, 0.85, 0.8, 0.75)
+		style.bg_color = color
+		style.border_color = Color(0.4, 0.8, 1, 0.45)
+		style.set_border_width_all(2)
+		button.add_theme_stylebox_override(state, style)
+
+
+## Pulido 2B: en Info, el contorno (calidad) y los volúmenes de sonido.
+func _build_info_extras() -> void:
+	var rows: VBoxContainer = _info_panel.get_node("Rows")
+	var anchor := _fps_check.get_index() + 1
+	var outline := CheckButton.new()
+	outline.text = "Contorno (calidad)"
+	outline.add_theme_font_size_override("font_size", 20)
+	outline.focus_mode = Control.FOCUS_NONE
+	outline.button_pressed = Style.outline_enabled
+	outline.toggled.connect(func(on: bool) -> void:
+		GameState.settings["outline_enabled"] = on
+		Style.set_outline(on))
+	rows.add_child(outline)
+	rows.move_child(outline, anchor)
+	anchor += 1
+	# Fase 7: comparar el arte nuevo (.glb) con las figuras simples.
+	var use_models := CheckButton.new()
+	use_models.text = "Usar modelos 3D (arte)"
+	use_models.add_theme_font_size_override("font_size", 20)
+	use_models.focus_mode = Control.FOCUS_NONE
+	use_models.button_pressed = ModelLoader.enabled
+	use_models.toggled.connect(func(on: bool) -> void:
+		GameState.settings["use_models"] = on
+		ModelLoader.set_enabled(on))
+	rows.add_child(use_models)
+	rows.move_child(use_models, anchor)
+	anchor += 1
+	for entry in [["master", "Volumen"], ["sfx", "Efectos"], ["music", "Música"]]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var label := Label.new()
+		label.text = entry[1]
+		label.custom_minimum_size = Vector2(110, 0)
+		label.add_theme_font_size_override("font_size", 18)
+		row.add_child(label)
+		var slider := HSlider.new()
+		slider.min_value = 0.0
+		slider.max_value = 1.0
+		slider.step = 0.05
+		slider.value = Sound.volume(entry[0])
+		slider.custom_minimum_size = Vector2(200, 36)
+		slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		slider.value_changed.connect(func(v: float) -> void: Sound.set_volume(entry[0], v))
+		row.add_child(slider)
+		rows.add_child(row)
+		rows.move_child(row, anchor)
+		anchor += 1
+
+
+## Pulido 2C: «Abrir todas las cajas» (aparece cuando el repartidor dejó cajas).
+func _build_boxes_button() -> void:
+	_boxes_button = Button.new()
+	_boxes_button.icon = Icons.texture("truck")
+	_boxes_button.add_theme_constant_override("icon_max_width", 30)
+	_boxes_button.add_theme_font_size_override("font_size", 18)
+	_boxes_button.text = "Abrir todas las cajas"
+	_boxes_button.focus_mode = Control.FOCUS_NONE
+	_boxes_button.visible = false
+	_boxes_button.custom_minimum_size = Vector2(0, 52)
+	_boxes_button.pressed.connect(EventBus.boxes_open_all_requested.emit)
+	%LeftColumn.add_child(_boxes_button)
+
+
+func _on_boxes_changed(dropped: int) -> void:
+	_boxes_button.visible = dropped > 0
+	_boxes_button.text = "Abrir todas las cajas (%d)" % dropped
+
+
+## Tocaste un obstáculo de la parcela: qué es, qué servicio lo limpia, cuánto
+## cuesta y cuánto tarda. «Llamar servicio» cobra (el servidor) y empieza la espera.
+func _show_obstacle(id: String) -> void:
+	var def := Parcel.definition(id)
+	if def.is_empty():
+		return
+	var vehicle_names := {"tractor": "tractor", "excavator": "retroexcavadora"}
+	var service_text: String = {"gardener": "Jardinero", "lumberjack": "Leñador"}.get(def["service"],
+		"Cuadrilla con %s" % vehicle_names.get(def["vehicle"], "vehículo pesado"))
+	var rows := _open_popup(str(def["name"]))
+	if Parcel.pending.has(id):
+		var left := int(Parcel.pending[id]["ready_at"]) - Economy.now()
+		rows.add_child(_small_label("Ya viene: %s." % service_text, Color(0.75, 0.95, 1)))
+		rows.add_child(_small_label("Llega en %s." % duration_text(maxi(left, 0)) if left > 0 else "Está por llegar (o esperando que haya paso).", Color(0.85, 0.9, 1)))
+		_popup_button(rows, "Reintentar ahora", func() -> void:
+			_close_popup()
+			Parcel.service_due.emit(id))
+	else:
+		var access := Parcel.access(id, _house_data)
+		var cost := Parcel.cost_of(id)
+		rows.add_child(_small_label("Lo limpia: %s" % service_text, Color(0.85, 0.9, 1)))
+		rows.add_child(_small_label("Cuesta $%d · Espera %s" % [cost, duration_text(int(def["seconds"]))], Color(1, 0.9, 0.7)))
+		rows.add_child(_small_label("Bloquea construir en esa zona hasta limpiarlo.", Color(0.85, 0.9, 1)))
+		if not access["ok"]:
+			rows.add_child(_small_label("No puede llegar: %s Despejá un camino desde la calle." % str(access["reason"]), Color(1, 0.7, 0.6)))
+		var call := _popup_button(rows, "Llamar servicio ($%d)" % cost, func() -> void:
+			_close_popup()
+			var result: Dictionary = await Parcel.call_service(id, _house_data)
+			EventBus.toast.emit("Viene el servicio: %s." % service_text if result["ok"] else str(result["error"])))
+		call.disabled = not access["ok"] or Economy.money < cost
+	_popup_button(rows, "Cerrar", _close_popup)
+
+
+## Botón «Cuartos» (Pulido 3B): lista los cuartos del piso y deja elegir su tipo.
+func _build_rooms_button() -> void:
+	_rooms_button = Icons.make_button("room_tag", "Cuartos: elegí qué es cada uno")
+	_rooms_button.pressed.connect(_show_rooms_list)
+	%LeftColumn.get_node("ViewIcons").add_child(_rooms_button)
+
+
+## Lista de los cuartos del piso que se está viendo (tocar uno abre su menú).
+func _show_rooms_list() -> void:
+	var level: int = _builder.level if _builder != null else 0
+	var rooms := HouseRooms.detect(_house_data, level)
+	var rows := _open_popup("Cuartos de %s" % HouseGrid.level_name(level).to_lower())
+	if rooms.is_empty():
+		rows.add_child(_small_label("Todavía no hay cuartos cerrados en este piso.\nUn cuarto es un piso rodeado de paredes.", Color(0.85, 0.9, 1)))
+	var n := 0
+	for room in rooms:
+		n += 1
+		var first: Vector2i = HouseGrid.key_to_cell(room["cells"].keys()[0])
+		var text := "Cuarto %d: %s%s" % [n, room["name"], " (principal)" if room.get("main", false) else ""]
+		_popup_button(rows, text, func() -> void:
+			_show_room_menu(level, first))
+	_popup_button(rows, "Cerrar", _close_popup)
+
+
+## Menú del tipo de un cuarto (Pulido 3B): elegir cocina, dormitorio, baño, sala,
+## estudio… y, si es un dormitorio, si es el PRINCIPAL o uno secundario. Lo
+## elegido manda sobre lo que el juego deduce por los muebles.
+func _show_room_menu(level: int, cell: Vector2i) -> void:
+	var room := HouseRooms.room_at(_house_data, level, cell)
+	if room.is_empty():
+		EventBus.toast.emit("Ahí no hay un cuarto cerrado.")
+		return
+	var rows := _open_popup("Tipo de cuarto")
+	var origin := "elegido por vos" if room.get("assigned", false) else "según los muebles"
+	rows.add_child(_small_label("Ahora: %s%s (%s)" % [room["name"], " · principal" if room.get("main", false) else "", origin], Color(0.85, 0.9, 1)))
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	rows.add_child(grid)
+	for type in HouseRooms.choosable_types():
+		var is_current: bool = room.get("assigned", false) and room["type"] == type["id"]
+		var button := _popup_button(grid, ("✓ " if is_current else "") + str(type["name"]), func() -> void:
+			if type["id"] == HouseRooms.BEDROOM:
+				_show_bedroom_menu(room)
+			else:
+				_assign_room(room, str(type["id"]), false))
+		button.custom_minimum_size = Vector2(200, 52)
+	var auto := _popup_button(grid, "Que decida el juego", func() -> void: _assign_room(room, "", false))
+	auto.custom_minimum_size = Vector2(200, 52)
+	auto.disabled = not room.get("assigned", false)
+	_popup_button(rows, "Cerrar", _close_popup)
+
+
+## Segundo paso: ¿dormitorio principal o secundario? (solo hay un principal).
+func _show_bedroom_menu(room: Dictionary) -> void:
+	var rows := _open_popup("Dormitorio")
+	rows.add_child(_small_label("Solo uno es el principal del personaje.", Color(0.85, 0.9, 1)))
+	_popup_button(rows, "★ Principal", func() -> void: _assign_room(room, HouseRooms.BEDROOM, true))
+	_popup_button(rows, "Secundario", func() -> void: _assign_room(room, HouseRooms.BEDROOM, false))
+	_popup_button(rows, "Cerrar", _close_popup)
+
+
+func _assign_room(room: Dictionary, type_id: String, main: bool) -> void:
+	HouseRooms.set_room_type(_house_data, room, type_id, main)
+	_close_popup()
+	var label := "ya no tiene un tipo elegido" if type_id == "" else "ahora es %s%s" % [HouseRooms.type_name(type_id).to_lower(), " principal" if main else ""]
+	EventBus.toast.emit("El cuarto %s." % label)
+	EventBus.rooms_changed.emit()
+
+
+## Barra del ángulo de la cámara (Pulido 3B): costado derecho, debajo del menú.
+## Reemplaza al botón de antes (que pasaba de a saltos por 5 ángulos).
+func _build_pitch_slider() -> void:
+	_pitch_slider = PitchSlider.new()
+	_pitch_slider.name = "PitchSlider"
+	add_child(_pitch_slider)
+
+
+## Pulido 3B: la columna izquierda (íconos, selector de pisos, brújula) va dentro
+## de un contenedor que no le exige altura a la pantalla.
+func _build_left_holder() -> void:
+	var column: Control = %LeftColumn
+	var middle: Control = column.get_parent()
+	_left_holder = Control.new()
+	_left_holder.name = "LeftHolder"
+	_left_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_left_holder.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	middle.add_child(_left_holder)
+	middle.move_child(_left_holder, column.get_index())
+	column.reparent(_left_holder, false)
+	column.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	column.position = Vector2.ZERO
+	column.pivot_offset = Vector2.ZERO
+	column.resized.connect(_fit_to_screen.call_deferred)
+
+
+## Acomoda la interfaz a la pantalla (Pulido 3B): respeta el área segura, no se
+## sale de los bordes en ningún tamaño y ubica la barra del ángulo.
+func _fit_to_screen() -> void:
+	var root: MarginContainer = $Root
+	var view := get_viewport().get_visible_rect().size
+	var margins := SafeArea.margins(BASE_MARGINS, SafeArea.insets(get_window()))
+	root.add_theme_constant_override("margin_left", int(margins.x))
+	root.add_theme_constant_override("margin_top", int(margins.y))
+	root.add_theme_constant_override("margin_right", int(margins.z))
+	root.add_theme_constant_override("margin_bottom", int(margins.w))
+	# La columna izquierda se achica si no hay altura (pantalla baja + barra de abajo).
+	if _left_holder != null:
+		var column: Control = %LeftColumn
+		var need := column.get_combined_minimum_size()
+		_left_holder.custom_minimum_size = Vector2(need.x, 0.0)
+		column.size = need
+		var available := maxf(40.0, _left_holder.size.y)
+		var factor := clampf(available / maxf(1.0, need.y), 0.45, 1.0)
+		column.scale = Vector2(factor, factor)
+		column.position = Vector2(0.0, maxf(0.0, (available - need.y * factor) / 2.0))
+	# Barra del ángulo: costado derecho, debajo del menú hamburguesa.
+	if _pitch_slider != null:
+		var menu_bottom := margins.y + float(Icons.BUTTON_SIZE) + 10.0
+		var height := clampf(view.y - menu_bottom - margins.w - 150.0, 120.0, PitchSlider.TRACK_HEIGHT)
+		_pitch_slider.position = Vector2(view.x - margins.z - PitchSlider.TRACK_WIDTH, menu_bottom)
+		_pitch_slider.size = Vector2(PitchSlider.TRACK_WIDTH, height)
 
 
 ## Íconos propios en lugar de botones con texto (el texto queda de ayuda).
@@ -207,12 +516,15 @@ func _setup_icons() -> void:
 	_speed_button.add_theme_font_size_override("font_size", 22)
 	_speed_button.text = "x%d" % GameClock.speed
 	for pair in [[_character_button, "person"], [_diary_button, "diary"], [_jobs_button, "work"], [_restaurant_button, "dish"],
-			[_couple_button, "heart"], [_home_button, "home"], [_info_button, "info"], [_logout_button, "logout"]]:
+			[_couple_button, "heart"], [_home_button, "home"], [_neighborhood_button, "home"], [_info_button, "info"], [_logout_button, "logout"]]:
 		pair[0].icon = Icons.texture(pair[1])
 		pair[0].add_theme_constant_override("icon_max_width", 30)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	# Pulido 3B: con la perilla del ángulo desviada, la cámara sube o baja.
+	if _pitch_slider != null and absf(_pitch_slider.value) > 0.05:
+		EventBus.camera_pitch_step_requested.emit(_pitch_slider.value * PITCH_RATE * delta)
 	var fps_text := "%d FPS" % Engine.get_frames_per_second()
 	if _fps_label.visible:
 		_fps_label.text = fps_text
@@ -256,6 +568,23 @@ func _on_overlay_input(event: InputEvent) -> void:
 
 func _close_cards() -> void:
 	_mood_card.hide()
+	_card_overlay.hide()
+	_side_menu.hide()
+
+
+## Pulido 2: el menú hamburguesa se abre y se cierra con el mismo botón, y
+## también tocando afuera (el velo transparente de atrás).
+func _toggle_side_menu() -> void:
+	if _side_menu.visible:
+		_close_side_menu()
+		return
+	_close_cards()
+	_side_menu.show()
+	_card_overlay.show()
+
+
+func _close_side_menu() -> void:
+	_side_menu.hide()
 	_card_overlay.hide()
 
 
@@ -380,12 +709,12 @@ func _on_construction_changed(count: int, accelerate_cost: int) -> void:
 
 ## Cierra el menú y pide abrir otra ventana (personaje o diario).
 func _open_from_menu(request: Signal) -> void:
-	_side_menu.hide()
+	_close_side_menu()
 	request.emit()
 
 
 func _open_info() -> void:
-	_side_menu.hide()
+	_close_side_menu()
 	_update_info()
 	_update_partner_label()
 	_clock_label.text = "Día %d · %s" % [GameClock.day(), GameClock.time_text()]
@@ -436,7 +765,7 @@ func _on_game_mode_changed(mode: String) -> void:
 	_redo_button.visible = building
 	_speed_button.visible = not building
 	_action_menu.hide()
-	_side_menu.hide()
+	_close_side_menu()
 	_apply_settings()
 	_on_server_status_changed(GameServer.online, GameServer.username())
 	_action_row.visible = building
@@ -447,7 +776,7 @@ func _on_game_mode_changed(mode: String) -> void:
 
 
 func _on_level_changed(level: int) -> void:
-	_level_label.text = LEVEL_NAMES[level] if level < LEVEL_NAMES.size() else "Piso %d" % level
+	_level_label.text = HouseGrid.level_name(level)
 	_floor_map.set_level(level)
 
 
@@ -572,7 +901,7 @@ func _close_popup() -> void:
 	_popup = null
 
 
-func _popup_button(rows: VBoxContainer, text: String, on_pressed: Callable) -> Button:
+func _popup_button(rows: Control, text: String, on_pressed: Callable) -> Button:
 	var button := Button.new()
 	button.text = text
 	button.custom_minimum_size = Vector2(280, 56)
@@ -627,7 +956,14 @@ func _on_proposal_changed(mode: String, summary: Dictionary) -> void:
 	var partner := Couple.partner_name()
 	var cost := int(summary.get("cost", 0))
 	var cost_text := (" · $%d" % cost) if cost > 0 else ((" · +$%d" % -cost) if cost < 0 else "")
-	if mode == "own":
+	if mode == "plan":
+		row.add_child(_small_label("Obra prevista: %d paso%s%s" % [int(summary.get("steps", 0)), "" if int(summary.get("steps", 0)) == 1 else "s", cost_text], Color(0.75, 0.95, 1)))
+		var invoice_button := _bar_button("Factura", _show_invoice)
+		invoice_button.icon = Icons.texture("invoice")
+		invoice_button.add_theme_constant_override("icon_max_width", 26)
+		row.add_child(invoice_button)
+		row.add_child(_bar_button("Descartar", EventBus.plan_discard_requested.emit))
+	elif mode == "own":
 		row.add_child(_small_label("Propuesta: %d cambios%s" % [int(summary.get("steps", 0)), cost_text], Color(1, 0.9, 0.7)))
 		row.add_child(_bar_button("Mandar a %s" % partner, EventBus.proposal_send_requested.emit))
 		row.add_child(_bar_button("Descartar", EventBus.proposal_discard_requested.emit))
@@ -642,7 +978,7 @@ func _on_proposal_changed(mode: String, summary: Dictionary) -> void:
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	box.add_theme_constant_override("margin_top", 128)
+	box.add_theme_constant_override("margin_top", 150)
 	box.add_child(_proposal_bar)
 	$Root.add_child(box)
 	_proposal_bar.tree_exited.connect(box.queue_free)
@@ -655,3 +991,46 @@ func _bar_button(text: String, on_pressed: Callable) -> Button:
 	button.add_theme_font_size_override("font_size", 18)
 	button.pressed.connect(on_pressed)
 	return button
+
+
+# --- Factura de la obra planificada (Pulido 2) ---
+
+## Resumen tipo factura de todo lo previsto: qué se agrega y cuánto cuesta.
+## Confirmar → se cobra y corre el tiempo de espera (en pareja, antes la
+## aprueba ella). Seguir planeando la cierra sin cambiar nada.
+func _show_invoice() -> void:
+	if _builder == null:
+		return
+	var invoice: Dictionary = _builder.plan_invoice()
+	var rows := _open_popup("Factura de obra")
+	for line in invoice["lines"]:
+		var row := HBoxContainer.new()
+		var name_label := _small_label("%d × %s" % [line["qty"], line["name"]])
+		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(name_label)
+		row.add_child(_small_label("$ %d" % line["cost"], Color(1, 0.9, 0.7)))
+		rows.add_child(row)
+	rows.add_child(HSeparator.new())
+	var total := int(invoice["total"])
+	var total_text := "Total: $ %d" % total if total >= 0 else "Te devuelven: $ %d" % -total
+	var total_label := _small_label(total_text, Color(1, 0.95, 0.6))
+	total_label.add_theme_font_size_override("font_size", 22)
+	rows.add_child(total_label)
+	if int(invoice["seconds"]) > 0:
+		rows.add_child(_small_label("Espera hasta que termine: %s" % duration_text(int(invoice["seconds"])), Color(0.85, 0.9, 1)))
+	_popup_button(rows, "Confirmar y construir", func() -> void:
+		_close_popup()
+		EventBus.plan_confirm_requested.emit())
+	_popup_button(rows, "Seguir planeando", _close_popup)
+	_popup_button(rows, "Descartar el plan", func() -> void:
+		_close_popup()
+		EventBus.plan_discard_requested.emit())
+
+
+## "45 s", "3 min", "1 h 20 min" para los tiempos de espera.
+static func duration_text(seconds: int) -> String:
+	if seconds < 60:
+		return "%d s" % seconds
+	if seconds < 3600:
+		return "%d min" % ceili(seconds / 60.0)
+	return "%d h %d min" % [seconds / 3600, (seconds % 3600) / 60]

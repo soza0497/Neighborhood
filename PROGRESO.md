@@ -1,5 +1,399 @@
 # Progreso
 
+## ▶ Fase 7 — preparación de arte y estilo (versión 0.11.0) — en la nube, rama `fase-7` (sale de `pulido-3`)
+
+**No se mergea a `main`, no se exporta APK.** Otra sesión hace la Fase 8 (barrio) en paralelo: aquí se tocó lo mínimo
+en archivos de casas/parcelas/mundo (nada de eso) y casi todo es archivo nuevo.
+
+**Próximo paso:** el desarrollador principal, **en la PC con Godot**, corre lo que en la nube **NO se pudo correr** (ver abajo)
+y, si todo está bien, decide la unión a `main`. Después: empezar a hacer arte real (Blender) siguiendo `docs/estilo.md`, sección 11.
+
+### ⚠ Qué quedó SIN correr (la nube de esta sesión no tenía Godot ni Lua)
+Como el brief pide no descargar binarios externos, **nada de GDScript se ejecutó**: ni siquiera se compiló. Se escribió con cuidado, pero
+puede haber errores de sintaxis o de API al primer arranque. Lo único verificado fue lo hecho con Python: los `.glb` (cabecera, límites,
+orientación de las caras, nombres de materiales) y los JSON (válidos). **Hay que correr, en este orden:**
+1. `godot --headless --path . --import` (importa los `.glb` nuevos y registra las clases nuevas; crea los `.uid` de los scripts nuevos).
+2. `godot --headless --path . res://tests/test_art.tscn` (**nueva**, ≈ 90 comprobaciones; si falla, copiame el texto «FALLÓ: …»).
+3. Todas las pruebas de antes: `test_house` (esperado 158), `test_character` (34), `test_economy` (66), `test_server` (78), `test_couple` (46),
+   `test_business` (46), `test_parcel` (55) y `lua5.1 server/tests/test_rules.lua` (322; no se tocó nada del servidor).
+4. Con ventana: `tests/art_demo.tscn` (genera `docs/capturas/art_1_con_modelos.png`, `art_2_respaldos.png`, `art_3_recoloreo.png`; **esas capturas
+   todavía no existen**) y las demos de antes (`polish2b_demo` se ajustó: la silla ahora trae modelo).
+Los `.uid` de los scripts nuevos no están en el repo: Godot los crea al importar (paso 1); commitealos.
+
+### Fase 7 — qué se hizo
+- **`docs/estilo.md` completo**: proporciones chibi, paleta, reglas para IA (solo referencias del dueño o CC0; nunca arte de otros juegos),
+  convenciones de importación (escala, pivote, orientación, nombres, materiales con nombre, presupuesto de triángulos) y guía de Blender → juego.
+- **`ModelLoader`** (`scripts/art/model_loader.gd`): campo `model` del catálogo → `.glb` en `assets/models/`. Nunca rompe (falta, roto, sin mallas o apagado
+  → figura simple). Respeta la caja de celdas (achica si se pasa), `model_fit/pivot/scale/offset/rotation/colors`. Sirve para **muebles, escaleras,
+  pilares, puertas y ventanas**. Techos no (se arman a medida). `ModelLoader.inspect(ruta)` avisa de pivote, escala y materiales mal.
+- **Paleta y luz en un solo lugar**: `data/palette.json` (colores por nombre de material + tonos de sombra + luz). Se movieron ahí `toon` y `light` de `style.json`.
+- **Personaje modular**: `data/character_slots.json` (esqueleto, 9 slots, ganchos de animación con nombres alternativos) y `CharacterAssembler`
+  (pieza `.glb` por slot con respaldo a las figuras simples; `CharacterAnimator.bind_model` usa el `AnimationPlayer` del `.glb` si existe).
+- **Ejemplos**: `tools/make_sample_models.py` (Python, sin Blender) generó `chair.glb`, `table.glb` y `character/hair_round.glb`
+  (formas redondeadas, ≤ 304 triángulos, materiales `wood`, `cloth_red`, `wood_light`, `hair`). `chair_basic` y `table_basic` ya los usan.
+- **Info → «Usar modelos 3D (arte)»**: apaga/prende y la casa y los personajes se arman de nuevo. Se guarda en la partida (`use_models`).
+- Versión **0.11.0** en `project.godot` y `export_presets.cfg` (sin exportar).
+
+### Fase 7 — cómo probarlo en el teléfono (cuando se exporte el APK, que NO se hizo)
+1. Tienda → Silla o Mesa de comedor → colocalas: se ven redondeadas, con tela roja y madera (los `.glb` de ejemplo).
+2. Menú → Info → apagá «Usar modelos 3D (arte)»: vuelven las cajas de antes; prendelo y vuelven las redondeadas.
+3. Cambiá un color en `data/palette.json` (p. ej. `wood`) y mirá que cambie en todas las piezas de madera.
+4. Medí los 30 FPS con el interruptor prendido y apagado.
+
+### Pendientes / errores conocidos de la Fase 7
+- Todo lo de «SIN correr». Capturas de la demo sin generar.
+- Los modelos ignoran el color con el que se pinta un mueble (`piece_color`); se manejan con `model_colors` o la paleta. Decidir si se quiere pintar muebles con modelo.
+- Techos con modelo y ropa deformable sobre esqueleto real: no hay (ver `docs/estilo.md`, sección 12).
+- Un `.glb` crudo (sin importar) solo se lee en la PC; en el APK viaja el importado (abrir el proyecto en el editor antes de exportar).
+
+## ▶ Fase 8 — Barrio (versión 0.11.0) — en la nube, rama `fase-8` (sale de `pulido-3`)
+
+**No se mergea a `main`, no se exporta APK.** Otra sesión hace la Fase 7 (arte) en `fase-7`: acá no se tocó el
+catálogo ni el cargador de modelos; todo lo nuevo está en `scripts/neighborhood/`, `data/neighborhood.json`,
+`ui/neighborhood_panel.*`, `tests/*neighborhood*` y (8D) un módulo Lua nuevo.
+
+**ATENCIÓN — nada de esto se pudo correr:** el entorno de la nube de esta sesión NO tiene Godot ni Lua y el
+brief prohíbe descargar binarios. Todo el código de la Fase 8 está escrito **sin ejecutarlo**: puede tener errores
+de sintaxis o de lógica. Lo primero que hay que hacer en la PC es correr las pruebas (lista abajo) y arreglar lo que salga.
+
+- **8A barrio y calles: escrito (sin correr)** — `data/neighborhood.json` (24 lotes: tu parcela, 10 casas en tu fila,
+  12 enfrente y una plazoleta), casas de vecinos deterministas con piezas del catálogo, acera de enfrente, farolas,
+  árboles de acera. La casa detrás de la valla ES la del lote vecino del mapa (reemplaza la «casa al azar» del Pulido 3A).
+- **8B vista aérea y visitas: escrito (sin correr)** — menú ☰ → «Barrio»: vista aérea (misma cámara; pellizcar y
+  girar), lista «¿Qué casa querés visitar?» (solo ver, por dentro), botón «Volver a mi casa», interruptor
+  «Mi casa se puede visitar» (apagado por defecto, se guarda en `GameState.settings["house_visitable"]`).
+- **8C vida: escrito (sin correr)** — `NeighborhoodLife`: hasta 10 vecinos con la figura chibi que salen de su casa,
+  caminan por las aceras, cruzan por los pasos (los autos frenan), se saludan (`wave`), van al parque o a casa de
+  otro vecino y a veces entran; 4 autos de cajas que siguen al de adelante sin tocarse. Ganchos de animación por
+  nombre (`idle`, `walk`, `wave`) y de sonido por evento (`EventBus.neighborhood_sound`; archivos futuros en
+  `data/sounds/`, ver `LEEME.txt`). LOD por distancia y menos vecinos si los FPS bajan de 24.
+- **8D metas del barrio: escrito (sin correr)** — meta «Plantar 50 plantas entre todos» (`data/neighborhood.json`,
+  `goal`): módulo Lua `server/nakama/modules/neighborhood_goals.lua` + RPC `goal_load` / `goal_claim` registrados en
+  `neighborhood.lua` (el servidor cuenta las plantas terminadas de tu casa, tope 10 por día, vecinos simulados
+  deterministas con tope del 60 %, premio chico y opcional $150 + 30 XP, sin fecha límite). Copia local para partidas
+  sin cuenta en `neighborhood_goal.gd` (mismos números). Panel «Barrio»: barra de la meta, tu aporte y «Retirar».
+
+**Resumen (fase 8 completa en código, 0 líneas ejecutadas):** barrio de 24 lotes con calle, aceras, farolas, árboles y
+plazoleta; 23 casas de vecinos generadas (apellido y diseño con piezas del catálogo, siempre iguales); la casa de detrás
+de la valla es la del lote vecino; vista aérea con la misma cámara; visitar casas por dentro en modo solo ver y volver;
+interruptor de privacidad; vecinos animados que caminan, se saludan y entran a sus casas; autos sin choques; LOD y
+límite de personajes; ganchos de sonido; meta del barrio con módulo Lua. Versión 0.11.0 (`project.godot`, `export_presets.cfg`).
+
+**Cómo probarlo en la PC / el teléfono (cuando se pueda correr):**
+1. `godot --headless --path . res://tests/test_neighborhood.tscn` y `lua5.1 server/tests/test_goals.lua` → «0 fallaron».
+   Después las pruebas viejas (`test_house`, `test_parcel`, `test_economy`, `test_server`, `test_couple`, `test_business`,
+   `test_character` y `lua5.1 server/tests/test_rules.lua`): no deberían cambiar (solo se tocaron `main.gd`, `world_builder.gd`,
+   `camera_rig.gd`, `event_bus.gd`, `hud.*` y `neighborhood.lua` con cambios chicos).
+2. `docker compose restart nakama` en `server/` (módulo Lua nuevo + `neighborhood.json`).
+3. Abrí el juego: mirá la valla de un costado (la casa de atrás ahora es del barrio) y la calle con farolas y vecinos.
+4. ☰ → **Barrio**: «Vista aérea del barrio» (arrastrá, pellizcá, girá con dos dedos); elegí una casa de la lista:
+   se ve por dentro (solo ver); **← Volver a mi casa**. Probá también con Esc en la PC.
+5. En Barrio → **Privacidad**: «Mi casa se puede visitar» (apagado). **Meta del barrio**: poné plantas en tu casa (Tienda →
+   Plantas), esperá que terminen la obra, abrí Barrio: sube tu aporte (máx. 10 por día).
+6. Menú Info → Mostrar FPS: con la calle a la vista y los vecinos, medí los **30 FPS** en el teléfono (si baja, hay menos vecinos).
+7. `tests/neighborhood_demo.tscn` con ventana (o `SHOT_DIR=docs/capturas xvfb-run ...`): saca `n8a_*`, `n8b_*`, `n8c_*`, `n8d_*`.
+
+### Pendientes / errores conocidos de la Fase 8
+- **TODO EL CÓDIGO ESTÁ SIN EJECUTAR** (sin Godot ni Lua en la nube): esperá errores de sintaxis o de tipos al primer arranque.
+  No hay capturas en `docs/capturas/` (las genera la demo).
+- Una sola calle; sin calle transversal ni giros de autos. Los vecinos no tocan tu parcela (caminan por aceras y lotes).
+- «Entrar a casa» es desaparecer unos segundos: sin HouseNav dentro de las casas vecinas ni vecinos visibles al visitar.
+- No se puede tocar una casa del mapa para visitarla (solo la lista). Los carteles de familia usan `Label3D` simples.
+- La meta cuenta solo plantas (categoría `plants`); «usar servicios» y adornos quedan para sumar en `goal.categories`.
+  La pareja no suma a la misma meta todavía (cada uno tiene la suya). Un solo barrio, una sola meta, sin ciclo nuevo.
+- Sonidos: solo las señales; no hay archivos en `data/sounds/`.
+- Si se quiere el interruptor de privacidad en el servidor (que la pareja o familia lo vea), falta una RPC.
+
+**Próximo paso:** (1) en la PC: `godot --headless --path . res://tests/test_neighborhood.tscn` y arreglar errores;
+(2) correr `tests/neighborhood_demo.tscn` con ventana y mirar las capturas `docs/capturas/n8*.png`.
+
+## ▶ Pulido 3 (versión 0.10.0) — en la nube, rama `pulido-3` (sale de `pulido-2`)
+
+Brief completo en `docs/pulido-3.md`. Tres sub-fases, un push a `pulido-3` al terminar cada una.
+**No se mergea a `main`, no se exporta APK.** Estado:
+
+- **3A parcela, camino y obstáculos: HECHO (2026-11-04)** — ver abajo.
+- **3B interfaz y personaje: HECHO (2026-11-04)** — ver «Pulido 3B» abajo.
+- **3C estilo (contorno sin costuras): HECHO (2026-11-04)** — ver «Pulido 3C» abajo.
+
+**Próximo paso:** el desarrollador principal verifica en la PC (checklist al final de esta nota, «Cómo
+probarlo»), corre las demos con Nakama que no se pudieron correr en la nube, y decide si se une
+`pulido-3` a `main` y se exporta el APK 0.10.0 (nada de eso se hizo: el brief lo prohíbe).
+
+### Pulido 3B — qué se hizo
+- **Pantalla cortada**: arreglada la causa (la columna izquierda exigía altura y agrandaba toda la interfaz) y
+  se respeta el **área segura** (`SafeArea`). Probado en 1920×1080, 1080×2400 y 2400×1080.
+- **Mueble**: al soltar queda **sostenido** y se puede **girar 45°** antes de Confirmar.
+- **Techo**: la rejilla **sube a la altura de las paredes** del piso.
+- **Ángulo de cámara**: **barra vertical con perilla** a la derecha, debajo del menú (vuelve sola al centro;
+  el botón viejo se quitó).
+- **Maqueta de pisos**: flechas **fuera de la caja**, azul/verde translúcido, **sin aristas del fondo**.
+- **Cuartos**: el jugador asigna el tipo (menú al tocar un cuarto o botón «Cuartos»), dormitorio **principal**
+  (`HouseRooms.main_bedroom`), «Multiuso» eliminado → **«★ Recomendado»**. Se guarda en la partida.
+- **Creación de personaje** al registrarse: nombre, 5 peinados, 4 ojos, 4 bocas, piel, pelo, ropa, con vista
+  previa que gira; opciones en `data/character_options.json`.
+- Pruebas: `test_house` **158**, `polish3b_demo` **52** (capturas `docs/capturas/p3b_*.png`).
+
+### Pulido 3C — qué se hizo
+- **Paredes continuas**: cajas de contorno por tramo recto, sin contorno entre tramos (costura 22 → 0 píxeles).
+  `polish3c_demo` **10** (capturas `p3c_*.png`: antes y después).
+
+### Pulido 3 — cómo probarlo en el teléfono
+1. [Claude, después de verificar] Unir `pulido-3` a `main`, **reiniciar Nakama** (`docker compose restart nakama`
+   en `server/`) y exportar el APK 0.10.0. Tu partida del Pulido 2 se migra sola (la casa se acerca a la calle).
+2. **Parcela**: al abrir, tu casa está cerca de la calle, con vallas a los costados y casas de vecinos detrás.
+   Solo se puede construir en 64 × 64 (lo demás se ve sombreado). Subí a nivel 4 y 6 para abrir más.
+   Mirá que la franja entre la casa y la calle esté sin árboles. Mandá al personaje a caminar y mirá que
+   rodee los árboles; limpiá uno y fijate que el camino se acorta.
+3. **Pantalla**: abrí la Tienda y elegí un mueble; las barras de arriba y abajo no se salen. Probá girando el
+   teléfono (vertical y horizontal).
+4. **Mueble**: Tienda → cama → tocá el piso: queda sostenida; tocá el botón de girar (45° cada vez) y
+   Confirmar (✓).
+5. **Techo**: Obra → Construir → Techos: la rejilla flota arriba de las paredes; arrastrá el rectángulo.
+6. **Ángulo**: arrastrá la perilla de la derecha hacia arriba (vista de cielo) y abajo; al soltar vuelve al centro.
+7. **Maqueta de pisos**: flechas afuera de la caja, sin las líneas de atrás.
+8. **Cuartos**: Obra → Modificar → tocá el piso de un cuarto → «Tipo de cuarto», o el botón de la etiqueta
+   (izquierda). Elegí Dormitorio → ★ Principal. Abrí la Tienda dentro del cuarto: pestaña «★ Recomendado».
+9. **Personaje**: cerrá sesión (menú) y creá una cuenta nueva: aparece la creación de personaje.
+10. **Contorno**: mirá las paredes desde varios ángulos (sin rayitas). Menú → Info → Mostrar FPS: medí los 30
+    FPS con una casa de dos pisos amueblada, con contorno encendido y apagado.
+
+### Pulido 3 — verificación final (nube: Godot 4.7.2 con SHA-512 verificado, Lua 5.1 de apt)
+Sin pantalla: casa **158**, personaje 34, economía 66, servidor 78, pareja 46, negocio 46, parcela **55**; Lua **322**.
+Demos con xvfb (OpenGL): `ui_demo` **41**, `polish2a_demo` 46, `polish2b_demo` 43, `polish2c_demo` 49,
+`polish3a_demo` **15**, `polish3b_demo` **52**, `polish3c_demo` **10**. Capturas en `docs/capturas/p3a_*`, `p3b_*`, `p3c_*`.
+**No se corrieron** (necesitan Nakama real; en la nube no hay Docker): `server_demo`, `economy_server_demo`,
+`couple_demo`, `couple_live_demo`, `login_demo`, `restaurant_demo`, `parcel_server_demo`. Las reglas del servidor
+(zona, migración a formato 5) están cubiertas por las pruebas Lua. **Pendiente en la PC**: reiniciar Nakama y
+correr esas demos (las de parcela y casa asumen la casa nueva cerca de la calle: `home_origin()` ya la sigue;
+`parcel_server_demo` se adaptó a ciegas, sin poder correrla). Los **30 FPS** y el **área segura real** (muesca,
+barra de gestos) solo se pueden medir en el teléfono.
+
+### Errores conocidos / pendientes de Pulido 3
+- `login_demo` no se adaptó para la pantalla de creación de personaje (el flujo real: crear cuenta → creación
+  → juego); probar a mano.
+- Los tipos de cuarto no viajan al servidor (a propósito); con otro teléfono de la misma cuenta no se ven.
+- Pared con puerta o ventana conserva el contorno por tramo (puede quedar una rayita en la juntura con el marco).
+- Cámara: no se limita a la zona abierta (se puede mirar todo el terreno, solo no se puede pisar ni construir).
+
+### Pulido 3A — qué se hizo
+- **Zona disponible = el doble de la parcela original (32 → 64 × 64), pegada a la calle**;
+  con niveles se abre hasta el triple (96 × 96: nivel 4 atrás, nivel 6 costados). Lo demás
+  se ve (sombreado) pero no se pisa ni se construye (teléfono y servidor). `data/parcel.json`.
+  (La «parcela original» es la de 32; la de la Fase 1 era de 12. Ver DECISIONES.)
+- **Vallas de madera** en los costados de la zona y **una casa de vecino al azar** detrás de cada
+  una (solo decoración). Siguen a la zona al abrirse terreno. `data/world.json`.
+- **La casa va cerca de la calle** (a 6 celdas), la franja hasta la calle **sin obstáculos**.
+  **Migración** (formato de casa 5, también en el servidor): casas, muebles, techos y
+  personaje se corren 26 celdas hacia la calle. Probada con una copia de partida del Pulido 2
+  (no se tocó ninguna partida real).
+- **El personaje esquiva obstáculos**: la red de caminos se regenera al limpiar/abrir terreno y
+  el camino rodea con aire árboles y rocas. Prueba: llega al otro lado de un árbol.
+- Pruebas: `test_parcel` **55**, Lua **322**, demo nueva `polish3a_demo` **15** (capturas
+  `docs/capturas/p3a_*.png`).
+
+**Verificación 3A (nube: Godot 4.7.2 con SHA-512 verificado, Lua 5.1 de apt):** sin pantalla —
+casa 150, personaje 34, economía 66, servidor 78, pareja 46, negocio 46, parcela 55; Lua 322.
+Demos con xvfb: `ui_demo` 40, `polish2a_demo` 46, `polish2b_demo` 43, `polish2c_demo` 49 y
+`polish3a_demo` 15. **No se corrieron** las demos que necesitan Nakama real (`server_demo`,
+`economy_server_demo`, `couple_demo`, `couple_live_demo`, `login_demo`, `restaurant_demo`,
+`parcel_server_demo`): en la nube no hay Docker ni Nakama; lo del servidor está cubierto por
+las pruebas Lua. **Antes de usar el servidor: reiniciar Nakama** (`docker compose restart nakama`)
+para que lea los módulos y `data/parcel.json` nuevos. Hay que correr esas demos en la PC.
+
+## Fase actual: Pulido 2 (versión 0.9.0) — en la nube, rama `pulido-2`
+
+Orden (lo pidió el dueño): **2A errores y claridad → 2B estilo y vida → 2C parcela,
+servicios y entregas** (las tres listas). Cada sub-fase termina con pruebas en verde, commit y push
+a `pulido-2`. Estado de cada una abajo.
+
+### Pulido 2A — errores y claridad: HECHO (2026-11-04)
+- **Techo "trabado"**: causa real encontrada y con prueba que la reproduce (un
+  techo en un piso más alto que lo construido no tenía a dónde ir; o venía
+  roto). Ahora todo piso con algo existe y lo roto se saca al cargar (teléfono
+  y servidor). DECISIONES → "Pulido 2A".
+- **Basurero**: borra TODO (techos, paredes, cimientos, pisos, muebles); lo que
+  se apoyaba solo en la pieza cae con ella, todo en rojo y con confirmación.
+- **Menú hamburguesa**: se cierra tocándolo otra vez o tocando afuera.
+- **Sin piso fantasma**: **Agregar piso** es una opción aparte en Obra; avisa
+  "Para agregar un piso tiene que haber una parte sin techo".
+- **Selector de pisos de frente** (holograma azul, un color por piso, puerta y
+  ventanas, punto parpadeante, flechas ↑↓ y girar de a 45°, recuerda el ángulo).
+- **Obra** con tres modos con ícono: Construir (llave y martillo), Modificar
+  (cruz de flechas) y Borrar (basurero).
+- **Construcción planificada**: lo que agregás queda *previsto* y brilla cada
+  3 s; **Factura** (qué se agrega, total, espera) → Confirmar → cobra y corre
+  el tiempo (en pareja, antes aprueba ella). Descartar lo deshace.
+- **Márgenes** arriba (34) y abajo (22) y **ángulo vertical de la cámara**
+  (5 posiciones, botón a la izquierda).
+- Pruebas: ver "Verificación" más abajo. Demo nueva `polish2a_demo` con capturas
+  (`docs/capturas/p2a_*.png`).
+
+### Pulido 2C — parcela, servicios y entregas: HECHO (2026-11-04) (más los sótanos, abajo)
+- **Parcela de 96 × 96** (el doble hacia cada lado; la casa de antes queda en el centro y se
+  migra sola, también en el servidor). Llena de **árboles, rocas, un laguito, tocones y
+  maleza** (≈540, desde una semilla: teléfono y servidor generan **los mismos**) que
+  **bloquean construir** hasta limpiarlos. Todo en `data/parcel.json`.
+- **Limpiar**: tocás un obstáculo → «Llamar servicio» → **cobra el servidor** → espera real →
+  llega el **jardinero / leñador** (el personaje va a abrirle la puerta) o la **cuadrilla con
+  tractor / retroexcavadora** (necesita camino libre de 2 × 2 desde la calle; si no, «No puedo
+  entrar»). Costos crecientes (× 1 + 0,02 por cada limpieza, tope × 3).
+- **Servicios genéricos** (vehículo o persona, ruta, acceso, animación) y **ambulancia**:
+  caída por una puerta al vacío de un piso alto → llega la ambulancia, lo curan (sin muerte
+  ni pérdida de progreso).
+- **Entrega de compras**: camión + repartidor, se le caen las cajas en la puerta, una caja en
+  cada lugar, **«Abrir todas las cajas»** (humo blanco, tose) o las abre solo.
+- Guardado **v4** (migración probada). Rendimiento: obstáculos en MultiMesh, red de caminos
+  solo en la zona útil (≈100 ms para armarla).
+- Pruebas nuevas: `test_parcel` (**40**), `polish2c_demo` y `parcel_server_demo` (**22**), y
+  Lua **312** (los mismos obstáculos que el teléfono, caminos, costos, bloqueo al
+  construir y migración de la parcela).
+
+### Pulido 2C — verificación (nube: Godot 4.7.2, Nakama 3.41.0 + PostgreSQL 16 de prueba)
+Sin red **460**: casa 150 (127 + 23 de sótanos), personaje 34, economía 66, servidor 78, pareja 46,
+negocio 46 y parcela 40. Lua **312**. Demos: `server_demo` 24, `economy_server_demo` 39, `login_demo` 17,
+`couple_demo` 78, `couple_live_demo` 12, `ui_demo` 40, `restaurant_demo` 32, `polish2a_demo` 46,
+`polish2b_demo` 43, **`polish2c_demo` 49** y **`parcel_server_demo` 22**. Nakama reiniciado con los
+módulos nuevos, sin errores. (Las demos que construyen en el servidor se adaptaron a la parcela de 96:
+sus coordenadas pasaron a la zona del centro; si no, un obstáculo al azar podía bloquear una pieza.)
+
+### Pulido 2C — cómo probarlo en el teléfono (para el dueño)
+1. [Claude] Unir `pulido-2` a `main`, **reiniciar Nakama** (`docker compose restart nakama`
+   en `server/`: lee `neighborhood_parcel.lua` y `data/parcel.json`; en los logs aparece
+   «Parcela: 96 x 96 celdas») y exportar el APK 0.9.0. **Tu partida de 0.8.0 se migra sola**:
+   la casa queda en el centro de la parcela nueva.
+2. [Dueño] Instalar el APK. Al abrir: tu casa en el medio de una parcela enorme, con
+   obstáculos alrededor (la zona de tu casa está libre).
+3. Probá construir encima de un árbol: queda en rojo y dice «Ahí hay un obstáculo…».
+4. Tocá una **maleza**: aparece qué servicio la limpia, cuánto cuesta y cuánto espera →
+   **Llamar servicio** (cuesta $15 y tarda unos 20 s). Mirá: tu personaje va al portón de la
+   calle, le abre y llega el jardinero; al terminar, la maleza desaparece y ya podés construir ahí.
+5. Probá una **roca** (tractor) y el **laguito** (retroexcavadora). Para ver «no puede entrar»:
+   cerrá con cimientos todo el frente de la parcela, llamá al servicio de una roca y esperá
+   (aunque antes de llamar, la ventana ya avisa que no hay camino).
+6. Comprá un mueble (Tienda). Cuando termine la obra llega el **camión**: al repartidor se le
+   caen las cajas en la puerta y deja una en cada lugar. Tocá **Abrir todas las cajas**
+   (abajo a la izquierda): el personaje las abre tosiendo entre humo. Si no tocás nada, a veces
+   las abre solo.
+7. **Ambulancia**: hacé un piso de arriba con una puerta que dé al vacío (sin balcón). En
+   algún momento el personaje se asoma y se cae; llega la ambulancia y lo cura. Fijate que no
+   perdés nada.
+8. **FPS** (Menú → Info → Mostrar FPS) con la parcela completa, casa de dos pisos amueblada:
+   meta 30+. Si baja, probá apagar el **contorno**; contame en cuántos FPS anda.
+9. Decime si los precios de limpieza están bien (todo en `data/parcel.json`).
+
+### Pulido 2C — pendientes y errores conocidos
+- **No se midieron los FPS en un teléfono** (en la nube no hay GPU). Las obstrucciones y el
+  bosque van en MultiMesh y la red de caminos se acotó a la zona útil, pero hay que verlo en el
+  teléfono. Armar los caminos tarda ~100 ms en esta máquina; en el teléfono puede ser más.
+- Las cajas y los servicios son **locales** (cada teléfono dibuja los suyos): con pareja, uno
+  puede ver un camión y el otro no. El dinero y la limpieza sí son del servidor.
+- Los servicios de limpieza solo se piden en **modo vivir** (o en construir sin herramienta).
+- La ambulancia no se llama desde ningún lado más (no hay lesiones reales todavía).
+- No se bajaron sonidos (ver 2B).
+
+### Pulido 2C — sótanos: HECHO
+- **Hasta 3 sótanos** (niveles −1 a −3; 5 pisos arriba). **Excavar antes de los cimientos**: pieza
+  «Excavación (sótano)», $30 por celda y 90 s de espera; después cimientos, piso y paredes del
+  sótano; escalera propia del sótano para llegar. **Obra → Agregar sótano**; el selector de frente
+  y las flechas bajan hasta el sótano y el terreno se esconde bajo tierra.
+- Niveles negativos en `HouseGrid`/`HouseData`, reglas de soporte en el juego **y en el servidor** (Lua),
+  migración de las casas de 5 niveles. Pruebas: 23 nuevas en `test_house`, 12 Lua y la sección 7 de
+  `polish2c_demo`.
+- Cómo probarlo: Construir → **Obra** → **Agregar sótano** → ir al sótano (flecha ↓) → **Construir →
+  Estructura → Excavación** (arrastrar) → confirmar → esperar 90 s (o acelerar) → **Cimientos** →
+  piso y paredes. Para bajar: una **escalera** en el sótano.
+- Pendiente: la retroexcavadora no se ve trabajando en la excavación (solo la espera de obra).
+
+### Pulido 2B — estilo y vida: HECHO (2026-11-04)
+- **Shader toon con contorno** (geometría invertida, grosor en píxeles, sombras
+  duras en 3 tonos, luz cálida) en casa, muebles, personaje, vecinos, bosque y
+  autos; suelo y calle sin contorno. **Todo editable en `data/style.json`** y los
+  dos `.gdshader`. Menú → Info → **Contorno (calidad)** lo apaga. Primer
+  `docs/estilo.md` con la paleta.
+- **Cambio de arte sin tocar código**: una pieza del catálogo puede traer
+  `model` (`.glb`) con respaldo a las figuras de ahora si no existe.
+- **Entorno**: suelo de un solo color, **niebla** en los bordes (mismo color que
+  el cielo), **bosque** atrás y a los costados (≈580 árboles en 3 llamadas de
+  dibujo) y **7 casas de vecinos** atrás.
+- **Trabajo como título**: sale por la puerta con **saco y maleta**, se despide con
+  una nubecita y desaparece del lote; vuelve por la calle con otra animación
+  (saltito). La pareja se ve igual por su intención.
+- **Restaurante automático**: la caja se cobra sola (el servidor calcula por
+  tiempo, al entrar y cada rato); el minijuego es un **Reto opcional** con
+  premio extra; **Mesero** y **Cocinero** como empleos sin tener restaurante.
+  Contratar personal/sueldos: solo diseño en `VISION.md`.
+- **Vida**: autos y gente en la calle (solo local), reposo del personaje
+  (respira, mira alrededor), hojitas que caen, humo blanco, ganchos de sonido con
+  volúmenes en Info.
+- Demo nueva `polish2b_demo` (43 comprobaciones, capturas `docs/capturas/p2b_*.png`)
+  y 6 pruebas Lua nuevas (cobro automático).
+
+### Pulido 2B — verificación (nube)
+Sin red: casa 127, personaje 34, economía 66, servidor 78, pareja 46, negocio 46
+= **397**. Lua **281** (275 + 6 nuevas del cobro automático y los empleos de
+restaurante). Demos: `server_demo` 24, `login_demo` 17, `couple_demo` 78,
+`couple_live_demo` 12, `ui_demo` 40, `restaurant_demo` 32, `polish2a_demo` 46 y
+**`polish2b_demo` 43** (nueva). `economy_server_demo` 35/39 igual que en `main`
+(ver 2A). Nakama reiniciado con los módulos nuevos, sin errores.
+
+### Pulido 2B — cómo probarlo en el teléfono (para el dueño)
+1. [Claude] Con la rama unida: reiniciar Nakama (`docker compose restart nakama`
+   en `server/`: toma el cobro automático y los empleos nuevos) y exportar el APK.
+2. [Dueño] Instalar el APK. Al abrir, el mundo se ve **dibujado**: contorno
+   oscuro fino, sombras en 3 tonos.
+3. Mirá el borde del mapa (alejá la cámara y bajala con el botón del ángulo):
+   **no se ve dónde termina** la calle ni hay costados azules: hay niebla y
+   **bosque**; atrás, **casas de vecinos**.
+4. Por la calle pasan **autos y gente**; caen hojitas en el jardín.
+5. **Menú → Info → Contorno (calidad)**: apagalo y fijate si sube el FPS (meta
+   30+ con una casa de dos pisos amueblada). Ahí también están los **volúmenes**.
+6. **Menú → Empleos**: probá **Mesero** o **Cocinero** (nivel 2 y 3). Cuando
+   empiece el turno el personaje sale **con saco y maleta**, se despide con una
+   nubecita y no está en la casa; al terminar vuelve caminando desde la calle.
+7. **Menú → Restaurante** (con restaurante abierto): ahora dice «Ingreso
+   automático» y se cobra solo («El restaurante te dio $X»); «Reto: Servicio»
+   es el minijuego opcional con premio extra.
+8. Con tu pareja: cuando uno sale a trabajar, el otro lo ve salir con saco y
+   maleta y desaparecer.
+9. **Pendiente tuyo (sonidos)**: si querés sonidos, bajá un paquete CC0 (por
+   ejemplo Kenney «Interface Sounds» / «Impact Sounds»), copiá los `.ogg` a
+   `assets/audio/` con los nombres `build`, `cancel`, `coin`, `level_up`,
+   `error`, `door`, `step`, `truck`, `box_open`, `cough`, `siren`, `car_pass`, y
+   anotá la licencia en `docs/`. No hay que tocar código.
+
+### Pulido 2A — verificación (nube, Godot 4.7.2, Nakama 3.41.0 + PostgreSQL 16 de prueba)
+Sin red: casa **127** (99 + 28 nuevas), personaje 34, economía 66, servidor 78,
+pareja 46, negocio 46 = **397**. Lua **275** (273 + 2). Demos: `server_demo` 24,
+`login_demo` 17, `couple_demo` 78, `couple_live_demo` 12, `ui_demo` 40,
+`restaurant_demo` 32, **`polish2a_demo` 46** (nueva, capturas `docs/capturas/p2a_*.png`).
+**Ojo:** `economy_server_demo` da 35/39 en esta máquina de la nube **también en
+`main` sin ningún cambio** (se probó con un `git worktree` de `6e96076`): falla
+el turno de trabajo con el reloj a x5 (depende de la velocidad de la máquina).
+No es de esta tanda; en la PC del dueño pasaba 39/39. Verificar allá.
+
+### Pulido 2A — cómo probarlo en el teléfono (para el dueño)
+1. [Claude] Unir `pulido-2` a `main`, reiniciar Nakama (`docker compose restart
+   nakama` en `server/`) y exportar el APK 0.9.0 (cuando lo pidas).
+2. [Dueño] Instalar el APK.
+3. Tocá **☰**: se abre. Tocá **☰** otra vez (o afuera): se cierra.
+4. Los íconos de arriba y abajo tienen más aire; el botón del **ángulo** (a la
+   izquierda, junto a techo y paredes) recorre 5 inclinaciones, de frente a
+   desde arriba.
+5. Construir → **Obra**: ahora hay **Construir / Modificar / Borrar** (íconos) y,
+   al lado, **Agregar piso**.
+6. Con la casa toda techada, **Agregar piso** dice "Para agregar un piso tiene
+   que haber una parte sin techo". Sacá un pedazo de techo y probá de nuevo.
+7. A la izquierda: el **frente de la casa** en azul. Tocá un piso para ir;
+   usá ↑ ↓ y ← → (girar). Cerrá el juego y abrilo: recuerda el ángulo.
+8. **Borrar**: probá techos (también viejos), paredes, pisos y cimientos. Si
+   algo sostiene otra cosa, la pregunta lo dice y se pone todo en rojo.
+9. **Construir** una pared o piso: queda *previsto* (brilla). Aparece arriba
+   "Obra prevista" → **Factura**. Probá Seguir planeando, Descartar y
+   Confirmar y construir (cobra y empieza la espera).
+10. Si algún techo viejo seguía "trabado": al abrir esta versión debería
+    poder borrarse; si no, avisame cuál era (piso y dónde).
+
 ## Fase actual: 6 — Primer negocio: restaurante (verificada en la PC; falta probarla en el teléfono)
 
 **Fase 6 verificada en la PC (2026-11-04).** Rama `fase-6` unida a `main`.
@@ -15,8 +409,7 @@ entrega, servicios, parcela más grande, sótanos, niebla, cámara). **Orden:**
 Fase 6 (en la nube, rama `fase-6`) → el dueño prueba su APK y manda feedback
 → Pulido 2 = esta lista + ese feedback.
 
-**Próximo paso:** el dueño prueba el APK 0.8.0 en el teléfono (checklist de la
-Fase 6 de abajo) y manda su feedback. Después: **Pulido 2** (`docs/pulido-2.md`
+**Próximo paso (después del Pulido 2):** el dueño prueba el APK 0.9.0 en el teléfono (checklists de 2A, 2B y 2C) y manda su feedback. Después: **Pulido 2** (`docs/pulido-2.md`
 + ese feedback). Siguen pendientes las pruebas de la Fase 5 y del Pulido 1 en
 los teléfonos.
 

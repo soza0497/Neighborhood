@@ -14,10 +14,21 @@ class_name HouseGrid
 ## Tamaño de la parcela en celdas (ancho X, fondo Z). Es la extensión
 ## máxima donde el jugador puede construir (casa, cobertizo, cancha...).
 ## El frente (Z grande) da a la calle.
-const LOT_SIZE := Vector2i(32, 32)
+## Pulido 2C: 96 x 96 = la casa de antes (32 x 32) con otro 100 % hacia cada
+## lado. Es "static var" (no const) solo para que las pruebas viejas, que
+## arman casas en un lote de 32, puedan elegir ese tamaño.
+static var LOT_SIZE := Vector2i(96, 96)
+## La zona donde queda la casa (cerca de la calle). Lo demás está lleno de
+## obstáculos hasta que se limpia, o cerrado hasta subir de nivel (ver ParcelRules).
+const HOME_ZONE := 32
 ## Cantidad de pisos (niveles) que se pueden construir: planta baja + 4.
 ## (También en el servidor: neighborhood_house.lua y neighborhood_rules.lua.)
 const MAX_LEVELS := 5
+## Pulido 2C: hasta 3 sótanos hacia abajo (niveles -1, -2 y -3). Los niveles
+## van de MIN_LEVEL a MAX_LEVELS - 1; HouseData los guarda con level_index().
+const MAX_BASEMENTS := 3
+const MIN_LEVEL := -MAX_BASEMENTS
+const LEVEL_COUNT := MAX_LEVELS + MAX_BASEMENTS
 
 ## Alto de los cimientos: la planta baja queda a esta altura del pasto.
 const FOUNDATION_HEIGHT := 0.3
@@ -27,6 +38,40 @@ const WALL_HEIGHT := 2.7
 const WALL_THICKNESS := 0.15
 ## Alto de las paredes cuando la vista es "paredes bajas".
 const CUT_WALL_HEIGHT := 0.5
+
+
+## Solo para las pruebas: elige un lote de 32 (la parcela vieja) y borra los
+## obstáculos, así las pruebas que arman casas con coordenadas chicas siguen igual.
+static func use_test_lot() -> void:
+	LOT_SIZE = Vector2i(32, 32)
+	HouseData.blocked_cells = {}
+
+
+## Todos los niveles posibles, de abajo (-3) hacia arriba (4).
+static func level_range() -> Array:
+	return range(MIN_LEVEL, MAX_LEVELS)
+
+
+## Posición de un nivel en la lista de HouseData.levels (el -3 es la 0).
+static func level_index(level: int) -> int:
+	return level - MIN_LEVEL
+
+
+static func is_valid_level(level: int) -> bool:
+	return level >= MIN_LEVEL and level < MAX_LEVELS
+
+
+## Nombre de un nivel para la interfaz.
+static func level_name(level: int) -> String:
+	if level < 0:
+		return "Sótano %d" % -level
+	return "Planta baja" if level == 0 else "Piso %d" % level
+
+
+## Esquina de la zona de la casa dentro de la parcela (Pulido 3A): centrada de
+## izquierda a derecha y CERCA de la calle (data/parcel.json, home_street_gap).
+static func home_origin() -> Vector2i:
+	return ParcelRules.home_origin(ParcelRules.config())
 
 
 ## Altura (Y local) de la superficie de un nivel. Nivel 0 = planta baja.

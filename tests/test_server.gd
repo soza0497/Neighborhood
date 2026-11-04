@@ -13,6 +13,7 @@ var _failed := 0
 
 
 func _ready() -> void:
+	HouseGrid.use_test_lot()  # Estas pruebas arman casas en un lote de 32 (la parcela real, desde el Pulido 2C, es de 96).
 	_test_session()
 	_test_credentials()
 	_test_error_texts()

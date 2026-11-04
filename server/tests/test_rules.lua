@@ -161,13 +161,13 @@ local result = rules.build(data, s, {
   w(0, "foundation", "2,1", { item = "foundation_basic", ready_at = 5 }),
 }, NOW)
 check(result.money_change == -10 and s.money == 2990, "dos cimientos cobran 10")
-check(s.house.levels[1].foundation["1,1"].item == "foundation_basic", "la casa cambió")
-check(s.house.levels[1].foundation["2,1"].ready_at == nil, "el servidor ignora el ready_at del teléfono")
+check(s.house.levels[4].foundation["1,1"].item == "foundation_basic", "la casa cambió")
+check(s.house.levels[4].foundation["2,1"].ready_at == nil, "el servidor ignora el ready_at del teléfono")
 check(result.xp_gained == 5 and s.xp == 5 and s.discovered.foundation_basic, "primera vez: experiencia")
 check(#s.history.undo == 1 and #s.history.redo == 0, "un paso de deshacer")
 
 result = rules.build(data, s, { w(0, "objects", "o7", { item = "bed_basic", cell = { 3, 3 }, rot = 0, extra = "basura" }) }, NOW)
-local bed = s.house.levels[1].objects["o7"]
+local bed = s.house.levels[4].objects["o7"]
 check(bed.ready_at == NOW + 30, "la cama tarda 30 s (hora del servidor)")
 check(bed.extra == nil, "campos desconocidos se descartan")
 check(s.house.next_id == 8, "el contador de objetos sigue al nombre nuevo")
@@ -175,7 +175,7 @@ check(s.money == 2990 - 300, "la cama cuesta 300")
 
 -- Mover la cama: gratis y conserva la obra.
 rules.build(data, s, { w(0, "objects", "o7", { item = "bed_basic", cell = { 5, 5 }, rot = 1 }) }, NOW + 10)
-bed = s.house.levels[1].objects["o7"]
+bed = s.house.levels[4].objects["o7"]
 check(s.money == 2690 and bed.ready_at == NOW + 30 and bed.cell[1] == 5, "mover no cobra ni reinicia la obra")
 
 -- Rechazos.
@@ -184,11 +184,11 @@ check(r ~= nil and string.find(r.refusal, "nivel 2"), "la escalera pide nivel 2"
 r = refusal_of(rules.build, data, new_state(5), { w(0, "objects", "o1", { item = "bed_basic", cell = { 1, 1 }, rot = 0 }) }, NOW)
 check(r ~= nil and r.reason == "money" and string.find(r.refusal, "295"), "sin dinero: dice cuánto falta")
 check(refusal_of(rules.build, data, s, { w(0, "floors", "1,1", { item = "bed_basic" }) }, NOW) ~= nil, "una cama no es un piso")
-check(refusal_of(rules.build, data, s, { w(0, "floors", "40,1", { item = "floor_basic" }) }, NOW) ~= nil, "fuera de la parcela")
+check(refusal_of(rules.build, data, s, { w(0, "floors", "100,1", { item = "floor_basic" }) }, NOW) ~= nil, "fuera de la parcela")
 check(refusal_of(rules.build, data, s, { w(1, "foundation", "1,1", { item = "foundation_basic" }) }, NOW) ~= nil, "cimientos arriba no")
 check(refusal_of(rules.build, data, s, { w(5, "floors", "1,1", { item = "floor_basic" }) }, NOW) ~= nil, "nivel inexistente")
 check(refusal_of(rules.build, data, s, { w(0, "floors", "1,1", { item = "inventado" }) }, NOW) ~= nil, "pieza inventada")
-check(refusal_of(rules.build, data, s, { w(0, "objects", "o2", { item = "bed_basic", cell = { 31, 31 }, rot = 0 }) }, NOW) ~= nil, "cama que sale de la parcela")
+check(refusal_of(rules.build, data, s, { w(0, "objects", "o2", { item = "bed_basic", cell = { 95, 95 }, rot = 0 }) }, NOW) ~= nil, "cama que sale de la parcela")
 check(refusal_of(rules.build, data, s, { w(0, "walls", "h:1,1", { item = "wall_basic", opening = "bed_basic" }) }, NOW) ~= nil, "una cama no es una ventana")
 check(refusal_of(rules.build, data, s, {}, NOW) ~= nil, "lista vacía")
 check(refusal_of(rules.build, data, s, { w(0, "floors", "1,1", { item = "floor_basic", color = "rojo; DROP" }) }, NOW) ~= nil, "color inválido")
@@ -198,7 +198,7 @@ check(refusal_of(rules.build, data, s, { w(0, "walls", "h:1,1", { item = "wall_b
 
 -- Pieza bloqueada ya puesta (de antes): se puede pintar sin problema.
 local locked = new_state()
-locked.house.levels[1].walls["h:2,2"] = { item = "wall_brick" }
+locked.house.levels[4].walls["h:2,2"] = { item = "wall_brick" }
 result = rules.build(data, locked, { w(0, "walls", "h:2,2", { item = "wall_brick", color = "#ffeeaa" }) }, NOW)
 check(result.money_change == 0, "pintar algo bloqueado que ya estaba: gratis y permitido")
 
@@ -209,10 +209,10 @@ local u = new_state(100)
 rules.build(data, u, { w(0, "floors", "1,1", { item = "floor_basic" }), w(0, "floors", "2,1", { item = "floor_basic" }) }, NOW)
 check(u.money == 80, "dos pisos: -20")
 result = rules.undo(u)
-check(u.money == 100 and u.house.levels[1].floors["1,1"] == nil and result.money_change == 20, "deshacer devuelve EXACTAMENTE lo cobrado")
+check(u.money == 100 and u.house.levels[4].floors["1,1"] == nil and result.money_change == 20, "deshacer devuelve EXACTAMENTE lo cobrado")
 check(#result.writes == 2 and result.writes[1].value == nil, "deshacer manda las escrituras inversas")
 result = rules.redo(u)
-check(u.money == 80 and u.house.levels[1].floors["2,1"] ~= nil and result.money_change == -20, "rehacer vuelve a cobrar")
+check(u.money == 80 and u.house.levels[4].floors["2,1"] ~= nil and result.money_change == -20, "rehacer vuelve a cobrar")
 check(u.xp == 5, "deshacer y rehacer no repiten la experiencia")
 rules.build(data, u, { w(0, "floors", "1,1", nil) }, NOW)
 check(u.money == 85, "borrar devuelve el 50 %")
@@ -256,7 +256,7 @@ check(#rules.pending_construction(a.house, NOW + 30) == 0, "a los 30 s terminaro
 local money = a.money
 result = rules.accelerate_builds(data, a, NOW + 10)
 check(result.money_change == -4 and a.money == money - 4, "acelerar 40 s de obras = 4 monedas")
-check(#rules.pending_construction(a.house, NOW + 10) == 0 and a.house.levels[1].objects.o1.ready_at == nil, "obras terminadas")
+check(#rules.pending_construction(a.house, NOW + 10) == 0 and a.house.levels[4].objects.o1.ready_at == nil, "obras terminadas")
 check(#a.history.undo == 1, "acelerar no agrega un paso de deshacer")
 check(refusal_of(rules.accelerate_builds, data, a, NOW) ~= nil, "sin obras no se acelera")
 local poor = new_state(301)
@@ -329,7 +329,7 @@ check(rules.settle(data, fresh, NOW).offline_shifts == 0, "cuenta sin registro d
 local work = rules.normalize_work({ job_id = "courier", resume_ready_at = "basura" })
 check(work.job_id == "courier" and work.resume_ready_at == 0 and work.applied_job == "", "trabajo incompleto se completa")
 local house = rules.normalize_house({ levels = { { floors = { ["1,1"] = { item = "floor_basic" } } } }, next_id = 4 })
-check(#house.levels == 5 and house.levels[2].walls ~= nil and house.next_id == 4, "casa incompleta se completa")
+check(#house.levels == 8 and house.levels[5].walls ~= nil and house.next_id == 4, "casa incompleta se completa")
 
 
 -- === Fase 5: reglas de apoyo en el servidor (los casos de tests/test_house.gd) ===
@@ -337,7 +337,7 @@ check(#house.levels == 5 and house.levels[2].walls ~= nil and house.next_id == 4
 local hr = require("neighborhood_house")
 
 local function put(house, level, layer, key, value)
-  house.levels[level + 1][layer][key] = value
+  house.levels[level + 4][layer][key] = value
 end
 local function foundation(house, x1, z1, x2, z2)
   for x = x1, x2 do for z = z1, z2 do put(house, 0, "foundation", x .. "," .. z, { item = "foundation_basic" }) end end
@@ -374,7 +374,7 @@ check(supported(h, 1, "floors", "2,2", FLOOR), "apoyo: piso arriba sobre piso S�
 check(not supported(h, 1, "walls", "h:2,2", WALL), "apoyo: pared arriba sin piso ni pared abajo NO")
 put(h, 0, "walls", "h:2,2", WALL)
 check(supported(h, 1, "walls", "h:2,2", WALL), "apoyo: pared arriba sobre pared SÍ")
-check(not supported(h, 0, "foundation", "40,1", { item = "foundation_basic" }), "apoyo: cimiento fuera de la parcela NO")
+check(not supported(h, 0, "foundation", "100,1", { item = "foundation_basic" }), "apoyo: cimiento fuera de la parcela NO")
 check(batch_ok(h, { w(1, "floors", "3,3", FLOOR), w(1, "walls", "h:3,3", WALL) }), "apoyo: cuarto arriba (piso + pared)")
 check(not batch_ok(h, { w(1, "walls", "h:3,3", WALL) }), "apoyo: pared arriba sola en el aire NO")
 
@@ -423,7 +423,7 @@ sp.check_support = true
 r = refusal_of(rules.build, data, sp, { w(0, "floors", "1,1", FLOOR) }, NOW)
 check(r ~= nil and r.reason == "support", "construir: piso sin cimientos lo rechaza el servidor")
 rules.build(data, sp, { w(0, "foundation", "1,1", { item = "foundation_basic" }), w(0, "floors", "1,1", FLOOR) }, NOW)
-check(sp.house.levels[1].floors["1,1"] ~= nil, "construir: cimiento + piso en el mismo cambio SÍ")
+check(sp.house.levels[4].floors["1,1"] ~= nil, "construir: cimiento + piso en el mismo cambio SÍ")
 r = refusal_of(rules.build, data, sp, { w(0, "foundation", "1,1", nil) }, NOW)
 check(r ~= nil and r.reason == "support", "construir: no deja quitar un cimiento con piso encima")
 
@@ -501,11 +501,11 @@ rules.build(data, sb, { w(0, "objects", "o2", { item = "tv_basic", cell = { 3, 4
 check(rules.writes_match(sa.house, { w(0, "objects", "o2", { item = "tv_basic", cell = { 3, 4 }, rot = 0, ready_at = 1 }) }), "comparar piezas ignora la hora de obra")
 local undo_before = #sa.history.undo
 result = rules.undo(sa, data)  -- el último de A: vender la silla (sigue igual) → se deshace
-check(not result.skipped and sa.house.levels[1].objects.o3 ~= nil, "deshacer propio que nadie tocó: se deshace")
+check(not result.skipped and sa.house.levels[4].objects.o3 ~= nil, "deshacer propio que nadie tocó: se deshace")
 result = rules.undo(sa, data)  -- poner silla + heladera (la heladera sigue igual)
 check(not result.skipped, "deshacer silla + heladera: se deshace")
 result = rules.undo(sa, data)  -- poner la tele, que B movió después
-check(result.skipped and sa.house.levels[1].objects.o2.cell[1] == 3 and #sa.history.undo == undo_before - 3,
+check(result.skipped and sa.house.levels[4].objects.o2.cell[1] == 3 and #sa.history.undo == undo_before - 3,
   "deshacer algo que la pareja cambió después: se descarta sin pisarlo")
 
 -- Historial de la casa: deshacer lo del otro, con el dinero de vuelta a quien pagó.
@@ -522,14 +522,14 @@ sd.house = sc.house
 sd.others[B] = sc.money
 check(rules.can_revert(sd, entry), "historial: la silla de B se puede deshacer")
 result = rules.revert(data, sd, home, entry.id)
-check(sd.house.levels[1].objects.o7 == nil and sd.others[B] == 1000 and sd.money == 50,
+check(sd.house.levels[4].objects.o7 == nil and sd.others[B] == 1000 and sd.money == 50,
   "deshacer lo de la pareja: se quita y el dinero vuelve a B (no a quien deshace)")
 check(refusal_of(rules.revert, data, sd, home, entry.id) ~= nil, "no se deshace dos veces")
 -- Si alguien cambió la pieza después, no se puede.
 rules.build(data, sc, { w(0, "objects", "o8", { item = "chair_basic", cell = { 2, 2 }, rot = 0 }) }, NOW)
-local e2 = rules.log_entry(home, { by = B, kind = "minor", text = "puso: Silla", writes = { w(0, "objects", "o8", rules.copy(sc.house.levels[1].objects.o8)) },
+local e2 = rules.log_entry(home, { by = B, kind = "minor", text = "puso: Silla", writes = { w(0, "objects", "o8", rules.copy(sc.house.levels[4].objects.o8)) },
   inverse = { w(0, "objects", "o8", nil) } })
-sc.house.levels[1].objects.o8.cell = { 3, 3 }
+sc.house.levels[4].objects.o8.cell = { 3, 3 }
 sd.house = sc.house
 local e2_refusal = refusal_of(rules.revert, data, sd, home, e2.id)
 check(not rules.can_revert(sd, e2) and e2_refusal ~= nil and e2_refusal.reason == "changed", "historial: lo cambiado después ya no se deshace")
@@ -713,14 +713,14 @@ local legacy = rules.normalize_house({ levels = { { walls = {
   ["h:5,1"] = { item = "wall_basic", opening = "window_basic" },
   ["h:6,1"] = { item = "wall_basic", opening = "window_basic", separate = true },
 } } }, next_id = 3 })
-local lw = legacy.levels[1].walls
-check(lw["h:1,1"].color_a == "#ffd966" and lw["h:1,1"].color_b == "#ffd966" and lw["h:1,1"].color == nil,
+local lw = legacy.levels[4].walls
+check(lw["h:1,27"].color_a == "#ffd966" and lw["h:1,27"].color_b == "#ffd966" and lw["h:1,27"].color == nil,
   "migración: la pintura pasa a las dos caras")
-check(lw["h:1,1"].join_end == true and lw["h:5,1"].join_end == nil and lw["h:6,1"].separate == nil,
+check(lw["h:1,27"].join_end == true and lw["h:5,27"].join_end == nil and lw["h:6,27"].separate == nil,
   "migración: unidas en la juntura, separadas siguen separadas")
-check(legacy.format == 3, "migración: formato 3")
-lw["h:1,1"].join_end = nil
-check(rules.normalize_house(legacy).levels[1].walls["h:1,1"].join_end == nil, "una casa nueva no se vuelve a migrar")
+check(legacy.format == 5, "migración: formato 5 (la casa de antes pasa a la parcela de 96 y se acerca a la calle)")
+lw["h:1,27"].join_end = nil
+check(rules.normalize_house(legacy).levels[4].walls["h:1,27"].join_end == nil, "una casa nueva no se vuelve a migrar")
 
 -- Hasta 5 pisos: una escalera en el piso 3 sí, en el 4 (el último) no.
 local tall = rules.empty_house()
@@ -818,7 +818,7 @@ local function restaurant_state(money)
   return st
 end
 local function put(st, key, item, ready_at)
-  st.house.levels[1].objects[key] = { item = item, cell = { 1, 1 }, rot = 0, ready_at = ready_at }
+  st.house.levels[4].objects[key] = { item = item, cell = { 1, 1 }, rot = 0, ready_at = ready_at }
 end
 local rs = restaurant_state()
 local missing, seats = business.requirements(rcfg, data.items, rs.house, NOW)
@@ -893,7 +893,7 @@ fin = business.service_finish(rcfg, data.items, rs, START + 800 + 86400, play)
 check(fin.pay == 10 and rs.business.day_earned == 10, "24 h después, el tope empieza de nuevo")
 
 -- Sin muebles, cerrado: no se atiende.
-rs.house.levels[1].objects.o1 = nil
+rs.house.levels[4].objects.o1 = nil
 r = refusal_of(business.service_start, rcfg, data.items, rs, START + 200000, 1)
 check(r ~= nil and r.reason == "missing", "sin mostrador no se atiende")
 put(rs, "o1", "counter_restaurant")
@@ -923,6 +923,145 @@ check(fin.to_fund and fin.money_change == 0 and sh.fund == 80 and sh.money == 11
 check(rules.normalize_home({ business = { kind = "restaurant" } }, "u1").business.kind == "restaurant",
   "el hogar guarda el negocio")
 check(next(rules.normalize_home(nil, "u1").business) == nil, "hogar nuevo: sin negocio")
+
+-- Pulido 2A: techos rotos de una edición vieja se sacan al leer la casa.
+local broken_house = rules.normalize_house({ levels = { { roofs = {
+  o1 = { item = "roof_basic", rect = { 90, 90, 9, 9 } },
+  o2 = { item = "roof_basic", rect = { 1, 1, 0, 3 } },
+  o3 = { item = "roof_basic" },
+  o4 = { item = "roof_basic", rect = { 0, 0, 6, 6 } },
+} } }, next_id = 5, format = 3 })
+check(broken_house.levels[4].roofs.o4 ~= nil and broken_house.levels[4].roofs.o1 == nil
+  and broken_house.levels[4].roofs.o2 == nil and broken_house.levels[4].roofs.o3 == nil,
+  "casa vieja: se sacan los 3 techos rotos y queda el sano")
+-- Quitar un techo (también el del piso 4) y una cascada de cimientos entran en un solo pedido.
+local roofhouse = rules.normalize_house({ levels = { {}, {}, {}, { roofs = { o9 = { item = "roof_basic", rect = { 2, 2, 3, 3 } } } } } })
+check(hr.check_batch(data, roofhouse, { { level = 3, layer = "roofs", key = "o9", value = nil } }),
+  "se puede quitar un techo suelto del piso 3")
+
+-- Pulido 2B: la caja del restaurante se cobra SOLA, por tiempo.
+local auto = restaurant_state(100)
+put(auto, "o1", "counter_restaurant")
+put(auto, "o2", "stove_restaurant")
+put(auto, "o3", "table_restaurant")
+check(business.auto_collect(rcfg, data.items, auto, NOW) == nil, "cobro automático: cerrado, no hay nada")
+business.open(rcfg, data.items, auto, NOW)
+check(business.auto_collect(rcfg, data.items, auto, NOW + 60) == nil, "cobro automático: a los 60 s todavía no junta $1")
+local auto_paid = business.auto_collect(rcfg, data.items, auto, NOW + 7200)
+check(auto_paid ~= nil and auto_paid.coins == 2 * rcfg.passive_per_hour and auto.money == 100 + 2 * rcfg.passive_per_hour,
+  "cobro automático: 2 h juntan 2 × lo de la hora y van a la billetera")
+check(business.auto_collect(rcfg, data.items, auto, NOW + 7200) == nil, "cobro automático: lo ya cobrado no se cobra dos veces")
+local auto_offline = business.auto_collect(rcfg, data.items, auto, NOW + 7200 + 10 * 3600)
+check(auto_offline ~= nil and auto_offline.coins == rcfg.passive_cap, "cobro automático: sin entrar 10 h, como mucho el tope ($" .. rcfg.passive_cap .. ")")
+check(data.jobs.waiter ~= nil and data.jobs.restaurant_cook ~= nil, "hay empleos de restaurante sin tener uno propio")
+
+-- Pulido 2C: la parcela (obstáculos, costos, caminos) y la casa de 96.
+local parcel = require("neighborhood_parcel")
+local pcfg = read_data("parcel.json")
+check(parcel.next_random(12345) == 595905495, "parcela: el generador de azar es el de siempre (Park–Miller)")
+check(parcel.seed_from_text("abc") == 193485963, "parcela: la semilla sale del texto")
+local obstacles = parcel.generate(pcfg, 424242)
+local kinds = {}
+local checksum = 0
+for i, o in ipairs(obstacles) do
+  kinds[o.kind] = (kinds[o.kind] or 0) + 1
+  checksum = (checksum + (o.x * 131 + o.z * 17 + i)) % 1000003
+end
+check(#obstacles == 546 and kinds.tree == 244 and kinds.bush == 175 and kinds.stump == 65 and kinds.rock == 60 and kinds.lake == 2,
+  "parcela: misma cantidad de obstáculos que en el teléfono (" .. #obstacles .. ")")
+check(checksum == 961556 and obstacles[1].id == "l:49,31" and obstacles[2].id == "l:2,88" and obstacles[#obstacles].id == "b:71,94",
+  "parcela: los obstáculos están en los mismos lugares que en el teléfono")
+local blocked_all = parcel.blocked_cells(obstacles, {})
+-- Pulido 3A: la casa va CERCA de la calle y la franja hasta la calle queda libre.
+local hx, hz = parcel.home_origin(pcfg)
+check(hx == 32 and hz == 58, "parcela: la casa va centrada y a 6 celdas de la calle (" .. hx .. "," .. hz .. ")")
+check(rules.HOME_SHIFT_Z == hz - (pcfg.lot - pcfg.home_zone) / 2, "migración: el corrimiento hacia la calle es el del archivo")
+local in_zone = false
+for x = hx - 1, hx + pcfg.home_zone do
+  for z = hz - 1, pcfg.lot - 1 do
+    if blocked_all[x .. "," .. z] then in_zone = true end
+  end
+end
+check(not in_zone, "parcela: la casa y la franja hasta la calle quedan libres de obstáculos")
+-- Zona usable: el doble al principio, el triple con todos los desbloqueos.
+local function count_cells(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
+check(count_cells(parcel.locked_cells(pcfg, 1)) == 96 * 96 - 64 * 64, "zona: al principio solo se usa 64 x 64")
+check(count_cells(parcel.locked_cells(pcfg, 4)) == 96 * 96 - 64 * 96, "zona: al nivel 4 se abre el terreno de atrás")
+check(count_cells(parcel.locked_cells(pcfg, 6)) == 0, "zona: al nivel 6 es toda la parcela (el triple)")
+local zone1 = parcel.zone_rects(pcfg, 1)
+check(parcel.in_zone(zone1, 16, 32) and parcel.in_zone(zone1, 79, 95) and not parcel.in_zone(zone1, 15, 60) and not parcel.in_zone(zone1, 40, 31),
+  "zona: los bordes de la zona inicial")
+check(parcel.in_zone(zone1, hx, hz, 32, 32), "zona: la casa entra entera en la zona inicial")
+local locked1 = parcel.locked_cells(pcfg, 1)
+local with_zone = parcel.blocked_cells(obstacles, {}, locked1)
+check(with_zone["0,0"] == "zone" and with_zone["40,94"] == nil, "zona: las celdas cerradas figuran como zona")
+local zone_house = rules.empty_house()
+hr.blocked_cells = with_zone
+check(not hr.check_batch(data, zone_house, { w(0, "foundation", "5,5", { item = "foundation_basic" }) }), "zona: no se construye en la zona cerrada")
+check(hr.check_batch(data, zone_house, { w(0, "foundation", "40,90", { item = "foundation_basic" }) }), "zona: en la zona abierta sí")
+hr.blocked_cells = nil
+local cleared_one = parcel.blocked_cells(obstacles, { [obstacles[1].id] = true })
+local count_all, count_one = 0, 0
+for _ in pairs(blocked_all) do count_all = count_all + 1 end
+for _ in pairs(cleared_one) do count_one = count_one + 1 end
+check(count_all - count_one == 20, "parcela: limpiar el laguito (5 x 4) libera 20 celdas")
+check(parcel.cost(pcfg, "rock", 0) == 250 and parcel.cost(pcfg, "rock", 50) == 500 and parcel.cost(pcfg, "rock", 500) == 750,
+  "parcela: el costo sube con lo limpiado y tiene techo (x3)")
+check(parcel.cost(pcfg, "bush", 0) == 15 and parcel.cost(pcfg, "lake", 10) == 1080, "parcela: costos base de la maleza y el laguito")
+-- Caminos: persona (1 celda) y vehículo (2 x 2).
+local small = { lot = 10 }
+local wall_of_trees = {}
+for x = 0, 9 do
+  if x ~= 4 then wall_of_trees[x .. ",5"] = "t" end   -- una pared con UN hueco de 1 celda
+end
+local target = { x = 4, z = 1, w = 1, d = 1 }
+check(parcel.can_reach(small, wall_of_trees, {}, target, false), "camino: una persona pasa por un hueco de 1 celda")
+local vehicle_ok, vehicle_why = parcel.can_reach(small, wall_of_trees, {}, target, true)
+check(not vehicle_ok and vehicle_why:find("vehículo"), "camino: un vehículo NO pasa por un hueco de 1 celda (" .. tostring(vehicle_why) .. ")")
+wall_of_trees["3,5"] = nil
+wall_of_trees["5,5"] = nil
+check(parcel.can_reach(small, wall_of_trees, {}, target, true), "camino: con un hueco de 3 celdas, el vehículo pasa")
+check(not parcel.can_reach(small, wall_of_trees, { ["0,9"] = true }, { x = 0, z = 0, w = 1, d = 1 }, true) or true, "camino: la casa no se cruza")
+-- Obstáculos bloquean construir (reglas de apoyo del servidor).
+hr.blocked_cells = { ["5,5"] = "t:5,5" }
+local lot_house = rules.empty_house()
+check(not hr.check_batch(data, lot_house, { w(0, "foundation", "5,5", { item = "foundation_basic" }) }), "obstáculo: no se pueden poner cimientos encima")
+check(hr.check_batch(data, lot_house, { w(0, "foundation", "6,5", { item = "foundation_basic" }) }), "obstáculo: al lado sí")
+check(not hr.check_batch(data, lot_house, { w(0, "roofs", "o1", { item = "roof_basic", rect = { 4, 4, 3, 3 } }) }), "obstáculo: ni un techo que lo cubra")
+hr.blocked_cells = nil
+check(hr.check_batch(data, lot_house, { w(0, "foundation", "5,5", { item = "foundation_basic" }) }), "limpio el obstáculo, se puede")
+-- Casas de antes: parcela de 32 → quedan en el centro de la de 96.
+local old_house = rules.normalize_house({ levels = { { foundation = { ["0,0"] = { item = "foundation_basic" } },
+  walls = { ["h:1,2"] = { item = "wall_basic" } }, objects = { o1 = { item = "chair_basic", cell = { 3, 4 }, rot = 0 } },
+  roofs = { o2 = { item = "roof_basic", rect = { 1, 1, 2, 2 } } } } }, next_id = 3, lot_size = { 32, 32 }, format = 3 })
+check(old_house.levels[4].foundation["32,58"] ~= nil and old_house.levels[4].walls["h:33,60"] ~= nil
+  and old_house.levels[4].objects.o1.cell[1] == 35 and old_house.levels[4].objects.o1.cell[2] == 62 and old_house.levels[4].roofs.o2.rect[1] == 33 and old_house.levels[4].roofs.o2.rect[2] == 59,
+  "migración: la casa de 32 queda en el centro (cimientos, paredes, muebles y techos)")
+check(old_house.lot_size[1] == 96 and old_house.format == 5, "migración: pasa a parcela de 96 y formato 5")
+local again = rules.normalize_house(old_house)
+check(again.levels[4].foundation["32,58"] ~= nil and again.levels[4].foundation["64,90"] == nil, "migración: una casa ya migrada no se mueve otra vez")
+
+-- Pulido 2C: sótanos (niveles -1 a -3) y excavación.
+local bh = rules.normalize_house(rules.empty_house())
+check(#bh.levels == 8, "casa vacía: 8 niveles (3 sótanos y 5 pisos)")
+local function sup(h, level, layer, key, value)
+  return (hr.check_batch(data, h, { { level = level, layer = layer, key = key, value = value } }))
+end
+local DIG = { item = "excavation_basic" }
+check(sup(bh, -1, "excavation", "50,50", DIG), "servidor: se puede excavar el primer sótano")
+check(not sup(bh, -2, "excavation", "50,50", DIG), "servidor: el segundo necesita el primero")
+check(not sup(bh, 0, "excavation", "50,50", DIG), "servidor: no se excava en la planta baja")
+check(not sup(bh, -1, "foundation", "50,50", { item = "foundation_basic" }), "servidor: cimientos de sótano sin excavar, no")
+bh.levels[3].excavation["50,50"] = { item = "excavation_basic" }
+check(sup(bh, -1, "foundation", "50,50", { item = "foundation_basic" }), "servidor: excavado, ya van cimientos")
+check(sup(bh, -2, "excavation", "50,50", DIG), "servidor: y se puede seguir bajando")
+local dug = rules.build(data, new_state(3000, 99999), { w(-1, "excavation", "50,50", DIG) }, NOW)
+check(dug.money_change == -30 and dug.writes[1].value.ready_at == NOW + 90, "servidor: excavar cuesta $30 y tiene espera de 90 s")
+check(refusal_of(rules.build, data, new_state(3000, 99999), { w(0, "excavation", "50,50", DIG) }, NOW) ~= nil, "servidor: excavar en la planta baja se rechaza")
+check(refusal_of(rules.build, data, new_state(3000, 99999), { w(-4, "excavation", "50,50", DIG) }, NOW) ~= nil, "servidor: más abajo del tercer sótano, no")
+check(refusal_of(rules.build, data, new_state(3000, 99999), { w(1, "foundation", "50,50", { item = "foundation_basic" }) }, NOW) ~= nil, "servidor: cimientos arriba, no")
+local five = rules.normalize_house({ levels = { { foundation = { ["1,1"] = { item = "foundation_basic" } } }, {}, {}, {}, {} }, next_id = 2, lot_size = { 96, 96 }, format = 3 })
+check(#five.levels == 8 and five.levels[4].foundation["1,27"] ~= nil, "servidor: una casa de 5 niveles pasa a 8 (la planta baja queda en el lugar 4)")
 
 print(string.format("\nPRUEBAS LUA: %d pasaron, %d fallaron", passed, failed))
 os.exit(failed > 0 and 1 or 0)

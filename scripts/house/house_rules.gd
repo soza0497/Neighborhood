@@ -33,13 +33,25 @@ const PILLAR_REACH := 2
 static func is_supported(house: HouseData, level: int, layer: String, key: String, value: Dictionary) -> bool:
 	match layer:
 		"foundation":
-			return level == 0 and HouseGrid.is_cell_in_lot(HouseGrid.key_to_cell(key))
+			var foundation_cell := HouseGrid.key_to_cell(key)
+			if level > 0 or not HouseGrid.is_valid_level(level) or not HouseGrid.is_cell_in_lot(foundation_cell) or is_blocked(foundation_cell):
+				return false
+			# Pulido 2C: en un sótano, antes hay que excavar esa celda.
+			return level == 0 or house.has_piece(level, "excavation", key)
+		"excavation":
+			var dig_cell := HouseGrid.key_to_cell(key)
+			if level >= 0 or not HouseGrid.is_valid_level(level) or not HouseGrid.is_cell_in_lot(dig_cell) or is_blocked(dig_cell):
+				return false
+			# Se excava de arriba hacia abajo: el sótano de abajo sobre el de arriba.
+			return level == -1 or house.has_piece(level + 1, "excavation", key)
 		"floors":
 			var cell := HouseGrid.key_to_cell(key)
-			if not HouseGrid.is_cell_in_lot(cell):
+			if not HouseGrid.is_cell_in_lot(cell) or is_blocked(cell):
 				return false
+			if level < 0:
+				return house.has_piece(level, "foundation", key)
 			if level == 0:
-				return house.has_piece(0, "foundation", key)
+				return house.has_piece(0, "foundation", key) and not is_stairs_cell(house, -1, cell)
 			if is_stairs_cell(house, level - 1, cell) or is_under_roof(house, level - 1, [cell]):
 				return false
 			if house.has_piece(level - 1, "floors", key):
@@ -54,7 +66,10 @@ static func is_supported(house: HouseData, level: int, layer: String, key: Strin
 				return false
 			if level > 0 and is_under_roof(house, level - 1, HouseGrid.edge_cells(key)):
 				return false
-			var support_layer := "foundation" if level == 0 else "floors"
+			if level < 0 and not house.has_piece(level, "foundation", HouseGrid.cell_key(HouseGrid.edge_cells(key)[0])) \
+					and not house.has_piece(level, "foundation", HouseGrid.cell_key(HouseGrid.edge_cells(key)[1])):
+				return false
+			var support_layer := "foundation" if level <= 0 else "floors"
 			for cell in HouseGrid.edge_cells(key):
 				if house.has_piece(level, support_layer, HouseGrid.cell_key(cell)):
 					return true
@@ -63,10 +78,19 @@ static func is_supported(house: HouseData, level: int, layer: String, key: Strin
 			return _is_object_supported(house, level, key, value)
 		"roofs":
 			var rect := HouseData.roof_rect(value)
-			if not Rect2i(Vector2i.ZERO, HouseGrid.LOT_SIZE).encloses(rect):
+			if level < 0 or not Rect2i(Vector2i.ZERO, HouseGrid.LOT_SIZE).encloses(rect):
 				return false
+			for roof_x in range(rect.position.x, rect.end.x):
+				for roof_z in range(rect.position.y, rect.end.y):
+					if is_blocked(Vector2i(roof_x, roof_z)):
+						return false
 			return roof_blocker(house, level, rect) == ""
 	return false
+
+
+## Pulido 2C: ¿hay un obstáculo sin limpiar (árbol, roca, laguito...) en la celda?
+static func is_blocked(cell: Vector2i) -> bool:
+	return not HouseData.blocked_cells.is_empty() and HouseData.blocked_cells.has(HouseGrid.cell_key(cell))
 
 
 ## ¿Hay una escalera en esa celda de ese nivel?
@@ -99,7 +123,7 @@ static func has_pillar_near(house: HouseData, level: int, cell: Vector2i) -> boo
 ## ¿Alguna de esas celdas queda adentro de un techo de ese nivel?
 static func is_under_roof(house: HouseData, level: int, cells: Array) -> bool:
 	if level < 0:
-		return false
+		return false  # En un sótano no hay techos (el techo es el piso de arriba).
 	for key in house.get_layer(level, "roofs"):
 		var rect := HouseData.roof_rect(house.get_piece(level, "roofs", key))
 		var all_inside := true
@@ -115,7 +139,7 @@ static func is_under_roof(house: HouseData, level: int, cells: Array) -> bool:
 ## piso del nivel de arriba metido adentro del techo lo atravesaría.
 static func roof_blocker(house: HouseData, level: int, rect: Rect2i) -> String:
 	var above := level + 1
-	if above >= HouseGrid.MAX_LEVELS:
+	if above >= HouseGrid.MAX_LEVELS or level < 0:
 		return ""
 	for key in house.get_layer(above, "walls"):
 		var cells := HouseGrid.edge_cells(key)
@@ -127,19 +151,89 @@ static func roof_blocker(house: HouseData, level: int, rect: Rect2i) -> String:
 	return ""
 
 
+## Lo que se borra de verdad al quitar una pieza (Pulido 2: el basurero borra
+## TODO): la pieza y, en cascada, lo que se apoyaba solo en ella y quedaría en
+## el aire (paredes de un cimiento, el piso de arriba de una pared...).
+## Devuelve la lista de escrituras de quitar, la pieza pedida primero.
+static func removal_closure(house: HouseData, first: Dictionary) -> Array:
+	var result: Array = [first]
+	var sim := house.duplicate_data()
+	sim.apply([first])
+	var changed := true
+	while changed:
+		changed = false
+		var fallen: Array = []
+		for level in HouseGrid.level_range():
+			for layer in HouseData.LAYERS:
+				for key in sim.get_layer(level, layer):
+					var value: Dictionary = sim.get_piece(level, layer, key)
+					# Solo cae lo que estaba bien apoyado antes y ahora no.
+					if is_supported(house, level, layer, key, house.get_piece(level, layer, key)) \
+							and not is_supported(sim, level, layer, key, value):
+						fallen.append(HouseData.write(level, layer, key, null))
+		if not fallen.is_empty():
+			changed = true
+			result.append_array(fallen)
+			sim.apply(fallen)
+	return result
+
+
+## ¿Se puede agregar otro piso? "" si sí; si no, el motivo en palabras.
+## Hace falta algo construido en el piso de arriba y que no todo esté tapado
+## por un techo (nada se apoya en un techo).
+static func add_floor_problem(house: HouseData) -> String:
+	var total := house.floors_total()
+	if total >= HouseGrid.MAX_LEVELS:
+		return "Ya tenés todos los pisos que entran (la planta baja y %d más)." % (HouseGrid.MAX_LEVELS - 1)
+	var top := total - 1
+	var cells: Array = []
+	for key in house.get_layer(top, "floors"):
+		cells.append(HouseGrid.key_to_cell(key))
+	if top == 0:
+		for key in house.get_layer(0, "foundation"):
+			var cell := HouseGrid.key_to_cell(key)
+			if not cell in cells:
+				cells.append(cell)
+	if cells.is_empty():
+		return "Primero construí el piso de abajo (cimientos o piso)."
+	for cell in cells:
+		if not is_under_roof(house, top, [cell]):
+			return ""
+	return "Para agregar un piso tiene que haber una parte sin techo."
+
+
+## ¿Se puede agregar otro sótano? "" si sí; si no, el motivo.
+## Hace falta algo construido en el nivel de arriba (cimientos si es el primero).
+static func add_basement_problem(house: HouseData) -> String:
+	var lowest := house.lowest_level()
+	if -lowest >= HouseGrid.MAX_BASEMENTS:
+		return "Ya tenés los %d sótanos que entran." % HouseGrid.MAX_BASEMENTS
+	if house.get_layer(lowest, "foundation").is_empty() and house.get_layer(lowest, "floors").is_empty():
+		return "Primero construí cimientos o piso en %s." % level_name(lowest).to_lower()
+	return ""
+
+
 ## Piezas que se apoyan en esta (si se quita, podrían quedar en el aire).
 ## Devuelve una lista de [nivel, capa, clave].
 static func dependents(house: HouseData, level: int, layer: String, key: String) -> Array:
 	var result: Array = []
 	match layer:
 		"foundation":
-			result.append([0, "floors", key])
+			result.append([level, "floors", key])
 			for edge in HouseGrid.cell_edges(HouseGrid.key_to_cell(key)):
-				result.append([0, "walls", edge])
+				result.append([level, "walls", edge])
 			# Lo de afuera (pilares, escalera metálica) puede ir sobre cimientos.
-			var object_key := house.object_at(0, HouseGrid.key_to_cell(key))
+			var object_key := house.object_at(level, HouseGrid.key_to_cell(key))
 			if object_key != "":
-				result.append([0, "objects", object_key])
+				result.append([level, "objects", object_key])
+		"excavation":
+			# Lo que se construyó adentro de la excavación y la de más abajo.
+			result.append([level, "foundation", key])
+			result.append([level, "floors", key])
+			for edge in HouseGrid.cell_edges(HouseGrid.key_to_cell(key)):
+				result.append([level, "walls", edge])
+			if level > HouseGrid.MIN_LEVEL:
+				result.append([level - 1, "excavation", key])
 		"floors":
 			var cell := HouseGrid.key_to_cell(key)
 			var object_key := house.object_at(level, cell)
@@ -214,7 +308,7 @@ static func _falling_dependent(house: HouseData, sim: HouseData, removing: Dicti
 	for dep in dependents(house, w["level"], w["layer"], w["key"]):
 		if removing.has(_id(dep[0], dep[1], dep[2])):
 			continue
-		if dep[0] < 0 or dep[0] >= HouseGrid.MAX_LEVELS:
+		if not HouseGrid.is_valid_level(dep[0]):
 			continue
 		var dep_value: Variant = sim.get_piece(dep[0], dep[1], dep[2])
 		if dep_value != null and not is_supported(sim, dep[0], dep[1], dep[2], dep_value):
@@ -248,12 +342,15 @@ static func removal_reason(house: HouseData, w: Dictionary) -> String:
 ## ¿Se puede llegar a ese piso? La planta baja sí; uno de arriba, si hay una
 ## escalera terminada en el piso de abajo y a ese también se llega.
 static func has_access(house: HouseData, level: int) -> bool:
-	if level <= 0:
+	if level == 0:
 		return true
-	for key in house.get_layer(level - 1, "objects"):
-		var value: Dictionary = house.get_piece(level - 1, "objects", key)
+	# Una escalera de un nivel lo une con el de arriba: para subir al piso 2 se usa
+	# la del piso 1; para bajar al sótano -1, la que está EN el sótano -1.
+	var stairs_level := level - 1 if level > 0 else level
+	for key in house.get_layer(stairs_level, "objects"):
+		var value: Dictionary = house.get_piece(stairs_level, "objects", key)
 		if kind_of(value) == "stairs" and not HouseData.is_under_construction(value):
-			return has_access(house, level - 1)
+			return has_access(house, level - 1 if level > 0 else level + 1)
 	return false
 
 
@@ -264,7 +361,7 @@ static func has_access(house: HouseData, level: int) -> bool:
 ##     reglas nuevas pueden dejar alguna).
 static func problems(house: HouseData) -> Array:
 	var result: Array = []
-	for level in HouseGrid.MAX_LEVELS:
+	for level in HouseGrid.level_range():
 		for layer in HouseData.LAYERS:
 			for key in house.get_layer(level, layer):
 				var value: Dictionary = house.get_piece(level, layer, key)
@@ -272,14 +369,15 @@ static func problems(house: HouseData) -> Array:
 					var item_name: String = Catalog.get_item(value.get("item", "")).get("name", "Pieza")
 					result.append({"level": level, "layer": layer, "key": key,
 						"text": "%s: %s sin apoyo" % [level_name(level), item_name]})
-		if level > 0 and not house.get_layer(level, "floors").is_empty() and not has_access(house, level):
+		if level != 0 and not house.get_layer(level, "floors").is_empty() and not has_access(house, level):
+			var from_level: int = level - 1 if level > 0 else level + 1
 			result.append({"level": level, "layer": "", "key": "",
-				"text": "%s: sin acceso (falta una escalera desde %s)" % [level_name(level), level_name(level - 1).to_lower()]})
+				"text": "%s: sin acceso (falta una escalera desde %s)" % [level_name(level), level_name(from_level).to_lower()]})
 	return result
 
 
 static func level_name(level: int) -> String:
-	return "Planta baja" if level == 0 else "Piso %d" % level
+	return HouseGrid.level_name(level)
 
 
 static func _is_object_supported(house: HouseData, level: int, key: String, value: Dictionary) -> bool:
@@ -297,7 +395,7 @@ static func _is_object_supported(house: HouseData, level: int, key: String, valu
 	var on_ground: bool = level == 0 and item.get("outdoor", false)
 	for cell in cells:
 		if on_ground:
-			if not HouseGrid.is_cell_in_lot(cell):
+			if not HouseGrid.is_cell_in_lot(cell) or is_blocked(cell):
 				return false
 		elif not house.has_piece(level, "floors", HouseGrid.cell_key(cell)):
 			return false

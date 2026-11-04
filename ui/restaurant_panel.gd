@@ -87,17 +87,19 @@ func _refresh() -> void:
 		_open_button.text = "Pedir permiso para cerrar" if s["shared"] else "Cerrar restaurante"
 		_serve_button.visible = true
 		_serve_button.disabled = not can or not s["ready"]
-		_collect_button.visible = true
-		_collect_button.disabled = not can or s["passive"] <= 0
-		_collect_button.text = "Cobrar caja ($%d)" % s["passive"]
+		# Pulido 2B: la caja se cobra sola (el botón queda solo para apurarla).
+		_collect_button.visible = s["passive"] > 0
+		_collect_button.disabled = not can
+		_collect_button.text = "Cobrar ya ($%d)" % s["passive"]
+		_serve_button.text = "Reto: Servicio (1:30)"
 		if s["ready"]:
-			_status_label.text = "Abierto · %d mesa%s. Atendé un servicio de 1:30 y cobrá lo que sirvas." % [
+			_status_label.text = "Abierto · %d mesa%s. Gana solo; el Reto: Servicio (1:30) da premio extra." % [
 				s["seats"], "" if s["seats"] == 1 else "s"]
 		else:
 			_status_label.text = "Abierto, pero no atiende: le falta %s." % Restaurant.missing_text(s["missing"])
 		var lines: PackedStringArray = []
 		var where := "la caja de la casa" if s["shared"] else "tu billetera"
-		lines.append("Clientes de paso: junta $%d por hora hasta $%d (va a %s). Ahora: $%d." % [
+		lines.append("Ingreso automático: $%d por hora, hasta $%d (se cobra solo y va a %s). Ahora: $%d." % [
 			s["passive_per_hour"], s["passive_cap"], where, s["passive"]])
 		var today := "Hoy ganaste $%d de $%d con los servicios." % [s["day_earned"], s["daily_cap"]]
 		if s["cap_left"] <= 0 and s["resets_in"] > 0:

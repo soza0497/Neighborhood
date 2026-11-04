@@ -457,6 +457,18 @@ function business.collect(cfg, items, state, now)
   return { coins = amount, to_fund = to_fund, money_change = to_fund and 0 or amount }
 end
 
+-- Pulido 2B: los ingresos normales del restaurante son AUTOMÁTICOS. El
+-- servidor los calcula por tiempo (como los turnos) y los cobra solo cuando
+-- el jugador entra (work_settle) o el teléfono avisa que sigue jugando.
+-- Devuelve nil si no había nada (cerrado, sin lo necesario, o $0).
+function business.auto_collect(cfg, items, state, now)
+  local ok, result = pcall(business.collect, cfg, items, state, now)
+  if ok then
+    return result
+  end
+  return nil
+end
+
 
 -- --- Lo de cada jugador: servicio en marcha, tope diario (game/business) ---
 

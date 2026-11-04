@@ -19,6 +19,8 @@ func _init(house: HouseData) -> void:
 	_house = house
 	_house.piece_changed.connect(_on_piece_changed)
 	_house.reloaded.connect(mark_dirty)
+	# Pulido 3A: al limpiar un obstáculo (o abrirse un terreno) el camino se regenera.
+	Parcel.changed.connect(mark_dirty)
 
 
 ## La casa cambió: el camino se vuelve a armar cuando se pida.
@@ -32,15 +34,19 @@ func _on_piece_changed(_level: int, _layer: String, _key: String) -> void:
 
 ## Número único de cada celda de cada nivel (el lote mide menos de 100).
 static func point_id(level: int, cell: Vector2i) -> int:
-	return level * 10000 + cell.y * 100 + cell.x
+	return HouseGrid.level_index(level) * 10000 + cell.y * 100 + cell.x
 
 
 static func id_to_level(id: int) -> int:
-	return id / 10000
+	return (id % 100000) / 10000 + HouseGrid.MIN_LEVEL
 
 
 static func id_to_cell(id: int) -> Vector2i:
 	return Vector2i(id % 100, (id / 100) % 100)
+
+
+## Los escalones usan otro rango de ids (las celdas llegan hasta 9595).
+const STEP_ID_BASE := 100000
 
 
 ## Altura del suelo de una celda (sobre cimientos o sobre el pasto).
@@ -56,6 +62,10 @@ func is_walkable(level: int, cell: Vector2i) -> bool:
 		return false
 	if level > 0 and not _house.has_piece(level, "floors", HouseGrid.cell_key(cell)):
 		return false
+	if level == 0 and HouseRules.is_blocked(cell):
+		return false  # Un árbol, una roca o el laguito (Pulido 2C).
+	if level < 0 and not _house.has_piece(level, "floors", HouseGrid.cell_key(cell)):
+		return false  # En un sótano solo se camina sobre piso.
 	return _house.object_at(level, cell) == ""
 
 
@@ -112,34 +122,76 @@ func _rebuild_if_needed() -> void:
 		rebuild()
 
 
+## Pulido 2C: con una parcela de 96 x 96, la red solo cubre la zona útil: la
+## casa y su alrededor (con margen) y la franja hasta la calle. Así armarla
+## es barato en un teléfono (≈2000 celdas en vez de 9216).
+const AREA_MARGIN := 8
+
+
+func nav_area() -> Rect2i:
+	var home := HouseGrid.home_origin()
+	var area := Rect2i(home, Vector2i(HouseGrid.HOME_ZONE, HouseGrid.HOME_ZONE)).grow(AREA_MARGIN)
+	for level in HouseGrid.level_range():
+		for layer in ["foundation", "floors"]:
+			for key in _house.get_layer(level, layer):
+				area = area.expand(HouseGrid.key_to_cell(key)).expand(HouseGrid.key_to_cell(key) + Vector2i.ONE)
+	area = area.grow(2)
+	# Hasta la calle (el frente de la parcela).
+	area = area.expand(Vector2i(area.position.x, HouseGrid.LOT_SIZE.y)).expand(Vector2i(area.end.x, HouseGrid.LOT_SIZE.y))
+	return area.intersection(Rect2i(Vector2i.ZERO, HouseGrid.LOT_SIZE))
+
+
 ## Arma la red de puntos completa.
 func rebuild() -> void:
 	_dirty = false
 	_astar.clear()
-	for level in HouseGrid.MAX_LEVELS:
-		for x in HouseGrid.LOT_SIZE.x:
-			for z in HouseGrid.LOT_SIZE.y:
+	var area := nav_area()
+	for level in HouseGrid.level_range():
+		for x in range(area.position.x, area.end.x):
+			for z in range(area.position.y, area.end.y):
 				var cell := Vector2i(x, z)
 				if is_walkable(level, cell):
 					var pos := HouseGrid.cell_center(cell) + Vector3(0, ground_y(level, cell), 0)
 					_astar.add_point(point_id(level, cell), pos)
 
-	for level in HouseGrid.MAX_LEVELS:
-		for x in HouseGrid.LOT_SIZE.x:
-			for z in HouseGrid.LOT_SIZE.y:
+	# Pulido 3A: pegado a un árbol o una roca el camino "cuesta más", así el
+	# personaje los rodea con un poco de aire (las copas son más anchas que la celda).
+	if not HouseData.blocked_cells.is_empty():
+		for x in range(area.position.x, area.end.x):
+			for z in range(area.position.y, area.end.y):
+				var cell := Vector2i(x, z)
+				if _astar.has_point(point_id(0, cell)) and _touches_obstacle(cell):
+					_astar.set_point_weight_scale(point_id(0, cell), NEAR_OBSTACLE_COST)
+
+	for level in HouseGrid.level_range():
+		for x in range(area.position.x, area.end.x):
+			for z in range(area.position.y, area.end.y):
 				var cell := Vector2i(x, z)
 				_connect_if_open(level, cell, cell + Vector2i(1, 0))
 				_connect_if_open(level, cell, cell + Vector2i(0, 1))
 		# Diagonales: solo si se puede ir por los dos lados (no corta esquinas).
-		for x in HouseGrid.LOT_SIZE.x:
-			for z in HouseGrid.LOT_SIZE.y:
+		for x in range(area.position.x, area.end.x):
+			for z in range(area.position.y, area.end.y):
 				for step in [Vector2i(1, 1), Vector2i(1, -1)]:
 					_connect_diagonal(level, Vector2i(x, z), step)
 
 	# Escaleras de todos los pisos (cada una une su piso con el de arriba).
-	for level in HouseGrid.MAX_LEVELS - 1:
+	for level in range(HouseGrid.MIN_LEVEL, HouseGrid.MAX_LEVELS - 1):
 		for key in _house.get_layer(level, "objects"):
 			_add_stairs(level, key)
+
+
+## Cuánto más "cuesta" caminar pegado a un obstáculo (1 = igual que en campo abierto).
+const NEAR_OBSTACLE_COST := 3.0
+
+
+## ¿Alguna de las 8 celdas de alrededor es un obstáculo?
+func _touches_obstacle(cell: Vector2i) -> bool:
+	for dx in range(-1, 2):
+		for dz in range(-1, 2):
+			if (dx != 0 or dz != 0) and Parcel.obstacle_at(cell + Vector2i(dx, dz)) != "":
+				return true
+	return false
 
 
 func _connect_if_open(level: int, a: Vector2i, b: Vector2i) -> void:
@@ -183,7 +235,7 @@ func _add_stairs(level: int, key: String) -> void:
 
 	var previous := entry_id
 	for i in steps.size():
-		var id := point_id(level, steps[i]) + 5000  # Ids aparte para los escalones.
+		var id := STEP_ID_BASE + point_id(level, steps[i])  # Ids aparte para los escalones.
 		var height := HouseGrid.level_y(level) + (i + 0.5) / steps.size() * HouseGrid.WALL_HEIGHT
 		_astar.add_point(id, HouseGrid.cell_center(steps[i]) + Vector3(0, height, 0))
 		_astar.connect_points(previous, id)

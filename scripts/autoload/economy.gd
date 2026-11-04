@@ -20,7 +20,7 @@ extends Node
 ## los vuelve a calcular con el mismo catalog.json y es el que decide.
 
 ## Piezas que tienen tiempo de construcción.
-const TIMED_LAYERS := ["objects", "roofs"]
+const TIMED_LAYERS := ["objects", "roofs", "excavation"]
 ## Máximo de días del juego sin conectarse que se pagan de trabajo.
 const MAX_OFFLINE_SHIFTS := 3
 ## Avisos del modo servidor.
@@ -579,6 +579,8 @@ func request_settle(away_minutes: float) -> void:
 		EventBus.toast.emit("Cobraste el turno que quedó a medias: $%d%s" % [int(data["pending_pay"]), where])
 	if int(data.get("offline_shifts", 0)) > 0:
 		EventBus.toast.emit("Mientras no estabas, trabajaste %d turno(s): $%d%s" % [int(data["offline_shifts"]), int(data["offline_pay"]), where])
+	if int(data.get("restaurant_pay", 0)) > 0:
+		EventBus.toast.emit("Tu restaurante trabajó solo: $%d%s" % [int(data["restaurant_pay"]), where])
 	if data.has("pending_seconds_left"):
 		_pay_retry_at = now() + int(data["pending_seconds_left"])
 

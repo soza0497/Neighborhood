@@ -89,6 +89,27 @@ signal house_problems_changed(problems: Array)
 ## Propuesta en la casa compartida: mode = "own" (la armo yo), "review" (veo
 ## la de mi pareja) o "" (ninguna); summary = {steps, pieces, cost}.
 signal proposal_changed(mode: String, summary: Dictionary)
+## Pulido 2: se agregó un piso (o cambió cuántos hay) y pedidos del plan.
+signal floors_changed(total: int)
+signal build_add_basement_requested
+signal build_add_floor_requested
+signal plan_confirm_requested
+signal plan_discard_requested
+## Pulido 2C: parcela, servicios y cajas.
+signal parcel_changed
+signal parcel_obstacle_tapped(id: String)
+signal boxes_changed(dropped: int)
+signal boxes_open_all_requested
+signal box_tapped(level: int, key: String)
+signal ambulance_requested(patient: Node3D)
+## Pulido 2: el ángulo vertical de la cámara cambió (grados hacia abajo).
+signal camera_pitch_requested(degrees: float)
+## Pulido 3B: abrir el menú de tipo de un cuarto (el que tiene esa celda en ese nivel).
+signal room_menu_requested(level: int, cell: Vector2i)
+## Pulido 3B: cambió el tipo de algún cuarto (la Tienda actualiza «Recomendado»).
+signal rooms_changed
+## Pulido 3B: la barra del ángulo pide subir (+) o bajar (-) el ángulo esos grados.
+signal camera_pitch_step_requested(degrees: float)
 ## La interfaz pide mandar o descartar mi propuesta, ver la de mi pareja (id
 ## del pedido) y responderla (aprobar o no) o cerrarla.
 signal proposal_send_requested
@@ -178,3 +199,22 @@ signal restaurant_changed
 signal restaurant_service_requested(info: Dictionary)
 ## Terminó un servicio: el resultado (lo que contó el servidor, o la práctica).
 signal restaurant_service_finished(result: Dictionary)
+
+## Fase 7: se prendió o apagó «Usar modelos» (Info). Hay que rearmar casa y personaje.
+signal models_toggled(enabled: bool)
+
+
+# --- Barrio (Fase 8) ---
+## La interfaz pide abrir el panel «Barrio» (menú hamburguesa).
+signal neighborhood_panel_requested
+## Visitar la casa de un lote del barrio (solo ver), ir a la vista aérea o volver.
+signal neighborhood_visit_requested(lot_id: String)
+signal neighborhood_aerial_requested
+signal neighborhood_return_requested
+## El estado de la vista del barrio cambió: "" (en mi casa), "aerial" o "visit".
+signal neighborhood_state_changed(state: String, lot_id: String)
+## Fase 8D: cambió la meta del barrio (leer NeighborhoodGoal.summary).
+signal neighborhood_goal_changed
+## Fase 8C: ganchos de sonido por evento. `event` es un nombre fijo (ver
+## data/neighborhood.json, "sounds"); todavía no hay archivos de audio.
+signal neighborhood_sound(event: String, position: Vector3)

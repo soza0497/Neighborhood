@@ -28,11 +28,12 @@ extends Node3D
 ## se arma una PROPUESTA con todos los cambios (se ven en la casa), y se manda
 ## entera a la pareja, que la previsualiza y la aprueba o la rechaza.
 
-enum Tool { NONE, FOUNDATION, FLOOR, WALL, ROOM, ROOF, OPENING, OBJECT, PAINT, MODIFY, ERASE }
+enum Tool { NONE, FOUNDATION, FLOOR, WALL, ROOM, ROOF, OPENING, OBJECT, PAINT, MODIFY, ERASE, EXCAVATE }
 
 ## Qué herramienta usa cada tipo ("kind") de objeto del catálogo.
 const KIND_TO_TOOL := {
 	"foundation": Tool.FOUNDATION,
+	"excavation": Tool.EXCAVATE,
 	"floor": Tool.FLOOR,
 	"wall": Tool.WALL,
 	"room": Tool.ROOM,
@@ -61,9 +62,10 @@ const JOINT_PICK_PIXELS := 40.0
 const DIRECTIONS := {"N": Vector2i(0, -1), "S": Vector2i(0, 1), "E": Vector2i(1, 0), "O": Vector2i(-1, 0)}
 
 const HINTS := {
-	Tool.NONE: "Elegí Tienda, Obra o Borrar.",
+	Tool.NONE: "Elegí Tienda u Obra (Construir, Modificar o Borrar).",
 	Tool.FOUNDATION: "Arrastrá para marcar el terreno de la casa (cimientos).",
 	Tool.FLOOR: "Arrastrá sobre los cimientos para poner piso.",
+	Tool.EXCAVATE: "Arrastrá en un sótano para excavar (un servicio con costo y espera). Después van los cimientos.",
 	Tool.WALL: "Arrastrá de esquina a esquina para levantar una pared.",
 	Tool.ROOM: "Arrastrá un rectángulo: pone piso y paredes de una vez.",
 	Tool.ROOF: "Arrastrá un rectángulo sobre la casa para techarla.",
@@ -77,7 +79,7 @@ const HINTS := {
 ## Herramientas de arrastre (rectángulo o línea). Al soltar NO se aplican:
 ## queda una selección con dos manijas (círculos) que se pueden mover, y se
 ## aplica con el botón Confirmar. Así el dedo no tapa lo que se construye.
-const HANDLE_TOOLS := [Tool.FOUNDATION, Tool.FLOOR, Tool.WALL, Tool.ROOM, Tool.ROOF]
+const HANDLE_TOOLS := [Tool.FOUNDATION, Tool.EXCAVATE, Tool.FLOOR, Tool.WALL, Tool.ROOM, Tool.ROOF]
 ## Herramientas de "tocar o mantener" (arrastrar sin mantener = cámara).
 const PRESS_TOOLS := [Tool.PAINT, Tool.MODIFY, Tool.ERASE]
 ## A cuántos píxeles de una manija cuenta como tocarla.
@@ -108,6 +110,12 @@ var selected_key := ""
 var erase_multi := false
 ## Color de pintura elegido (id del catálogo).
 var paint_item_id := ""
+## Pulido 2: construcción planificada. Lo que se agrega queda como "previsto"
+## (brilla cada pocos segundos) hasta que se toca Factura → Confirmar. Se
+## puede apagar (las pruebas viejas construyen de una).
+var plan_enabled := true
+## true mientras se confirma el plan (así no vuelve a quedar como plan).
+var _plan_bypass := false
 
 # --- Estado del gesto ---
 var _pressing := false
@@ -152,6 +160,10 @@ var _pending_ok: Array = []
 var _pending_blocked: Array = []
 ## La selección que espera Confirmar no tiene manijas (borrar, copiar contorno).
 var _pending_plain := false
+## Pulido 3B: celda donde está "sostenido" un mueble antes de confirmarlo (para
+## poder girarlo con el botón ANTES de ponerlo). NO_CELL = ninguno.
+const NO_CELL := Vector2i(-100000, -100000)
+var _held_cell := NO_CELL
 
 # --- Propuesta en la casa compartida ---
 ## Pasos de la propuesta aplicados en la casa (para verlos): {writes, inverse}.
@@ -248,6 +260,7 @@ func select_item(item_id: String) -> void:
 	place_diag = false
 	_cursor.visible = false
 	_joints_dirty = true
+	_sync_grid()
 	_update_camera_pan()
 	_show_tool_hint()
 
@@ -268,15 +281,58 @@ func set_erase_mode(value: bool) -> void:
 
 ## Cambia de nivel (piso). Devuelve el nivel que quedó.
 func set_level(new_level: int) -> int:
-	level = clampi(new_level, 0, HouseGrid.MAX_LEVELS - 1)
+	# Solo se puede ir a pisos que existen (los construidos o los agregados).
+	level = clampi(new_level, house.lowest_level(), house.floors_total() - 1)
 	_erase_items.clear()
 	_cancel_gesture()
 	select_object("")
 	_paint_face = {}
 	EventBus.build_paint_arrows.emit(false)
-	_grid.position.y = HouseGrid.level_y(level) + 0.03
+	_sync_grid()
 	_joints_dirty = true
 	return level
+
+
+## Altura de la rejilla y de lo que se toca para elegir celdas: la del piso, o
+## (Pulido 3B) con el techo, la de lo ALTO de las paredes de este piso: la
+## rejilla «flota» ahí para tocar el área desde arriba sin que la pared tape.
+func pick_height() -> float:
+	return HouseGrid.level_y(level) + (HouseGrid.WALL_HEIGHT if tool == Tool.ROOF else 0.0)
+
+
+func _sync_grid() -> void:
+	if _grid != null:
+		_grid.position.y = pick_height() + 0.03
+
+
+## "Agregar piso" (Obra): suma un piso arriba y lo muestra. Si no se puede
+## (no hay una parte sin techo, no hay piso de abajo...), avisa por qué.
+## Devuelve true si lo agregó.
+func add_floor() -> bool:
+	var problem := HouseRules.add_floor_problem(house)
+	if problem != "":
+		EventBus.build_hint.emit(problem)
+		EventBus.toast.emit(problem)
+		return false
+	house.floor_count = house.floors_total() + 1
+	EventBus.floors_changed.emit(house.floors_total())
+	EventBus.build_level_set_requested.emit(house.floors_total() - 1)
+	EventBus.build_hint.emit("Piso agregado. Construí ahí arriba.")
+	return true
+
+
+## «Agregar sótano» (Obra): suma un sótano abajo (hasta 3) y va a él.
+func add_basement() -> bool:
+	var problem := HouseRules.add_basement_problem(house)
+	if problem != "":
+		EventBus.build_hint.emit(problem)
+		EventBus.toast.emit(problem)
+		return false
+	house.basement_count = -house.lowest_level() + 1
+	EventBus.floors_changed.emit(house.floors_total())
+	EventBus.build_level_set_requested.emit(house.lowest_level())
+	EventBus.build_hint.emit("Sótano agregado. Excavá (Construir › Excavación) y después poné cimientos.")
+	return true
 
 
 ## Botón de girar: gira lo elegido, o el mueble que se va a colocar. Los
@@ -299,6 +355,14 @@ func rotate_object() -> void:
 		var next := next_orientation(item.get("id", ""), place_rotation, place_diag)
 		place_rotation = next[0]
 		place_diag = next[1]
+		if _held_cell != NO_CELL:
+			# Pulido 3B: el mueble sostenido se gira ahí mismo, antes de confirmar.
+			var check := _check(_object_place_writes(_held_cell))
+			_pending_ok = check["ok"]
+			_pending_blocked = check["blocked"]
+			_show_preview()
+			EventBus.build_hint.emit("Girado (%d°). Confirmá con ✓ o tocá otro lugar." % HouseGrid.object_angle(place_rotation, place_diag))
+			return
 		EventBus.build_hint.emit("Girado (%d°). Arrastrá para colocarlo." % HouseGrid.object_angle(place_rotation, place_diag))
 
 
@@ -406,6 +470,8 @@ func context_action(action: String) -> void:
 				_paint_tap_face({"edge": target["key"], "side": target.get("side", "b")})
 			else:
 				_paint_now([{"layer": target["layer"], "key": target["key"]}])
+		"room_type":
+			EventBus.room_menu_requested.emit(level, HouseGrid.key_to_cell(target["key"]))
 		"erase", "erase_opening":
 			var entry := _erase_entry(target, action == "erase_opening")
 			if not entry.is_empty():
@@ -561,7 +627,7 @@ func draft_writes() -> Array:
 
 ## Deshacer dentro de la propuesta: saca el último cambio.
 func draft_undo() -> void:
-	if _draft_mode != "own" or _draft_steps.is_empty():
+	if not (_draft_mode == "own" or _draft_mode == "plan") or _draft_steps.is_empty():
 		return
 	var step: Dictionary = _draft_steps.pop_back()
 	house.apply(step["inverse"])
@@ -624,8 +690,22 @@ func review_request() -> Dictionary:
 	return _review_request
 
 
-func _add_to_draft(writes: Array) -> void:
-	_draft_mode = "own"
+## ¿Estas escrituras van al plan? Solo lo que AGREGA piezas con una
+## herramienta de poner (no mover, pintar ni borrar).
+func _should_plan(writes: Array) -> bool:
+	if not plan_enabled or _plan_bypass or not (_draft_mode == "" or _draft_mode == "plan"):
+		return false
+	if not tool in [Tool.FOUNDATION, Tool.EXCAVATE, Tool.FLOOR, Tool.WALL, Tool.ROOM, Tool.ROOF, Tool.OPENING, Tool.OBJECT]:
+		return false
+	for w in writes:
+		if w["value"] == null:
+			return false
+	return true
+
+
+func _add_to_draft(writes: Array, mode := "own") -> void:
+	# Un plan que se vuelve propuesta (cambio estructural en pareja) queda "own".
+	_draft_mode = "own" if (mode == "own" or _draft_mode == "own") else "plan"
 	var inverse := house.apply(writes)
 	_draft_steps.append({"writes": writes, "inverse": inverse})
 	_announce_draft()
@@ -635,11 +715,67 @@ func _end_draft() -> void:
 	_draft_steps.clear()
 	_draft_mode = ""
 	_review_request = {}
+	view.set_planned({})
 	EventBus.proposal_changed.emit("", {})
 
 
 func _announce_draft() -> void:
+	_mark_planned()
 	EventBus.proposal_changed.emit(_draft_mode, draft_summary())
+
+
+## Le dice a la vista qué piezas están previstas (para que brillen).
+func _mark_planned() -> void:
+	var ids := {}
+	if _draft_mode == "plan":
+		for w in draft_writes():
+			ids["%d|%s|%s" % [w["level"], w["layer"], w["key"]]] = true
+	view.set_planned(ids)
+
+
+# --- Plan y factura (Pulido 2) ---
+
+## La factura del plan: {lines: [{name, qty, cost}], total, seconds}.
+## `total` es lo que se paga (negativo = te devuelven). `seconds` es la
+## espera hasta que termina la obra más larga.
+func plan_invoice() -> Dictionary:
+	var writes := draft_writes()
+	var original := house_without_draft()
+	var quote := Economy.quote(original, writes)
+	var grouped := {}
+	var longest := 0
+	for w in quote["writes"]:
+		var value: Variant = w["value"]
+		if value == null:
+			continue
+		var old: Variant = original.get_piece(w["level"], w["layer"], w["key"])
+		var piece_name: String = Catalog.get_item(value.get("item", "")).get("name", _piece_name(w["layer"], value))
+		var line: Dictionary = grouped.get(piece_name, {"name": piece_name, "qty": 0, "cost": 0})
+		line["qty"] += 1
+		line["cost"] += -Economy.change_for(w["layer"], old, value)
+		grouped[piece_name] = line
+		longest = maxi(longest, int(value.get("ready_at", 0)) - Economy.now())
+	return {"lines": grouped.values(), "total": -int(quote["money"]), "seconds": longest}
+
+
+## Factura aceptada: se saca lo previsto y se construye de verdad (cobra,
+## pone el temporizador y, en pareja, pide la aprobación). Si no se puede
+## (falta plata, sin conexión), el plan vuelve a quedar previsto.
+func confirm_plan() -> bool:
+	if _draft_mode != "plan" or not Economy.can_request():
+		return false
+	var writes := draft_writes()
+	var money_change: int = Economy.quote(house_without_draft(), writes)["money"]
+	if not Economy.can_change(money_change):
+		EventBus.build_hint.emit("Te faltan $%d para esta factura. Sacá algo del plan." % (-money_change - Economy.money))
+		return false
+	discard_draft()
+	_plan_bypass = true
+	var applied: bool = await _apply(writes)
+	_plan_bypass = false
+	if not applied:
+		_add_to_draft(writes, "plan")
+	return applied
 
 
 # --- Entrada (toques y mouse) ---
@@ -794,6 +930,22 @@ func _finish() -> void:
 			EventBus.build_hint.emit("Mové los círculos para ajustar y tocá «Confirmar».")
 		else:
 			EventBus.build_hint.emit(_blocked_hint() + " Lo rojo no se va a poner.")
+		return
+
+	# Pulido 3B: un mueble (o escalera, pilar) NO se pone al soltar: queda
+	# sostenido con su fantasma para poder girarlo con el botón de 45° y recién
+	# se pone con Confirmar. Tocar en otro lugar lo cambia de sitio.
+	if tool == Tool.OBJECT and not (_pending_ok.is_empty() and _pending_blocked.is_empty()):
+		_held_cell = _cell_at(_last_screen_pos, false)
+		_pressing = false
+		_drag_handle = -1
+		_awaiting_confirm = true
+		_pending_plain = true
+		EventBus.build_pending_changed.emit(true)
+		_announce_cost()
+		EventBus.build_hint.emit("Girá con el botón (45°), tocá otro lugar para moverlo y confirmá con ✓." \
+			if _pending_blocked.is_empty() else _blocked_hint())
+		_show_preview()
 		return
 
 	var ok := _pending_ok
@@ -1063,16 +1215,23 @@ func _erase_entry(target: Dictionary, opening_only := false) -> Dictionary:
 		var writes: Array = [HouseData.write(lvl, layer, key, wall)]
 		writes.append_array(_unjoin_previous(lvl, key))
 		return {"id": "%d|%s|%s|opening" % [lvl, layer, key], "label": opening_name.to_lower(), "writes": writes}
-	var w := HouseData.write(lvl, layer, key, null)
-	var reason := HouseRules.removal_reason(house, w)
-	if reason != "":
-		EventBus.build_hint.emit(reason)
-		EventBus.toast.emit(reason)
-		return {}
-	var writes: Array = [w]
-	if layer == "walls":
-		writes.append_array(_unjoin_previous(lvl, key))
-	return {"id": "%d|%s|%s" % [lvl, layer, key], "label": _piece_name(layer, value), "writes": writes}
+	# Pulido 2: el basurero borra TODO. Lo que se apoyaba solo en la pieza
+	# (paredes de un cimiento, el piso de arriba de una pared...) se borra
+	# con ella: la pregunta lo dice y todo se ve en rojo.
+	var closure := HouseRules.removal_closure(house, HouseData.write(lvl, layer, key, null))
+	var removing := {}
+	for c in closure:
+		removing["%d|%s|%s" % [c["level"], c["layer"], c["key"]]] = true
+	var writes: Array = closure.duplicate()
+	for c in closure:
+		if c["layer"] == "walls":
+			var previous := HouseGrid.previous_in_line(c["key"])
+			if not removing.has("%d|walls|%s" % [c["level"], previous]):
+				writes.append_array(_unjoin_previous(c["level"], c["key"]))
+	var label := _piece_name(layer, value)
+	if closure.size() > 1:
+		label += " y %d pieza%s que se apoya%s" % [closure.size() - 1, "" if closure.size() == 2 else "s", "" if closure.size() == 2 else "n"]
+	return {"id": "%d|%s|%s" % [lvl, layer, key], "label": label, "writes": writes}
 
 
 ## Si la pared de antes estaba unida a esta, se separa (la juntura se va).
@@ -1161,6 +1320,10 @@ func _open_context_menu(target: Dictionary) -> void:
 			options.append({"id": "erase", "text": "Borrar techo"})
 		"floors":
 			options.append({"id": "paint", "text": "Pintar"})
+			# Pulido 3B: si el piso es de un cuarto cerrado, se le puede elegir el tipo.
+			var room := HouseRooms.room_at(house, level, HouseGrid.key_to_cell(target["key"]))
+			if not room.is_empty():
+				options.append({"id": "room_type", "text": "Tipo de cuarto (%s)" % room["name"]})
 			options.append({"id": "erase", "text": "Borrar piso"})
 		"foundation":
 			options.append({"id": "erase", "text": "Borrar cimientos"})
@@ -1201,6 +1364,11 @@ func _apply(writes: Array) -> bool:
 	if needs_approval(writes):
 		_add_to_draft(writes)
 		EventBus.build_hint.emit("Agregado a la propuesta. Cuando termines, mandala a %s." % Couple.partner_name())
+		return true
+	# Pulido 2: lo que se agrega queda previsto en un plan; se paga al confirmar la factura.
+	if _should_plan(writes):
+		_add_to_draft(writes, "plan")
+		EventBus.build_hint.emit("Quedó previsto. Seguí agregando y, al terminar, tocá «Factura».")
 		return true
 	var quote := Economy.quote(house, writes)
 	var money_change: int = quote["money"]
@@ -1273,11 +1441,11 @@ func _hover(screen_pos: Vector2) -> void:
 	_cursor.visible = true
 	if tool == Tool.WALL:
 		var v := _vertex_at(screen_pos)
-		_cursor.position = Vector3(v.x, HouseGrid.level_y(level) + 0.05, v.y)
+		_cursor.position = Vector3(v.x, pick_height() + 0.05, v.y)
 		_cursor.scale = Vector3(0.3, 1, 0.3)
 	else:
 		var cell := _cell_at(screen_pos, false)
-		_cursor.position = HouseGrid.cell_center(cell) + Vector3(0, HouseGrid.level_y(level) + 0.05, 0)
+		_cursor.position = HouseGrid.cell_center(cell) + Vector3(0, pick_height() + 0.05, 0)
 		_cursor.scale = Vector3.ONE
 
 
@@ -1289,6 +1457,7 @@ func _cancel_gesture() -> void:
 		_awaiting_confirm = false
 		EventBus.build_pending_changed.emit(false)
 	_pending_plain = false
+	_held_cell = NO_CELL
 	_paint_targets.clear()
 	_paint_surface = ""
 	_pending_ok = []
@@ -1307,8 +1476,12 @@ func _place_writes(screen_pos: Vector2) -> Array:
 	var cell := _end_cell
 	match tool:
 		Tool.FOUNDATION:
+			# Cimientos: en la planta baja o en un sótano (ya excavado).
 			for c in HouseGrid.cells_in_rect(_start_cell, cell):
-				_add_if_new(writes, 0, "foundation", HouseGrid.cell_key(c), {"item": item["id"]})
+				_add_if_new(writes, mini(level, 0), "foundation", HouseGrid.cell_key(c), {"item": item["id"]})
+		Tool.EXCAVATE:
+			for c in HouseGrid.cells_in_rect(_start_cell, cell):
+				_add_if_new(writes, level, "excavation", HouseGrid.cell_key(c), {"item": item["id"]})
 		Tool.FLOOR:
 			for c in HouseGrid.cells_in_rect(_start_cell, cell):
 				_add_if_new(writes, level, "floors", HouseGrid.cell_key(c), {"item": item["id"]})
@@ -1337,12 +1510,17 @@ func _place_writes(screen_pos: Vector2) -> Array:
 					writes.append(HouseData.write(level, "walls", edge, wall))
 					writes.append_array(_auto_join(edge, wall))
 		Tool.OBJECT:
-			var anchor := _centered_anchor(_cell_at(screen_pos, false), place_rotation)
-			var value := {"item": item["id"], "cell": [anchor.x, anchor.y], "rot": place_rotation}
-			if place_diag:
-				value["diag"] = true
-			writes.append_array(_object_writes(NEW_KEY, value))
+			writes.append_array(_object_place_writes(_cell_at(screen_pos, false)))
 	return writes
+
+
+## Las escrituras para poner el objeto elegido con su centro en `cell`.
+func _object_place_writes(cell: Vector2i) -> Array:
+	var anchor := _centered_anchor(cell, place_rotation)
+	var value := {"item": item["id"], "cell": [anchor.x, anchor.y], "rot": place_rotation}
+	if place_diag:
+		value["diag"] = true
+	return _object_writes(NEW_KEY, value)
 
 
 ## Ventanas iguales seguidas se unen solas al ponerlas (como antes): la unión
@@ -1636,7 +1814,7 @@ func _ray(screen_pos: Vector2) -> Array:
 ## Punto del piso del nivel actual bajo la pantalla (o null).
 func _point_on_level(screen_pos: Vector2) -> Variant:
 	var ray := _ray(screen_pos)
-	return Plane(Vector3.UP, HouseGrid.level_y(level)).intersects_ray(ray[0], ray[1])
+	return Plane(Vector3.UP, pick_height()).intersects_ray(ray[0], ray[1])
 
 
 ## Celda bajo la pantalla. `clamp_to_lot` la mantiene dentro del lote
@@ -1678,7 +1856,7 @@ func _handle_at(screen_pos: Vector2) -> int:
 ## Pone las manijas en las esquinas (o puntas) de la selección.
 func _update_handles() -> void:
 	var shown := tool in HANDLE_TOOLS and (_pressing or _awaiting_confirm) and not _pending_plain
-	var y := HouseGrid.level_y(level) + 0.12
+	var y := pick_height() + 0.12
 	for i in _handles.size():
 		_handles[i].visible = shown
 		if not shown:
@@ -1775,9 +1953,13 @@ func _pick_object(screen_pos: Vector2) -> String:
 ## mueble, pared, piso y cimientos. {level, layer, key, side?} o {}.
 func _pick_any(screen_pos: Vector2) -> Dictionary:
 	var ray := _ray(screen_pos)
-	var roof := view.pick_roof(ray[0], ray[1], level)
-	if roof != "":
-		return {"level": level, "layer": "roofs", "key": roof}
+	# Techos del piso actual y del de abajo (los de abajo se ven desde acá).
+	for roof_level in [level, level - 1]:
+		if roof_level < 0:
+			continue
+		var roof := view.pick_roof(ray[0], ray[1], roof_level)
+		if roof != "":
+			return {"level": roof_level, "layer": "roofs", "key": roof}
 	var object_key := _pick_object(screen_pos)
 	if object_key != "":
 		return {"level": level, "layer": "objects", "key": object_key}
@@ -1806,10 +1988,32 @@ func _update_camera_pan() -> void:
 
 ## Explica por qué algo salió en rojo, según la herramienta y el piso.
 func _blocked_hint() -> String:
+	# Pulido 2C: si lo rojo está sobre un obstáculo, se dice.
+	for w in _pending_blocked:
+		var cells: Array = []
+		match w["layer"]:
+			"foundation", "floors":
+				cells = [HouseGrid.key_to_cell(w["key"])]
+			"objects":
+				if w["value"] != null:
+					cells = HouseData.value_cells(w["value"])
+			"roofs":
+				if w["value"] != null:
+					var rect := HouseData.roof_rect(w["value"])
+					for x in range(rect.position.x, rect.end.x):
+						for z in range(rect.position.y, rect.end.y):
+							cells.append(Vector2i(x, z))
+		for c in cells:
+			if HouseRules.is_blocked(c):
+				return "Ahí hay un obstáculo (árbol, roca, laguito...): tocalo y llamá al servicio para limpiarlo."
 	var upstairs := level > 0
 	match tool:
+		Tool.EXCAVATE:
+			return "Solo se excava en un sótano (Agregar sótano), de arriba hacia abajo, y no donde hay obstáculos."
 		Tool.FOUNDATION:
-			return "Los cimientos van solo en la planta baja."
+			if level < 0:
+				return "En un sótano, los cimientos van sobre un lugar ya excavado."
+			return "Los cimientos van solo en la planta baja o en un sótano."
 		Tool.FLOOR:
 			if upstairs:
 				return "Arriba, el piso necesita piso, una pared o un pilar cerca debajo (y no encima de un techo)."

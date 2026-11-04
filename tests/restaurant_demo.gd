@@ -62,7 +62,7 @@ func _run() -> void:
 	print("\n1) Casa + restaurante aparte en la parcela")
 	await GameServer.register(user_a, PASSWORD)
 	var local_a := {"house": _demo_house(), "economy": {"xp": 0},
-		"character": {"data": {"name": "Ana", "appearance": {"shirt": "#ffd166"}}, "level": 0, "cell": [8, 27],
+		"character": {"data": {"name": "Ana", "appearance": {"shirt": "#ffd166"}}, "level": 0, "cell": [40, 59],
 			"saved_unix": int(Time.get_unix_time_from_system())}}
 	var result: Dictionary = await GameServer.load_game(local_a)
 	_check(result["ok"], "cuenta nueva con la partida importada")
@@ -82,7 +82,7 @@ func _run() -> void:
 	await _b.register(user_b, PASSWORD)
 	await _b.load_game({"house": _demo_house(), "economy": {"xp": 0}})
 	var b_stove: Dictionary = await _b.call_rpc("build_apply", {"writes": [
-		HouseData.write(0, "objects", "o50", {"item": "stove_restaurant", "cell": [21, 18], "rot": 0})]})
+		HouseData.write(0, "objects", "o50", {"item": "stove_restaurant", "cell": [53, 50], "rot": 0})]})
 	await _b.call_rpc("build_accelerate", {})
 	var b_open: Dictionary = await _b.call_rpc("restaurant_open", {})
 	var b_start: Dictionary = await _b.call_rpc("service_start", {})
@@ -102,7 +102,7 @@ func _run() -> void:
 	_check(not refused["ok"] and refused["error"].contains("Plancha"), "sin plancha no abre: \"%s\"" % refused["error"])
 	var money := Economy.money
 	result = await Economy.request("build_apply", {"writes": [
-		HouseData.write(0, "objects", "o40", {"item": "stove_restaurant", "cell": [21, 18], "rot": 0})]})
+		HouseData.write(0, "objects", "o40", {"item": "stove_restaurant", "cell": [53, 50], "rot": 0})]})
 	_check(result["ok"] and Economy.money == money - 450, "comprar la plancha: el servidor cobra $450")
 	load = await Economy.request("restaurant_load")
 	_check(Restaurant.normalize(load["data"]["restaurant"])["missing"].size() == 1, "mientras está en obra, todavía falta")
@@ -118,7 +118,7 @@ func _run() -> void:
 	if view.low_walls:
 		EventBus.view_walls_toggle_requested.emit()
 	var walls: Dictionary = _main.house.get_layer(0, "walls")
-	_check(walls.has("h:20,17") and walls.has("h:21,26"), "el edificio del restaurante tiene sus paredes (%d en total)" % walls.size())
+	_check(walls.has("h:52,49") and walls.has("h:53,58"), "el edificio del restaurante tiene sus paredes (%d en total)" % walls.size())
 	rig.set_state({"x": 21.0 - 16.0, "z": 21.5 - 16.0, "yaw": 20.0, "distance": 17.0})
 	await _frames(10)
 	await _shot("restaurante_1_parcela.png")
@@ -253,20 +253,20 @@ func _run() -> void:
 
 func _demo_house() -> Dictionary:
 	var level := {"foundation": {}, "floors": {}, "walls": {}, "objects": {}}
-	_building(level, Vector2i(4, 19), Vector2i(11, 25), Vector2i(7, 25))
-	_building(level, Vector2i(16, 17), Vector2i(26, 25), Vector2i(21, 25))
+	_building(level, Vector2i(36, 51), Vector2i(43, 57), Vector2i(39, 57))
+	_building(level, Vector2i(48, 49), Vector2i(58, 57), Vector2i(53, 57))
 	level["objects"] = {
-		"o1": {"item": "bed_basic", "cell": [5, 20], "rot": 0},
-		"o2": {"item": "stove_basic", "cell": [9, 20], "rot": 0},
-		"o3": {"item": "sofa_basic", "cell": [6, 23], "rot": 0},
-		"o10": {"item": "counter_restaurant", "cell": [18, 18], "rot": 0},
-		"o11": {"item": "table_restaurant", "cell": [18, 22], "rot": 0},
-		"o12": {"item": "table_restaurant", "cell": [21, 22], "rot": 0},
-		"o13": {"item": "table_restaurant", "cell": [24, 22], "rot": 0},
-		"o14": {"item": "stool_restaurant", "cell": [18, 23], "rot": 0},
-		"o15": {"item": "stool_restaurant", "cell": [21, 23], "rot": 0},
-		"o16": {"item": "stool_restaurant", "cell": [24, 23], "rot": 0},
-		"o17": {"item": "plant_pot", "cell": [25, 18], "rot": 0},
+		"o1": {"item": "bed_basic", "cell": [37, 52], "rot": 0},
+		"o2": {"item": "stove_basic", "cell": [41, 52], "rot": 0},
+		"o3": {"item": "sofa_basic", "cell": [38, 55], "rot": 0},
+		"o10": {"item": "counter_restaurant", "cell": [50, 50], "rot": 0},
+		"o11": {"item": "table_restaurant", "cell": [50, 54], "rot": 0},
+		"o12": {"item": "table_restaurant", "cell": [53, 54], "rot": 0},
+		"o13": {"item": "table_restaurant", "cell": [56, 54], "rot": 0},
+		"o14": {"item": "stool_restaurant", "cell": [50, 55], "rot": 0},
+		"o15": {"item": "stool_restaurant", "cell": [53, 55], "rot": 0},
+		"o16": {"item": "stool_restaurant", "cell": [56, 55], "rot": 0},
+		"o17": {"item": "plant_pot", "cell": [57, 50], "rot": 0},
 	}
 	return {"levels": [level], "next_id": 60, "lot_size": [HouseGrid.LOT_SIZE.x, HouseGrid.LOT_SIZE.y]}
 
@@ -275,10 +275,10 @@ func _demo_house() -> Dictionary:
 func _building(level: Dictionary, a: Vector2i, b: Vector2i, door_cell: Vector2i) -> void:
 	for c in HouseGrid.cells_in_rect(a, b):
 		level["foundation"][HouseGrid.cell_key(c)] = {"item": "foundation_basic"}
-		level["floors"][HouseGrid.cell_key(c)] = {"item": "floor_basic"} if a.x < 12 else \
+		level["floors"][HouseGrid.cell_key(c)] = {"item": "floor_basic"} if a.x < 12 + 32 else \
 			{"item": "floor_tile", "color": "#ffe1b0"}
 	for edge in HouseGrid.edges_around_rect(a, b):
-		level["walls"][edge] = {"item": "wall_basic"} if a.x < 12 else \
+		level["walls"][edge] = {"item": "wall_basic"} if a.x < 12 + 32 else \
 			{"item": "wall_basic", "color_a": "#ff8f6b", "color_b": "#ff8f6b"}
 	var door := "h:%d,%d" % [door_cell.x, door_cell.y + 1]
 	if level["walls"].has(door):
@@ -289,7 +289,7 @@ func _building(level: Dictionary, a: Vector2i, b: Vector2i, door_cell: Vector2i)
 func _house_from_server() -> Dictionary:
 	var house := HouseData.new()
 	house.from_dict(GameState.house)
-	house.apply([HouseData.write(0, "objects", "o40", {"item": "stove_restaurant", "cell": [21, 18], "rot": 0})])
+	house.apply([HouseData.write(0, "objects", "o40", {"item": "stove_restaurant", "cell": [53, 50], "rot": 0})])
 	return house.to_dict()
 
 

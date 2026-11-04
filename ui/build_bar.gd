@@ -5,12 +5,14 @@ extends PanelContainer
 ## Tres herramientas, con nombres, íconos y orden propios:
 ##   1. Tienda (bolsa): muebles, electrodomésticos, electrónica, plantas y
 ##      adornos. Primero lo que recomienda el cuarto que se está mirando.
-##   2. Obra (casco), con dos modos:
-##        Agregar: cimientos, pisos, paredes, puertas, ventanas, techos,
-##                 escaleras y pilares (+ "Copiar contorno de abajo").
-##        Modificar: tocar algo para moverlo, girarlo, pintarlo o borrarlo
-##                 (abajo, los colores de pintura).
-##   3. Borrar (basurero), con "modo selección" para borrar varias cosas.
+##   2. Obra (casco), con tres modos de íconos claros (Pulido 2):
+##        Construir (llave inglesa y martillo): cimientos, pisos, paredes,
+##                 puertas, ventanas, techos, escaleras y pilares (+ "Copiar
+##                 contorno de abajo"). Aparte, "Agregar piso".
+##        Modificar (cruz de flechas): tocar algo para moverlo, girarlo,
+##                 pintarlo o borrarlo (abajo, los colores de pintura).
+##        Borrar (basurero): borra cualquier pieza, con "modo selección"
+##                 para borrar varias cosas.
 ##
 ## Encima de la barra, a la derecha (ActionRow), van los botones que sirven
 ## en ese momento: flechas N/S/E/O, girar y borrar lo elegido, las flechas de
@@ -26,15 +28,17 @@ const ITEM_BUTTON_SIZE := Vector2(150, 76)
 const CATEGORY_BUTTON_SIZE := Vector2(0, 56)
 const ACTION_SIZE := 60
 
-## "shop", "build" o "erase" ("" = ninguna).
+## "shop" o "build" ("" = ninguna).
 var tool := ""
-## En Obra: "add" o "modify".
+## En Obra: "add" (Construir), "modify" o "erase" (Borrar).
 var build_mode := "add"
 var current_category := ""
 
 var _builder: Node
 var _character: Node3D
 var _action_row: HBoxContainer
+var _add_floor_button: Button
+var _add_basement_button: Button
 var _tool_buttons: Dictionary = {}
 var _mode_buttons: Dictionary = {}
 var _tool_group := ButtonGroup.new()
@@ -65,7 +69,7 @@ var _room: Dictionary = {}
 func _ready() -> void:
 	_item_group.allow_unpress = true
 	_tool_group.allow_unpress = true
-	for entry in [["shop", "shop", "Tienda"], ["build", "helmet", "Obra"], ["erase", "trash", "Borrar"]]:
+	for entry in [["shop", "shop", "Tienda"], ["build", "helmet", "Obra"]]:
 		var button := Icons.make_button(entry[1], entry[2], 56, true)
 		button.button_group = _tool_group
 		button.toggled.connect(_on_tool_toggled.bind(entry[0]))
@@ -73,7 +77,7 @@ func _ready() -> void:
 		_tool_buttons[entry[0]] = button
 	var separator := VSeparator.new()
 	_sub_modes.add_child(separator)
-	for entry in [["add", "plus", "Agregar"], ["modify", "hand", "Modificar"]]:
+	for entry in [["add", "build_tools", "Construir"], ["modify", "move", "Modificar"], ["erase", "trash", "Borrar"]]:
 		var button := Icons.make_button(entry[1], entry[2], 56, true)
 		button.button_group = _mode_group
 		button.toggled.connect(func(on: bool) -> void:
@@ -82,6 +86,13 @@ func _ready() -> void:
 		_sub_modes.add_child(button)
 		_mode_buttons[entry[0]] = button
 	_mode_buttons["add"].button_pressed = true
+	# "Agregar piso": opción aparte (no es un modo; es una acción).
+	_add_floor_button = Icons.make_button("add_floor", "Agregar piso", 56)
+	_add_floor_button.pressed.connect(EventBus.build_add_floor_requested.emit)
+	_sub_modes.add_child(_add_floor_button)
+	_add_basement_button = Icons.make_button("add_basement", "Agregar sótano", 56)
+	_add_basement_button.pressed.connect(EventBus.build_add_basement_requested.emit)
+	_sub_modes.add_child(_add_basement_button)
 	Icons.setup(_cancel_button, "close", "Cancelar", 56)
 	_confirm_button.pressed.connect(EventBus.build_confirm_requested.emit)
 	_cancel_button.pressed.connect(EventBus.build_cancel_requested.emit)
@@ -103,6 +114,10 @@ func _ready() -> void:
 		if tool == "shop":
 			_show_category(current_category))
 	EventBus.economy_changed.connect(_on_economy_changed)
+	# Pulido 3B: si el jugador le cambia el tipo a un cuarto, «Recomendado» se actualiza.
+	EventBus.rooms_changed.connect(func() -> void:
+		if tool == "shop":
+			_fill_categories(SHOP_CATEGORIES, true))
 	EventBus.server_busy_changed.connect(func(busy: bool) -> void:
 		_server_busy = busy
 		if _confirm_button.visible:
@@ -166,8 +181,12 @@ func _update_actions() -> void:
 		_actions[direction].visible = modifying and _has_selection
 	_actions["rotate"].visible = (modifying and _has_selection) or placing
 	_actions["delete"].visible = modifying and _has_selection
-	_actions["multi"].visible = tool == "erase"
-	if tool != "erase" and _actions["multi"].button_pressed:
+	var erasing := tool == "build" and build_mode == "erase"
+	_actions["multi"].visible = erasing
+	if _add_floor_button != null:
+		_add_floor_button.visible = tool == "build"
+		_add_basement_button.visible = tool == "build"
+	if not erasing and _actions["multi"].button_pressed:
 		_actions["multi"].button_pressed = false
 
 
@@ -190,9 +209,6 @@ func _set_tool(id: String) -> void:
 		"build":
 			_set_build_mode(build_mode)
 			return
-		"erase":
-			_fill_categories([], false)
-			EventBus.build_item_selected.emit(HouseBuilder.ERASE_TOOL_ID)
 		_:
 			_fill_categories([], false)
 			EventBus.build_item_selected.emit("")
@@ -206,6 +222,9 @@ func _set_build_mode(mode: String) -> void:
 	_select_item("", "")
 	if mode == "add":
 		_fill_categories(BUILD_CATEGORIES, false)
+	elif mode == "erase":
+		_fill_categories([], false)
+		EventBus.build_item_selected.emit(HouseBuilder.ERASE_TOOL_ID)
 	else:
 		_fill_categories([], false)
 		EventBus.build_item_selected.emit(HouseBuilder.MODIFY_TOOL_ID)
@@ -248,7 +267,10 @@ func _fill_categories(ids: Array, with_recommended: bool) -> void:
 
 func _category_name(id: String) -> String:
 	if id == RECOMMENDED:
-		return "★ %s" % _room.get("name", "Este cuarto")
+		# Pulido 3B: "★ Recomendado" y, abajo, el tipo del cuarto si tiene uno
+		# (si no tiene tipo, solo lo más común: no se dice "multiuso").
+		var typed: bool = _room.get("type", "") not in ["", "mixed", "empty"]
+		return "★ Recomendado\n%s" % _room["name"] if typed else "★ Recomendado"
 	return Catalog.categories.get(id, {}).get("name", id)
 
 

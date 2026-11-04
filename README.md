@@ -247,6 +247,36 @@ y el constructor nuevos con clics de verdad y saca capturas `ui_*.png`;
 `tests/restaurant_demo.tscn` (Fase 6, con capturas `restaurante_*.png`) prueban contra el
 servidor de verdad: ver `docs/servidor.md`.)
 
+**Pulido 2** (versión 0.9.0): `tests/polish2a_demo.tscn` (errores y claridad: menú,
+techo trabado, basurero, Agregar piso, selector de frente, plan con factura;
+capturas `p2a_*.png`) y `tests/polish2b_demo.tscn` (estilo toon, entorno, modelos
+`.glb`, trabajo con saco y maleta, sonido; capturas `p2b_*.png`). Se corren con
+ventana (`godot --path . res://tests/polish2a_demo.tscn`) o, sin pantalla, con
+`xvfb-run`. Para cambiar el **estilo** (contorno, tonos, colores, niebla) editá
+`data/style.json`; el **mundo** (bosque, vecinos, calle, autos) está en
+`data/world.json`; cómo meter un **modelo `.glb`** nuevo: `docs/estilo.md`.
+
+**Fase 7 — preparación de arte** (versión 0.11.0): cómo meter modelos `.glb`, la paleta (`data/palette.json`), el personaje por
+piezas (`data/character_slots.json`) y la guía de Blender → juego están en `docs/estilo.md`. Pruebas: `tests/test_art.tscn` (sin pantalla),
+`tests/art_demo.tscn` (con ventana; capturas `art_*.png`). Ejemplos: `python3 tools/make_sample_models.py`.
+
+**Pulido 3** (versión 0.10.0; brief en `docs/pulido-3.md`): **3A** — la zona disponible empieza en 64 × 64
+pegada a la calle (con niveles se abre hasta 96 × 96), con vallas de madera y vecinos a los costados; la casa
+va cerca de la calle y el personaje esquiva árboles y rocas. Pruebas: `test_parcel.tscn` (sin pantalla),
+`lua5.1 server/tests/test_rules.lua` y `tests/polish3a_demo.tscn` (con ventana; capturas `p3a_*.png`).
+Los datos (zona, desbloqueos, casa) están en `data/parcel.json`; las vallas y vecinos, en `data/world.json`.
+**3B** — área segura de la pantalla, mueble que se gira antes de confirmar, rejilla flotante del techo, barra del
+ángulo de la cámara, maqueta de pisos sin aristas del fondo, tipo de cuarto elegido por el jugador (dormitorio
+principal) y creación de personaje al registrarse (peinados, ojos y bocas en `data/character_options.json`).
+Prueba: `tests/polish3b_demo.tscn` (con `xvfb-run -s "-screen 0 2560x2560x24"` para los tamaños de pantalla).
+**3C** — paredes con contorno continuo: `tests/polish3c_demo.tscn`.
+
+**2C — parcela de 96 × 96, servicios y sótanos:** `godot --headless --path . res://tests/test_parcel.tscn`
+(reglas de la parcela, sin pantalla ni red), `tests/polish2c_demo.tscn` (con ventana: limpiar
+obstáculos con jardinero / tractor, entrega con camión y cajas, ambulancia y sótanos; capturas
+`p2c_*.png`) y `tests/parcel_server_demo.tscn` (contra el servidor de verdad). Los obstáculos, sus
+precios y esperas están en `data/parcel.json` (**reiniciá Nakama si lo cambiás**).
+
 Y las reglas del servidor (opcional, necesita Lua 5.1, ver `docs/servidor.md`):
 
 ```bash
@@ -311,3 +341,8 @@ Están siempre cargados y se usan desde cualquier script por su nombre:
 - **SaveSystem**: guarda/carga `GameState` en `user://save.json` (con copia de
   respaldo y migración de versiones viejas)
   (en la PC: `~/.local/share/godot/app_userdata/Neighborhood/`).
+
+
+**Fase 8** (versión 0.11.0, barrio): `tests/test_neighborhood.tscn` (sin pantalla: mapa, casas vecinas, vida, meta),
+`lua5.1 server/tests/test_goals.lua` (meta del servidor) y `tests/neighborhood_demo.tscn` (con ventana; capturas
+`n8*.png`). En el juego: menú ☰ → **Barrio** (vista aérea, visitar casas, privacidad, meta del barrio).

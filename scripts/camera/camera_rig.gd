@@ -17,6 +17,10 @@ extends Node3D
 @export var default_distance := 22.0
 ## Inclinación de la vista, en grados (más negativo = más desde arriba).
 @export var pitch_degrees := -50.0
+## Pulido 2: inclinaciones que se pueden elegir (grados hacia abajo), de
+## "de frente" (casi horizontal) a "desde arriba" del todo. Editables acá.
+const PITCH_PRESETS := [-8.0, -25.0, -50.0, -70.0, -89.0]
+const PITCH_NAMES := ["De frente", "Baja", "Normal", "Alta", "Desde arriba"]
 ## Giro inicial, en grados.
 @export var default_yaw_degrees := 45.0
 ## Hasta dónde se puede mover el punto que se mira, desde el centro del mapa.
@@ -43,9 +47,34 @@ var _mouse_rotating := false
 
 
 func _ready() -> void:
+	# Pulido 2C: se puede mirar toda la parcela (no más allá de sus bordes).
+	bounds_half_size = maxf(28.0, HouseGrid.LOT_SIZE.x / 2.0 - 2.0)
 	_pitch.rotation_degrees.x = pitch_degrees
 	reset_view()
 	EventBus.camera_reset_requested.connect(reset_view)
+
+
+## Cambia la inclinación vertical (grados; negativo = mira hacia abajo).
+func set_pitch(degrees: float) -> void:
+	pitch_degrees = clampf(degrees, -89.0, -5.0)
+	_pitch.rotation_degrees.x = pitch_degrees
+
+
+## Sube (+) o baja (-) el ángulo `degrees` grados (lo usa la barra del ángulo).
+## Subir = mirar más desde arriba, hasta la vista aérea de cielo (-89).
+func step_pitch(degrees: float) -> void:
+	set_pitch(pitch_degrees - degrees)
+
+
+## Pasa a la siguiente inclinación de PITCH_PRESETS. Devuelve su nombre.
+func cycle_pitch() -> String:
+	var best := 0
+	for i in PITCH_PRESETS.size():
+		if absf(PITCH_PRESETS[i] - pitch_degrees) < absf(PITCH_PRESETS[best] - pitch_degrees):
+			best = i
+	var next := (best + 1) % PITCH_PRESETS.size()
+	set_pitch(PITCH_PRESETS[next])
+	return PITCH_NAMES[next]
 
 
 ## Vuelve la cámara a su posición inicial.
@@ -79,6 +108,7 @@ func get_state() -> Dictionary:
 		"z": position.z,
 		"yaw": rotation_degrees.y,
 		"distance": _distance,
+		"pitch": pitch_degrees,
 	}
 
 
@@ -87,7 +117,71 @@ func set_state(state: Dictionary) -> void:
 	position = Vector3(state.get("x", 0.0), 0.0, state.get("z", 0.0))
 	rotation_degrees.y = state.get("yaw", default_yaw_degrees)
 	_set_distance(state.get("distance", default_distance))
+	# Una partida vieja (sin ángulo) vuelve al ángulo normal.
+	set_pitch(float(state.get("pitch", PITCH_PRESETS[2])))
 	_clamp_position()
+
+
+# --- Vista del barrio (Fase 8B) ---
+# Misma cámara y mismos gestos (arrastrar, pellizcar, dos dedos para girar); solo
+# se amplían los límites para poder ver todo el barrio desde arriba.
+
+## Límites de antes de entrar al barrio ({} = no se está en el barrio).
+var _home_limits: Dictionary = {}
+var _fly_tween: Tween
+## Cuánto se abre la cámara en el barrio.
+const NEIGHBORHOOD_BOUNDS := 190.0
+const NEIGHBORHOOD_MAX_DISTANCE := 170.0
+const NEIGHBORHOOD_FAR := 800.0
+
+
+func in_neighborhood_view() -> bool:
+	return not _home_limits.is_empty()
+
+
+## Abre los límites (zoom, borde y alcance de la vista) para mirar el barrio.
+func enter_neighborhood_view() -> void:
+	if not _home_limits.is_empty():
+		return
+	_home_limits = {"bounds": bounds_half_size, "max": max_distance, "far": _camera.far, "floor": floor_height}
+	bounds_half_size = NEIGHBORHOOD_BOUNDS
+	max_distance = NEIGHBORHOOD_MAX_DISTANCE
+	_camera.far = NEIGHBORHOOD_FAR
+	floor_height = 0.0
+	single_finger_pan = true
+
+
+## Vuelve a los límites de siempre.
+func exit_neighborhood_view() -> void:
+	if _home_limits.is_empty():
+		return
+	if _fly_tween != null and _fly_tween.is_valid():
+		_fly_tween.kill()
+	bounds_half_size = _home_limits["bounds"]
+	max_distance = _home_limits["max"]
+	_camera.far = _home_limits["far"]
+	floor_height = _home_limits["floor"]
+	_home_limits = {}
+	_set_distance(_distance)
+	_clamp_position()
+
+
+## Viaja suavemente a un punto del suelo con cierto zoom.
+func fly_to(point: Vector3, distance: float, duration := 0.8) -> void:
+	if _fly_tween != null and _fly_tween.is_valid():
+		_fly_tween.kill()
+	if duration <= 0.0 or not is_inside_tree():
+		position = Vector3(point.x, floor_height, point.z)
+		_set_distance(distance)
+		_clamp_position()
+		return
+	_fly_tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_fly_tween.tween_property(self, "position", Vector3(point.x, floor_height, point.z), duration)
+	_fly_tween.tween_method(_set_distance, _distance, distance, duration)
+
+
+func current_distance() -> float:
+	return _distance
 
 
 # Se usa _unhandled_input para que los botones de la interfaz reciban
