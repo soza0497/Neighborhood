@@ -1,5 +1,20 @@
 # Progreso
 
+## ▶ ESTADO ACTUAL (2026-11-04) — versión 0.11.0, todo unido en `main`
+Pulido 2, Pulido 3, Fase 7 (arte) y Fase 8 (barrio) están unidos y **verificados en la PC**: pruebas de Godot y de
+Lua en verde (Lua 322 + metas 42), Nakama con los 7 módulos, cuenta nueva completa contra el servidor real
+(`login_demo` 18/18). APK 0.11.0 en `build/neighborhood.apk`.
+
+**Pendientes de verificación (próximo paso):**
+1. Seis demos con servidor usan coordenadas de la parcela vieja y fallan: `server_demo`, `economy_server_demo`,
+   `parcel_server_demo`, `couple_demo`, `couple_live_demo`, `restaurant_demo` (usar `HouseGrid.home_origin()`).
+   Confirmar que no esconden un error real en pareja o restaurante. También `polish2a_demo` (1) y `polish2c_demo` (2).
+2. El dueño prueba el APK 0.11.0 en el teléfono y mide los FPS (contorno sí/no, barrio con vecinos).
+3. Detalle visual: al crear el personaje se ve el panel del login detrás del editor.
+4. Decidir si los muebles con modelo se pueden pintar (hoy ignoran el color) y el tamaño de la zona inicial (64×64).
+
+Las notas de abajo son el detalle de cada fase.
+
 ## ▶ Fase 7 — preparación de arte y estilo (versión 0.11.0) — en la nube, rama `fase-7` (sale de `pulido-3`)
 
 **No se mergea a `main`, no se exporta APK.** Otra sesión hace la Fase 8 (barrio) en paralelo: aquí se tocó lo mínimo
