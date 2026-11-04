@@ -28,7 +28,7 @@ extends Node3D
 ## se arma una PROPUESTA con todos los cambios (se ven en la casa), y se manda
 ## entera a la pareja, que la previsualiza y la aprueba o la rechaza.
 
-enum Tool { NONE, FOUNDATION, FLOOR, WALL, ROOM, ROOF, OPENING, OBJECT, PAINT, MODIFY, ERASE, EXCAVATE }
+enum Tool { NONE, FOUNDATION, FLOOR, WALL, ROOM, ROOF, OPENING, OBJECT, PAINT, MODIFY, ERASE, EXCAVATE, ROOMS }
 
 ## Qué herramienta usa cada tipo ("kind") de objeto del catálogo.
 const KIND_TO_TOOL := {
@@ -49,6 +49,9 @@ const KIND_TO_TOOL := {
 ## Herramientas que no están en el catálogo.
 const MODIFY_TOOL_ID := "modify"
 const ERASE_TOOL_ID := "erase"
+## Pulido 4A: herramienta «Cuartos» (dentro de Obra → Modificar): resalta los cuartos y
+## al tocar uno abre el menú de su tipo.
+const ROOMS_TOOL_ID := "rooms"
 
 ## Clave provisional para algo nuevo; al soltar se cambia por un id real.
 const NEW_KEY := "__new__"
@@ -74,6 +77,7 @@ const HINTS := {
 	Tool.PAINT: "Tocá una pared o un piso para pintarlo. Mantené presionado para pintar arrastrando.",
 	Tool.MODIFY: "Tocá algo para elegirlo. Mantené presionado un mueble para moverlo con el dedo.",
 	Tool.ERASE: "Tocá lo que querés borrar.",
+	Tool.ROOMS: "Tocá un cuarto resaltado para elegir qué es (cocina, dormitorio, baño…).",
 }
 
 ## Herramientas de arrastre (rectángulo o línea). Al soltar NO se aplican:
@@ -81,7 +85,7 @@ const HINTS := {
 ## aplica con el botón Confirmar. Así el dedo no tapa lo que se construye.
 const HANDLE_TOOLS := [Tool.FOUNDATION, Tool.EXCAVATE, Tool.FLOOR, Tool.WALL, Tool.ROOM, Tool.ROOF]
 ## Herramientas de "tocar o mantener" (arrastrar sin mantener = cámara).
-const PRESS_TOOLS := [Tool.PAINT, Tool.MODIFY, Tool.ERASE]
+const PRESS_TOOLS := [Tool.PAINT, Tool.MODIFY, Tool.ERASE, Tool.ROOMS]
 ## A cuántos píxeles de una manija cuenta como tocarla.
 const HANDLE_PICK_DISTANCE := 70.0
 
@@ -178,6 +182,8 @@ var _grid: MeshInstance3D
 var _cursor: MeshInstance3D
 var _ghost: Node3D
 var _selection_marker: MeshInstance3D
+## Pulido 4A: resalte de cuartos (herramienta «Cuartos»).
+var _room_overlay: Node3D
 var _handles: Array[MeshInstance3D] = []
 var _joints: Node3D
 ## Vértice de cada puntito de juntura (en el mismo orden que sus nodos).
@@ -203,6 +209,7 @@ func setup(new_house: HouseData, new_history: UndoHistory, new_view: HouseView, 
 		select_object("")
 		_joints_dirty = true)
 	paint_item_id = _first_paint_id()
+	EventBus.rooms_changed.connect(refresh_room_overlay)
 
 
 func _process(_delta: float) -> void:
@@ -244,6 +251,9 @@ func select_item(item_id: String) -> void:
 	elif item_id == ERASE_TOOL_ID:
 		item = {}
 		tool = Tool.ERASE
+	elif item_id == ROOMS_TOOL_ID:
+		item = {}
+		tool = Tool.ROOMS
 	else:
 		item = Catalog.get_item(item_id)
 		tool = KIND_TO_TOOL.get(item.get("kind", ""), Tool.NONE)
@@ -263,6 +273,7 @@ func select_item(item_id: String) -> void:
 	_sync_grid()
 	_update_camera_pan()
 	_show_tool_hint()
+	refresh_room_overlay()
 
 
 ## Borrar: una cosa por vez, o varias (modo selección).
@@ -290,6 +301,7 @@ func set_level(new_level: int) -> int:
 	EventBus.build_paint_arrows.emit(false)
 	_sync_grid()
 	_joints_dirty = true
+	refresh_room_overlay()
 	return level
 
 
@@ -994,6 +1006,12 @@ func _on_tap(screen_pos: Vector2) -> void:
 				_paint_face = {}
 				EventBus.build_paint_arrows.emit(false)
 				_paint_now([{"layer": "floors", "key": floor_key}])
+		Tool.ROOMS:
+			var cell := room_cell_at(screen_pos)
+			if cell == NO_CELL:
+				EventBus.build_hint.emit("Ahí no hay un cuarto cerrado. Tocá uno de los resaltados.")
+			else:
+				EventBus.room_menu_requested.emit(level, cell)
 		Tool.ERASE:
 			var target := _pick_any(screen_pos)
 			if target.is_empty():
@@ -1020,6 +1038,11 @@ func _on_tap(screen_pos: Vector2) -> void:
 func _on_long_press(screen_pos: Vector2) -> void:
 	_long_pressed = true
 	match tool:
+		Tool.ROOMS:
+			# Nada que arrastrar: sigue siendo la cámara.
+			_long_pressed = false
+			_moved = true
+			return
 		Tool.MODIFY:
 			var target := _pick_any(screen_pos)
 			if target.is_empty():
@@ -1719,9 +1742,46 @@ func _update_selection_marker() -> void:
 		_selection_marker.visible = true
 
 
+## Pulido 4A: celda de cuarto cerrado bajo el dedo (NO_CELL si no hay).
+func room_cell_at(screen_pos: Vector2) -> Vector2i:
+	var point: Variant = _point_on_level(screen_pos)
+	if point == null:
+		return NO_CELL
+	var cell := Vector2i(floori(point.x), floori(point.z))
+	return cell if not HouseRooms.room_at(house, level, cell).is_empty() else NO_CELL
+
+
+## Pulido 4A: con la herramienta «Cuartos» cada cuarto del piso se resalta con un color
+## chato (el principal, más claro). Se esconde con cualquier otra herramienta.
+func refresh_room_overlay() -> void:
+	if _room_overlay == null:
+		return
+	for child in _room_overlay.get_children():
+		child.queue_free()
+	_room_overlay.visible = tool == Tool.ROOMS and house != null
+	if not _room_overlay.visible:
+		return
+	var n := 0
+	for room in HouseRooms.detect(house, level):
+		var hue := fmod(0.08 + 0.17 * n, 1.0)
+		var color := Color.from_hsv(hue, 0.55, 1.0, 0.5 if room.get("main", false) else 0.38)
+		n += 1
+		for key in room["cells"]:
+			var cell := HouseGrid.key_to_cell(key)
+			var mesh := PlaneMesh.new()
+			mesh.size = Vector2(0.94, 0.94)
+			var tile := _make_flat_marker("RoomTile", mesh, color)
+			tile.visible = true
+			tile.position = Vector3(cell.x + 0.5, HouseGrid.level_y(level) + 0.05, cell.y + 0.5)
+			remove_child(tile)  # _make_flat_marker lo cuelga de acá; va dentro del resalte.
+			_room_overlay.add_child(tile)
+
+
 func _on_piece_changed(changed_level: int, layer: String, key: String) -> void:
 	if layer == "walls":
 		_joints_dirty = true
+	if tool == Tool.ROOMS and layer in ["walls", "floors", "objects"]:
+		refresh_room_overlay()
 	# Si lo elegido se movió o desapareció (por ejemplo, al deshacer).
 	if layer == selected_layer and changed_level == level and key == selected_key:
 		if house.has_piece(level, layer, key):
@@ -2088,6 +2148,11 @@ func _create_helpers() -> void:
 	var marker := PlaneMesh.new()
 	marker.size = Vector2.ONE
 	_selection_marker = _make_flat_marker("SelectionMarker", marker, Color(1, 0.85, 0.2, 0.6))
+
+	_room_overlay = Node3D.new()
+	_room_overlay.name = "RoomOverlay"
+	_room_overlay.visible = false
+	add_child(_room_overlay)
 
 	_ghost = Node3D.new()
 	_ghost.name = "Ghost"

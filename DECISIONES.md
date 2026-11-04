@@ -1267,3 +1267,16 @@ pivote en el centro de la base, **contorno por shader (no modelado)**; el arte s
   3 s, hay un vecino activo menos (mínimo 3). Hay que medirlo en el teléfono (meta: 30 FPS).
 - **Sonido:** solo la señal `EventBus.neighborhood_sound(evento, posición)` (`greet`, `door`, `car_pass`); si existe
   `data/sounds/<nombre>.ogg|wav|mp3` suena en 3D, si no se prueba `assets/audio/`, y si no hay nada, no pasa nada.
+
+
+## Pulido 4A — Los cuartos salen de la columna izquierda (versión 0.12.0)
+
+- **«Cuartos» es una herramienta de Obra**, un cuarto botón en la fila de modos (Construir · Modificar · **Cuartos** · Borrar) con el
+  ícono `room.svg`. Se hizo como modo propio (`HouseBuilder.Tool.ROOMS`, id `rooms`) y no como sub-herramienta escondida dentro de
+  Modificar: Modificar ya usa su fila para las pinturas y mover/borrar salen del menú de cada pieza; un modo aparte es lo más
+  descubrible y no toca el flujo de Modificar. Si el dueño prefiere otra ubicación, es cambiar una fila en `build_bar.gd`.
+- Con la herramienta, cada cuarto cerrado del piso se resalta con un color chato (el dormitorio principal, más marcado); tocar uno abre
+  el menú de tipo del Pulido 3B (el mismo `_show_room_menu`). Tocar fuera de un cuarto solo avisa. Arrastrar mueve la cámara.
+- **Panel «Casa» (☰)**: lista de cuartos de todos los pisos con su tipo y botón «Cambiar tipo», y el interruptor «Mi casa se puede
+  visitar» (el mismo ajuste que ya estaba en Barrio). Queda como el lugar de los ajustes de la casa.
+- La columna izquierda queda con techo, paredes y la maqueta de pisos.

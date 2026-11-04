@@ -30,7 +30,7 @@ const ACTION_SIZE := 60
 
 ## "shop" o "build" ("" = ninguna).
 var tool := ""
-## En Obra: "add" (Construir), "modify" o "erase" (Borrar).
+## En Obra: "add" (Construir), "modify", "rooms" (Cuartos) o "erase" (Borrar).
 var build_mode := "add"
 var current_category := ""
 
@@ -77,7 +77,7 @@ func _ready() -> void:
 		_tool_buttons[entry[0]] = button
 	var separator := VSeparator.new()
 	_sub_modes.add_child(separator)
-	for entry in [["add", "build_tools", "Construir"], ["modify", "move", "Modificar"], ["erase", "trash", "Borrar"]]:
+	for entry in [["add", "build_tools", "Construir"], ["modify", "move", "Modificar"], ["rooms", "room", "Cuartos: elegí qué es cada uno"], ["erase", "trash", "Borrar"]]:
 		var button := Icons.make_button(entry[1], entry[2], 56, true)
 		button.button_group = _mode_group
 		button.toggled.connect(func(on: bool) -> void:
@@ -225,6 +225,10 @@ func _set_build_mode(mode: String) -> void:
 	elif mode == "erase":
 		_fill_categories([], false)
 		EventBus.build_item_selected.emit(HouseBuilder.ERASE_TOOL_ID)
+	elif mode == "rooms":
+		# Pulido 4A: herramienta «Cuartos» (resalta los cuartos; tocar uno abre su tipo).
+		_fill_categories([], false)
+		EventBus.build_item_selected.emit(HouseBuilder.ROOMS_TOOL_ID)
 	else:
 		_fill_categories([], false)
 		EventBus.build_item_selected.emit(HouseBuilder.MODIFY_TOOL_ID)

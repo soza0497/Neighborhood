@@ -90,7 +90,6 @@ var _house_data: HouseData
 var _boxes_button: Button
 ## Pulido 3B: barra vertical del ángulo de la cámara (debajo del menú).
 var _pitch_slider: PitchSlider
-var _rooms_button: Button
 ## Márgenes normales de la interfaz (izquierda, arriba, derecha, abajo).
 const BASE_MARGINS := Vector4(16, 34, 16, 22)
 ## Cuántos grados por segundo cambia el ángulo con la perilla al tope.
@@ -126,7 +125,6 @@ func _ready() -> void:
 	_setup_icons()
 	_build_floor_selector()
 	_build_pitch_slider()
-	_build_rooms_button()
 	_build_left_holder()
 	get_viewport().size_changed.connect(_fit_to_screen)
 	_fit_to_screen.call_deferred()
@@ -214,6 +212,7 @@ func setup_house(house: HouseData, character: Node3D, builder: Node) -> void:
 	_house_data = house
 	_floor_map.setup(house, character)
 	$RestaurantPanel.house = house
+	$HomePanel.house = house
 	_compass_button.target = character
 	_bottom_bar.setup(_action_row, builder, character)
 
@@ -369,30 +368,6 @@ func _show_obstacle(id: String) -> void:
 			var result: Dictionary = await Parcel.call_service(id, _house_data)
 			EventBus.toast.emit("Viene el servicio: %s." % service_text if result["ok"] else str(result["error"])))
 		call.disabled = not access["ok"] or Economy.money < cost
-	_popup_button(rows, "Cerrar", _close_popup)
-
-
-## Botón «Cuartos» (Pulido 3B): lista los cuartos del piso y deja elegir su tipo.
-func _build_rooms_button() -> void:
-	_rooms_button = Icons.make_button("room_tag", "Cuartos: elegí qué es cada uno")
-	_rooms_button.pressed.connect(_show_rooms_list)
-	%LeftColumn.get_node("ViewIcons").add_child(_rooms_button)
-
-
-## Lista de los cuartos del piso que se está viendo (tocar uno abre su menú).
-func _show_rooms_list() -> void:
-	var level: int = _builder.level if _builder != null else 0
-	var rooms := HouseRooms.detect(_house_data, level)
-	var rows := _open_popup("Cuartos de %s" % HouseGrid.level_name(level).to_lower())
-	if rooms.is_empty():
-		rows.add_child(_small_label("Todavía no hay cuartos cerrados en este piso.\nUn cuarto es un piso rodeado de paredes.", Color(0.85, 0.9, 1)))
-	var n := 0
-	for room in rooms:
-		n += 1
-		var first: Vector2i = HouseGrid.key_to_cell(room["cells"].keys()[0])
-		var text := "Cuarto %d: %s%s" % [n, room["name"], " (principal)" if room.get("main", false) else ""]
-		_popup_button(rows, text, func() -> void:
-			_show_room_menu(level, first))
 	_popup_button(rows, "Cerrar", _close_popup)
 
 
