@@ -155,7 +155,7 @@ func refresh() -> void:
 	var centers: Dictionary = {}
 	for id in _slots:
 		centers[id] = (_slots[id] as Slot).center
-	var changes := lod.update(cam_pos, centers)
+	lod.update(cam_pos, centers)
 	var map_target := lod.map_mode
 	if forced_level >= 0:
 		map_target = forced_level == 3
@@ -193,9 +193,8 @@ func _apply_level(slot: Slot) -> bool:
 				if _builds_left <= 0:
 					return false
 				_builds_left -= 1
-				slot.lod0 = ExteriorLod0.build(IslandFakeHouses.house_for(slot.lot), slot.card)
+				slot.lod0 = ExteriorLod0.build(IslandFakeHouses.house_for(slot.lot), slot.card, _houses)
 				slot.lod0.transform = slot.xf
-				_houses.add_child(slot.lod0)
 			_free_lod1(slot)
 			_set_cluster_member(slot, false)
 		1:
@@ -203,7 +202,7 @@ func _apply_level(slot: Slot) -> bool:
 				if _builds_left <= 0:
 					return false
 				_builds_left -= 1
-				slot.lod1 = ExteriorLod1.build(slot.card)
+				slot.lod1 = ExteriorLod1.build(slot.card, 1 <= int(IslandData.lod_config().get("outline_max_level", 1)))
 				slot.lod1.transform = slot.xf
 				_houses.add_child(slot.lod1)
 			slot.lod1.visible = true

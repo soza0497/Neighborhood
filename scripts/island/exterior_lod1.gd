@@ -16,10 +16,11 @@ static func build_kit(card: ExteriorCard) -> IslandMeshKit:
 
 
 ## La casa lista para poner en la escena (sin colocar: el que la pide la mueve).
-static func build(card: ExteriorCard) -> MeshInstance3D:
+## `outlined` = false la dibuja sin contorno (data/island.json → lod.outline_max_level = 0).
+static func build(card: ExteriorCard, outlined := true) -> MeshInstance3D:
 	var node := MeshInstance3D.new()
 	node.name = "Lod1"
 	node.mesh = build_kit(card).build()
-	node.material_override = IslandMaterials.blocks(true)
+	node.material_override = IslandMaterials.blocks(outlined)
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return node

@@ -253,11 +253,11 @@ def write_json(lots, path):
         },
         "lod": {
             "distances": [70.0, 230.0, 520.0], "hysteresis": 0.12, "map_enter_radii": 2.9, "map_exit_radii": 2.5,
-            "update_interval": 0.15, "builds_per_frame": 2, "lod0_max": 3, "vegetation_range": 320.0,
+            "update_interval": 0.15, "builds_per_frame": 2, "lod0_max": 1, "vegetation_range": 320.0,
             "vegetation_hysteresis": 0.15, "vegetation_chunk": 140.0, "outline_max_level": 1
         },
         "demo": {
-            "stress_lots": 60, "stress_houses": 100, "stress_spacing": 52.0, "warmup_frames": 40, "measure_seconds": 2.0,
+            "stress_houses": 100, "stress_spacing": 52.0, "warmup_frames": 40, "measure_seconds": 2.0,
             "presets": [
                 {"name": "calle", "focus": "player", "distance": 42.0, "yaw": 20.0, "pitch": -40.0},
                 {"name": "barrio", "focus": "i12", "distance": 210.0, "yaw": 20.0, "pitch": -50.0},

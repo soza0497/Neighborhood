@@ -317,14 +317,13 @@
   "map_exit_radii": 2.5,
   "update_interval": 0.15,
   "builds_per_frame": 2,
-  "lod0_max": 3,
+  "lod0_max": 1,
   "vegetation_range": 320.0,
   "vegetation_hysteresis": 0.15,
   "vegetation_chunk": 140.0,
   "outline_max_level": 1
  },
  "demo": {
-  "stress_lots": 60,
   "stress_houses": 100,
   "stress_spacing": 52.0,
   "warmup_frames": 40,

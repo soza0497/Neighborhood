@@ -5,9 +5,11 @@ extends RefCounted
 
 
 ## La casa completa en un nodo cuyo origen es el centro de su huella, en el suelo.
-static func build(house: HouseData, card: ExteriorCard) -> Node3D:
+## `parent` tiene que estar YA en el árbol de la escena: HouseView arma sus niveles al entrar.
+static func build(house: HouseData, card: ExteriorCard, parent: Node3D) -> Node3D:
 	var holder := Node3D.new()
 	holder.name = "Lod0"
+	parent.add_child(holder)
 	var box := card.bounds()
 	var view := HouseView.new()
 	view.name = "House"

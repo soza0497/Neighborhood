@@ -68,9 +68,8 @@ func set_level(new_level: int) -> void:
 		if level == 2:
 			entries.append({"card": card, "xf": xf})
 		elif level == 0 and i < LOD0_LIMIT:
-			var node := ExteriorLod0.build(IslandFakeHouses.house_for(l), card)
+			var node := ExteriorLod0.build(IslandFakeHouses.house_for(l), card, _holder)
 			node.transform = xf
-			_holder.add_child(node)
 		else:
 			var node1 := ExteriorLod1.build(card)
 			node1.transform = xf

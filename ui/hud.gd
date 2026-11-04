@@ -298,6 +298,8 @@ func _build_info_extras() -> void:
 	rows.add_child(use_models)
 	rows.move_child(use_models, anchor)
 	anchor += 1
+	# Isla 1A: demo de rendimiento escondida detrás de «Herramientas de prueba».
+	anchor = IslandTestEntry.add_to(rows, anchor, get_tree())
 	for entry in [["master", "Volumen"], ["sfx", "Efectos"], ["music", "Música"]]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
