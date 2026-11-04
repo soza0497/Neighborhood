@@ -1,0 +1,15 @@
+{
+	"_ayuda": "Cámara (Pulido 5B). Ángulos en grados hacia abajo (negativo): -90 = desde arriba, 0 = de frente. pitch_min_degrees = el ángulo MÁS BAJO que se permite (la cámara no pasa a 'primera persona'). low_pitch_below = por debajo de este ángulo (más horizontal) cambian los controles: un dedo horizontal desplaza a los lados y uno vertical avanza/retrocede despacio, con zona muerta. Velocidades: todo es PROPORCIONAL a la distancia a lo que se mira (más lejos = más rápido), con tope por cuadro y amortiguación. pan_cap = tope por gesto (metros por cada metro de distancia). frame_cap = tope por cuadro. pending_cap = lo máximo que puede quedar pendiente por mover. damping = cuánto se amortigua (más alto = más seco). low_side_factor / low_forward_factor = fracción del 'agarrar el suelo' que se usa al lado / hacia adelante cuando la cámara está baja. low_dead_zone_px = píxeles verticales que hay que arrastrar antes de que empiece a avanzar. lot_margin = metros extra alrededor de la parcela usable; lot_soft_border = desde cuántos metros del límite se empieza a frenar (suave, sin golpe). Esos límites de la parcela solo valen en la vista normal (vivir y construir); la vista aérea del barrio y las visitas conservan los suyos.",
+	"pitch_min_degrees": -20.0,
+	"pitch_max_degrees": -89.0,
+	"low_pitch_below": -35.0,
+	"pan_cap": 0.3,
+	"frame_cap": 0.12,
+	"pending_cap": 0.5,
+	"damping": 18.0,
+	"low_side_factor": 0.8,
+	"low_forward_factor": 0.3,
+	"low_dead_zone_px": 14.0,
+	"lot_margin": 3.0,
+	"lot_soft_border": 6.0
+}
