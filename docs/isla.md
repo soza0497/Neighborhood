@@ -21,6 +21,8 @@ puliendo la construcción de casas.
   estilo Nueva York o europeas.
 - Cada **isla** reúne unas **30 familias** al empezar (se prevé hasta 50 o 60).
   Cuando una isla se llena, el servidor crea otra.
+- **Cada familia puede tener hasta 3 parcelas**: la gratuita y **2 más** (decisión del
+  dueño, 2026-11-04). Para 30 familias, la isla tiene unas **90 parcelas**.
 
 ## 2. Parcelas
 ### Tamaños (a medir, ver §6)
@@ -30,7 +32,14 @@ puliendo la construcción de casas.
 | **Mediana (M)** | 48 × 48 | Se compra |
 | **Grande (L / premium)** | 64 × 64 | Se compra; junto a la playa, el lago o el parque |
 
-- **Hasta 2 o 3 parcelas** por jugador (contiguas; se pueden unir).
+- **Hasta 3 parcelas** por jugador: la gratuita + 2 adicionales (no hace falta que sean contiguas).
+- **Cada parcela tiene un uso**: **Hogar** (casa de la familia) o **Negocio** (granja, tienda, restaurante, etc.).
+  En una parcela de **Hogar no puede haber un negocio**: a lo sumo algo muy chico y suelto (un carrito de
+  helados, un puesto), nunca estructuras de negocio. Quien quiere un negocio compra **otra parcela** y la
+  declara de Negocio. El uso lo guarda y lo valida el servidor.
+- **Los negocios no son del jugador por ahora**: los de la isla vienen ya creados (genéricos o propios de
+  la isla). El jugador **no** puede crear su propio restaurante todavía; la opción «Restaurante» se oculta
+  del menú hasta que exista el sistema de negocios (ver `VISION.md`).
 - El tamaño de la parcela inicial es el de la Fase 1 (32), no el 64×64 de hoy:
   es lo que el dueño pidió (parcelas chicas). Los obstáculos y los servicios del
   Pulido 2C (árboles, rocas, limpieza) se conservan **dentro** de la parcela
@@ -61,6 +70,14 @@ puliendo la construcción de casas.
 - **Vecinos simulados** ocupan lotes mientras no haya jugadores reales (ya
   existen en la Fase 8). Cuando llega un jugador real a una isla, **reemplaza a
   un vecino simulado** del lote que le toca.
+
+### Plantilla de casa (mudanza)
+- El jugador puede **guardar una plantilla** de su casa: solo la **estructura** (cimientos, pisos, paredes con
+  puertas y ventanas, techos, escaleras, pilares). **Sin muebles ni objetos.**
+- Para **mudarse** o repetir el diseño en otra parcela, elige la plantilla y, al colocarla, se ve una
+  **silueta como un holograma** de cómo quedaría (verde si cabe, roja si no). Se cobra como construir (pasa por
+  el mismo plan y factura del servidor).
+- Se guardan en la cuenta (varias, con nombre).
 
 ## 3. Cómo se mantiene fluido (LOD)
 Regla de oro: **solo tu parcela está «viva»** (completa y editable). Lo demás se

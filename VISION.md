@@ -248,3 +248,11 @@ parte, no el centro. Cada familia puede comprar **más parcelas** para otros uso
 Esto guía las decisiones de diseño: metas comunitarias (ya existe la meta del barrio por participación),
 misiones, logros, minijuegos y negocios con administración. Diseño de la isla en `docs/isla.md`.
 Prioridad actual: **que la isla funcione** (mapa, parcelas, LOD); lo demás viene después.
+
+## Negocios y parcelas (2026-11-04)
+- El jugador **todavía no crea sus propios negocios**: se oculta «Restaurante» del menú y de la tienda hasta que
+  exista el sistema de negocios. Los negocios de la isla vienen creados (genéricos o propios).
+- Cada parcela es de **Hogar** o de **Negocio**. En una de Hogar no hay estructuras de negocio (solo algo chico
+  como un carrito de helados). Para un negocio se compra otra parcela. Hasta 3 parcelas por familia.
+- **Plantilla de casa**: guardar solo la estructura (sin muebles) para mudarse; al colocarla se ve una
+  silueta de holograma. Ver `docs/isla.md`.
