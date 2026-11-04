@@ -1216,3 +1216,17 @@ Decisiones menores tomadas por el desarrollador (el dueño no las pidió una por
   queda listo para cuando haya visitantes reales. Las casas generadas siempre se pueden ver (solo ver).
 - **Calles:** una sola calle principal (la de `world.json`) con 2 aceras. Una calle transversal queda para después.
 - Paleta/estilo (`style.json`) NO se tocó (es de la Fase 7): los colores propios del barrio están en `neighborhood.json`.
+
+## Fase 8C — Vida del barrio
+
+- **Local y sin servidor:** los vecinos y los autos solo existen en cada teléfono (`NeighborhoodLife`); no se guardan.
+- **Rutas por puntos, no HouseNav:** el interior de las casas vecinas solo se arma al visitar, así que «entrar a casa»
+  es: caminar hasta la puerta, desaparecer unos segundos (adentro) y volver a salir. HouseNav para vecinos queda pendiente.
+- **Autos sin choques:** dos carriles (uno por sentido); cada auto mira al de adelante en su carril (en círculo) y
+  nunca avanza más de lo que le deja libre (distancia mínima 4,6 m entre centros). Frenan si alguien cruza. Con 4 autos
+  no hace falta más lógica; una calle transversal con giros queda para después.
+- **Rendimiento:** máximo 10 vecinos y 4 autos (`data/neighborhood.json`, `life`); LOD de 3 niveles (cerca: animados;
+  medio: se mueven sin animar el cuerpo; lejos: escondidos y su lógica corre cada 0,5 s); si los FPS están bajo 24 durante
+  3 s, hay un vecino activo menos (mínimo 3). Hay que medirlo en el teléfono (meta: 30 FPS).
+- **Sonido:** solo la señal `EventBus.neighborhood_sound(evento, posición)` (`greet`, `door`, `car_pass`); si existe
+  `data/sounds/<nombre>.ogg|wav|mp3` suena en 3D, si no se prueba `assets/audio/`, y si no hay nada, no pasa nada.

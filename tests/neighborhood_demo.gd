@@ -35,6 +35,7 @@ func _run() -> void:
 	await _frames(10)
 	await _test_8a()
 	await _test_8b()
+	await _test_8c()
 	await _test_privacy_saved()
 	print("\nDEMO BARRIO: %d pasaron, %d fallaron · capturas: %s" % [_passed, _failed, ", ".join(_shots)])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -103,8 +104,29 @@ func _test_8b() -> void:
 	await _shot("n8b_vuelta.png")
 
 
+func _test_8c() -> void:
+	print("\n3) 8C: vida del barrio")
+	var life: NeighborhoodLife = _main.get_node("World").neighborhood.life
+	# Adelantamos el reloj para que los vecinos ya estén en la calle.
+	for i in 900:
+		life.step(0.1)
+	var out := 0
+	for w in life.walkers:
+		if (w["node"] as Node3D).visible or not w["hidden"]:
+			out += 1
+	_check(out > 0, "hay vecinos afuera (%d) y autos (%d)" % [out, life.cars.size()])
+	_ctrl.enter_aerial()
+	await _frames(70)
+	_rig().fly_to(Vector3(0, 0, 50), 45.0, 0.0)
+	await _shot("n8c_vida_calle.png")
+	var fps := Engine.get_frames_per_second()
+	print("  FPS medidos en esta máquina (no cuenta como prueba del teléfono): %d" % fps)
+	_ctrl.return_home()
+	await _frames(5)
+
+
 func _test_privacy_saved() -> void:
-	print("\n3) Privacidad: «Mi casa se puede visitar»")
+	print("\n4) Privacidad: «Mi casa se puede visitar»")
 	_check(not NeighborhoodMap.is_my_house_visitable(), "empieza apagado")
 	NeighborhoodMap.set_my_house_visitable(true)
 	var saved := GameState.to_dict()

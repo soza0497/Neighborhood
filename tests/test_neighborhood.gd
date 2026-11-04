@@ -16,6 +16,7 @@ func _ready() -> void:
 	_test_designs()
 	_test_privacy()
 	await _test_scene()
+	await _test_life()
 	print("\nPRUEBAS: %d pasaron, %d fallaron" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -178,4 +179,66 @@ func _test_scene() -> void:
 	house.set_interior(false)
 	await get_tree().process_frame
 	_check(not house.interior_on and house.get_node_or_null("Inner/Interior") == null, "al irse se desarma")
+	holder.queue_free()
+
+
+func _test_life() -> void:
+	var holder := Node3D.new()
+	add_child(holder)
+	var builder := NeighborhoodBuilder.new()
+	holder.add_child(builder)
+	await get_tree().process_frame
+	var life := builder.life
+	life.camera_override = Vector3(0, 40, 60)
+	var cfg: Dictionary = NeighborhoodMap.data()["life"]
+	_check(life.walkers.size() == int(cfg["max_walkers"]), "hay %d vecinos caminantes (máximo de data)" % life.walkers.size())
+	_check(life.cars.size() == int(cfg["max_cars"]), "hay %d autos" % life.cars.size())
+	# Rutas por puntos: de una casa a otra de enfrente cruza la calle (y marca el cruce).
+	var route := life.route_lots("n_r1", "s_12")
+	_check(route["flags"].has(true), "una ruta al otro lado de la calle tiene un cruce marcado")
+	_check((route["points"][0] as Vector3).distance_to(NeighborhoodMap.door_point("n_r1", 1.0)) < 0.1, "la ruta sale de la puerta")
+	_check((route["points"][-1] as Vector3).distance_to(NeighborhoodMap.door_point("s_12", 1.0)) < 0.1, "y llega a la puerta del destino")
+	var same_side := life.route_lots("n_r1", "n_r3")
+	_check(not same_side["flags"].has(true), "del mismo lado no hay cruce")
+	# Diez minutos de juego simulados (6000 pasos de 0,1 s).
+	for i in 6000:
+		life.step(0.1)
+	_check(life.stats["left"] > 0 and life.stats["entered"] > 0, "salen de sus casas (%d) y entran (%d)" % [life.stats["left"], life.stats["entered"]])
+	_check(life.stats["min_car_gap"] >= float(cfg["car_min_gap"]) - 0.01,
+		"los autos nunca se tocan: la menor distancia entre centros fue %.2f m (mínimo %.1f)" % [life.stats["min_car_gap"], float(cfg["car_min_gap"])])
+	var inside_bounds := true
+	for w in life.walkers:
+		var p: Vector3 = (w["node"] as Node3D).position
+		if not (is_finite(p.x) and is_finite(p.z)) or absf(p.x) > 300.0 or p.z < -5.0 or p.z > 120.0:
+			inside_bounds = false
+	for c in life.cars:
+		var p: Vector3 = (c["node"] as Node3D).position
+		if not is_finite(p.x) or absf(p.x) > 300.0 or absf(p.z - life.street_z) > 4.0:
+			inside_bounds = false
+	_check(inside_bounds, "todos siguen dentro del barrio y de la calle")
+	print("  saludos en 10 minutos: %d" % life.stats["greets"])
+	# LOD: con la cámara lejísimos, nada se dibuja; cerca, los autos sí.
+	life.camera_override = Vector3(5000, 40, 5000)
+	life._update_lod()
+	var any_visible := false
+	for e in life.walkers + life.cars:
+		if (e["node"] as Node3D).visible:
+			any_visible = true
+	_check(not any_visible, "LOD: lejos de la cámara no se dibuja nada")
+	life.camera_override = Vector3(0, 40, life.street_z)
+	life._update_lod()
+	var cars_visible := 0
+	for c in life.cars:
+		if (c["node"] as Node3D).visible:
+			cars_visible += 1
+	_check(cars_visible > 0, "LOD: cerca de la cámara se dibujan los autos (%d)" % cars_visible)
+	# Límite de activos: con 3 activos, los demás se esconden.
+	life.active_limit = 3
+	life.step(0.1)
+	life.step(0.6)
+	var shown := 0
+	for w in life.walkers:
+		if (w["node"] as Node3D).visible:
+			shown += 1
+	_check(shown <= 3, "con límite de 3 activos se ven como mucho 3 vecinos (%d)" % shown)
 	holder.queue_free()

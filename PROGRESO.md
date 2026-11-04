@@ -16,7 +16,12 @@ de sintaxis o de lógica. Lo primero que hay que hacer en la PC es correr las pr
 - **8B vista aérea y visitas: escrito (sin correr)** — menú ☰ → «Barrio»: vista aérea (misma cámara; pellizcar y
   girar), lista «¿Qué casa querés visitar?» (solo ver, por dentro), botón «Volver a mi casa», interruptor
   «Mi casa se puede visitar» (apagado por defecto, se guarda en `GameState.settings["house_visitable"]`).
-- 8C vida: pendiente. 8D metas del barrio: pendiente.
+- **8C vida: escrito (sin correr)** — `NeighborhoodLife`: hasta 10 vecinos con la figura chibi que salen de su casa,
+  caminan por las aceras, cruzan por los pasos (los autos frenan), se saludan (`wave`), van al parque o a casa de
+  otro vecino y a veces entran; 4 autos de cajas que siguen al de adelante sin tocarse. Ganchos de animación por
+  nombre (`idle`, `walk`, `wave`) y de sonido por evento (`EventBus.neighborhood_sound`; archivos futuros en
+  `data/sounds/`, ver `LEEME.txt`). LOD por distancia y menos vecinos si los FPS bajan de 24.
+- 8D metas del barrio: pendiente.
 
 **Próximo paso:** (1) en la PC: `godot --headless --path . res://tests/test_neighborhood.tscn` y arreglar errores;
 (2) correr `tests/neighborhood_demo.tscn` con ventana y mirar las capturas `docs/capturas/n8*.png`.

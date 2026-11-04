@@ -12,6 +12,8 @@ var houses: Dictionary = {}     ## id de lote → NeighborHouseView
 var lamp_positions: Array[Vector3] = []
 var tree_positions: Array[Vector3] = []
 var park_node: Node3D
+## Fase 8C: vecinos que caminan y autos (ver NeighborhoodLife).
+var life: NeighborhoodLife
 
 
 func _ready() -> void:
@@ -23,6 +25,8 @@ func _ready() -> void:
 	_build_street_trees()
 	_build_park()
 	_build_houses()
+	life = NeighborhoodLife.new()
+	add_child(life)
 
 
 func _street() -> Dictionary:
