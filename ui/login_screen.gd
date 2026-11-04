@@ -28,6 +28,8 @@ const MAIN_SCENE := "res://scenes/main.tscn"
 
 ## true mientras se espera al servidor (los botones no hacen nada).
 var _busy := false
+## Pulido 3B: se acaba de crear la cuenta (primera vez): antes de jugar se crea el personaje.
+var _new_account := false
 
 
 func _ready() -> void:
@@ -72,6 +74,7 @@ func _on_login_pressed(create: bool) -> void:
 		result = await GameServer.login(user, password)
 	_password_edit.text = ""  # La contraseña no se queda en la pantalla.
 	if result["ok"]:
+		_new_account = create
 		await _load_and_enter()
 	else:
 		_show_form("No se pudo entrar.", result["error"])
@@ -103,7 +106,29 @@ func _load_and_enter() -> void:
 	Couple.apply_answer(result["data"])
 	GameServer.start_realtime()
 	SaveSystem.save_game()
+	if _new_account:
+		await create_character()
 	_enter_game()
+
+
+## Pulido 3B: la primera vez (después de crear la cuenta) se arma el personaje:
+## nombre, peinado, ojos, boca y colores, con vista previa que gira. «Listo» lo
+## guarda y entra al juego. Se puede cambiar después desde el menú.
+func create_character() -> void:
+	_new_account = false
+	if not GameState.character.is_empty():
+		return  # Ya había uno (la cuenta venía con partida).
+	_show_waiting("")
+	var editor: Control = preload("res://ui/character_editor.tscn").instantiate()
+	add_child(editor)
+	editor.open_for_creation(CharacterData.create_default().to_dict())
+	var chosen: Dictionary = await editor.created
+	editor.queue_free()
+	chosen.erase("journal")
+	var spawn := Character.spawn_cell()
+	GameState.character = {"data": chosen, "level": 0, "cell": [spawn.x, spawn.y],
+		"saved_unix": int(Time.get_unix_time_from_system())}
+	SaveSystem.save_game()
 
 
 ## La partida del teléfono que le toca a esta cuenta. Si la que está guardada

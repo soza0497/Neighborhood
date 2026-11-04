@@ -160,6 +160,10 @@ var _pending_ok: Array = []
 var _pending_blocked: Array = []
 ## La selección que espera Confirmar no tiene manijas (borrar, copiar contorno).
 var _pending_plain := false
+## Pulido 3B: celda donde está "sostenido" un mueble antes de confirmarlo (para
+## poder girarlo con el botón ANTES de ponerlo). NO_CELL = ninguno.
+const NO_CELL := Vector2i(-100000, -100000)
+var _held_cell := NO_CELL
 
 # --- Propuesta en la casa compartida ---
 ## Pasos de la propuesta aplicados en la casa (para verlos): {writes, inverse}.
@@ -256,6 +260,7 @@ func select_item(item_id: String) -> void:
 	place_diag = false
 	_cursor.visible = false
 	_joints_dirty = true
+	_sync_grid()
 	_update_camera_pan()
 	_show_tool_hint()
 
@@ -283,9 +288,21 @@ func set_level(new_level: int) -> int:
 	select_object("")
 	_paint_face = {}
 	EventBus.build_paint_arrows.emit(false)
-	_grid.position.y = HouseGrid.level_y(level) + 0.03
+	_sync_grid()
 	_joints_dirty = true
 	return level
+
+
+## Altura de la rejilla y de lo que se toca para elegir celdas: la del piso, o
+## (Pulido 3B) con el techo, la de lo ALTO de las paredes de este piso: la
+## rejilla «flota» ahí para tocar el área desde arriba sin que la pared tape.
+func pick_height() -> float:
+	return HouseGrid.level_y(level) + (HouseGrid.WALL_HEIGHT if tool == Tool.ROOF else 0.0)
+
+
+func _sync_grid() -> void:
+	if _grid != null:
+		_grid.position.y = pick_height() + 0.03
 
 
 ## "Agregar piso" (Obra): suma un piso arriba y lo muestra. Si no se puede
@@ -338,6 +355,14 @@ func rotate_object() -> void:
 		var next := next_orientation(item.get("id", ""), place_rotation, place_diag)
 		place_rotation = next[0]
 		place_diag = next[1]
+		if _held_cell != NO_CELL:
+			# Pulido 3B: el mueble sostenido se gira ahí mismo, antes de confirmar.
+			var check := _check(_object_place_writes(_held_cell))
+			_pending_ok = check["ok"]
+			_pending_blocked = check["blocked"]
+			_show_preview()
+			EventBus.build_hint.emit("Girado (%d°). Confirmá con ✓ o tocá otro lugar." % HouseGrid.object_angle(place_rotation, place_diag))
+			return
 		EventBus.build_hint.emit("Girado (%d°). Arrastrá para colocarlo." % HouseGrid.object_angle(place_rotation, place_diag))
 
 
@@ -445,6 +470,8 @@ func context_action(action: String) -> void:
 				_paint_tap_face({"edge": target["key"], "side": target.get("side", "b")})
 			else:
 				_paint_now([{"layer": target["layer"], "key": target["key"]}])
+		"room_type":
+			EventBus.room_menu_requested.emit(level, HouseGrid.key_to_cell(target["key"]))
 		"erase", "erase_opening":
 			var entry := _erase_entry(target, action == "erase_opening")
 			if not entry.is_empty():
@@ -905,6 +932,22 @@ func _finish() -> void:
 			EventBus.build_hint.emit(_blocked_hint() + " Lo rojo no se va a poner.")
 		return
 
+	# Pulido 3B: un mueble (o escalera, pilar) NO se pone al soltar: queda
+	# sostenido con su fantasma para poder girarlo con el botón de 45° y recién
+	# se pone con Confirmar. Tocar en otro lugar lo cambia de sitio.
+	if tool == Tool.OBJECT and not (_pending_ok.is_empty() and _pending_blocked.is_empty()):
+		_held_cell = _cell_at(_last_screen_pos, false)
+		_pressing = false
+		_drag_handle = -1
+		_awaiting_confirm = true
+		_pending_plain = true
+		EventBus.build_pending_changed.emit(true)
+		_announce_cost()
+		EventBus.build_hint.emit("Girá con el botón (45°), tocá otro lugar para moverlo y confirmá con ✓." \
+			if _pending_blocked.is_empty() else _blocked_hint())
+		_show_preview()
+		return
+
 	var ok := _pending_ok
 	var blocked := _pending_blocked
 	_cancel_gesture()
@@ -1277,6 +1320,10 @@ func _open_context_menu(target: Dictionary) -> void:
 			options.append({"id": "erase", "text": "Borrar techo"})
 		"floors":
 			options.append({"id": "paint", "text": "Pintar"})
+			# Pulido 3B: si el piso es de un cuarto cerrado, se le puede elegir el tipo.
+			var room := HouseRooms.room_at(house, level, HouseGrid.key_to_cell(target["key"]))
+			if not room.is_empty():
+				options.append({"id": "room_type", "text": "Tipo de cuarto (%s)" % room["name"]})
 			options.append({"id": "erase", "text": "Borrar piso"})
 		"foundation":
 			options.append({"id": "erase", "text": "Borrar cimientos"})
@@ -1394,11 +1441,11 @@ func _hover(screen_pos: Vector2) -> void:
 	_cursor.visible = true
 	if tool == Tool.WALL:
 		var v := _vertex_at(screen_pos)
-		_cursor.position = Vector3(v.x, HouseGrid.level_y(level) + 0.05, v.y)
+		_cursor.position = Vector3(v.x, pick_height() + 0.05, v.y)
 		_cursor.scale = Vector3(0.3, 1, 0.3)
 	else:
 		var cell := _cell_at(screen_pos, false)
-		_cursor.position = HouseGrid.cell_center(cell) + Vector3(0, HouseGrid.level_y(level) + 0.05, 0)
+		_cursor.position = HouseGrid.cell_center(cell) + Vector3(0, pick_height() + 0.05, 0)
 		_cursor.scale = Vector3.ONE
 
 
@@ -1410,6 +1457,7 @@ func _cancel_gesture() -> void:
 		_awaiting_confirm = false
 		EventBus.build_pending_changed.emit(false)
 	_pending_plain = false
+	_held_cell = NO_CELL
 	_paint_targets.clear()
 	_paint_surface = ""
 	_pending_ok = []
@@ -1462,12 +1510,17 @@ func _place_writes(screen_pos: Vector2) -> Array:
 					writes.append(HouseData.write(level, "walls", edge, wall))
 					writes.append_array(_auto_join(edge, wall))
 		Tool.OBJECT:
-			var anchor := _centered_anchor(_cell_at(screen_pos, false), place_rotation)
-			var value := {"item": item["id"], "cell": [anchor.x, anchor.y], "rot": place_rotation}
-			if place_diag:
-				value["diag"] = true
-			writes.append_array(_object_writes(NEW_KEY, value))
+			writes.append_array(_object_place_writes(_cell_at(screen_pos, false)))
 	return writes
+
+
+## Las escrituras para poner el objeto elegido con su centro en `cell`.
+func _object_place_writes(cell: Vector2i) -> Array:
+	var anchor := _centered_anchor(cell, place_rotation)
+	var value := {"item": item["id"], "cell": [anchor.x, anchor.y], "rot": place_rotation}
+	if place_diag:
+		value["diag"] = true
+	return _object_writes(NEW_KEY, value)
 
 
 ## Ventanas iguales seguidas se unen solas al ponerlas (como antes): la unión
@@ -1761,7 +1814,7 @@ func _ray(screen_pos: Vector2) -> Array:
 ## Punto del piso del nivel actual bajo la pantalla (o null).
 func _point_on_level(screen_pos: Vector2) -> Variant:
 	var ray := _ray(screen_pos)
-	return Plane(Vector3.UP, HouseGrid.level_y(level)).intersects_ray(ray[0], ray[1])
+	return Plane(Vector3.UP, pick_height()).intersects_ray(ray[0], ray[1])
 
 
 ## Celda bajo la pantalla. `clamp_to_lot` la mantiene dentro del lote
@@ -1803,7 +1856,7 @@ func _handle_at(screen_pos: Vector2) -> int:
 ## Pone las manijas en las esquinas (o puntas) de la selección.
 func _update_handles() -> void:
 	var shown := tool in HANDLE_TOOLS and (_pressing or _awaiting_confirm) and not _pending_plain
-	var y := HouseGrid.level_y(level) + 0.12
+	var y := pick_height() + 0.12
 	for i in _handles.size():
 		_handles[i].visible = shown
 		if not shown:

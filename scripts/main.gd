@@ -105,6 +105,7 @@ func _ready() -> void:
 	EventBus.plan_confirm_requested.connect(_builder.confirm_plan)
 	EventBus.plan_discard_requested.connect(_builder.discard_draft)
 	EventBus.camera_pitch_requested.connect(_camera_rig.set_pitch)
+	EventBus.camera_pitch_step_requested.connect(_camera_rig.step_pitch)
 	EventBus.proposal_send_requested.connect(_builder.send_draft)
 	EventBus.proposal_discard_requested.connect(_builder.discard_draft)
 	EventBus.proposal_review_requested.connect(_on_proposal_review_requested)

@@ -99,12 +99,8 @@ func _test_menu_and_margins() -> void:
 func _test_camera_pitch() -> void:
 	print("\n2) Ángulo vertical de la cámara")
 	var rig: CameraRig = _main.get_node("CameraRig")
-	var seen := {}
-	for i in CameraRig.PITCH_PRESETS.size():
-		seen[snappedf(rig.pitch_degrees, 0.1)] = true
-		_hud._pitch_button.pressed.emit()
-		await _frames(2)
-	_check(seen.size() == CameraRig.PITCH_PRESETS.size(), "el botón recorre los %d ángulos (de frente a desde arriba)" % seen.size())
+	# Pulido 3B: el botón de saltos fue reemplazado por la barra con perilla (ver polish3b_demo).
+	_check(_hud.get("_pitch_slider") != null, "hay una barra para el ángulo de la cámara")
 	rig.set_pitch(CameraRig.PITCH_PRESETS[0])
 	await _frames(3)
 	await _shot("p2a_2_camara_de_frente.png")

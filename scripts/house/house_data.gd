@@ -59,6 +59,13 @@ var floor_count := 1
 var basement_count := 0
 ## Cuántas piezas rotas se sacaron al cargar (ver repair).
 var repaired_count := 0
+## Pulido 3B: el tipo que el JUGADOR le puso a un cuarto ("nivel:x,z" de cada
+## celda del cuarto → id del tipo, por ejemplo "bedroom"). Lo asignado manda
+## sobre lo que el juego deduce por los muebles (ver HouseRooms). Se guarda con
+## la casa en el teléfono; el servidor no lo usa (no calcula nada con esto).
+var room_types: Dictionary = {}
+## Una celda ("nivel:x,z") de adentro del dormitorio PRINCIPAL ("" = ninguno).
+var main_bedroom_cell := ""
 
 
 func _init() -> void:
@@ -76,6 +83,8 @@ func clear() -> void:
 	next_id = 1
 	floor_count = 1
 	basement_count = 0
+	room_types = {}
+	main_bedroom_cell = ""
 
 
 ## Piso más alto con algo construido (cualquier capa: techos y muebles
@@ -231,6 +240,8 @@ func to_dict() -> Dictionary:
 		"format": FORMAT,
 		"floor_count": floor_count,
 		"basement_count": basement_count,
+		"room_types": room_types.duplicate(),
+		"main_bedroom": main_bedroom_cell,
 	}
 
 
@@ -239,7 +250,13 @@ func from_dict(data: Dictionary) -> void:
 	# El servidor no guarda "floor_count": si falta, se conserva lo que había.
 	var kept_floors := floor_count
 	var kept_basements := basement_count
+	# El servidor no guarda los tipos de cuarto (solo viven en el teléfono): si
+	# no vienen, se conservan los que había.
+	var kept_room_types := room_types
+	var kept_main_bedroom := main_bedroom_cell
 	clear()
+	room_types = kept_room_types
+	main_bedroom_cell = kept_main_bedroom
 	var saved_levels: Array = data.get("levels", [])
 	# Pulido 2C: las casas de antes tienen 5 niveles (0 a 4): los 3 sótanos
 	# (vacíos) van al principio de la lista.
@@ -267,6 +284,9 @@ func from_dict(data: Dictionary) -> void:
 		migrated_offset += Vector2i(0, HouseGrid.home_origin().y - (HouseGrid.LOT_SIZE.y - HouseGrid.HOME_ZONE) / 2)
 	if migrated_offset != Vector2i.ZERO:
 		_shift(migrated_offset)
+	if data.has("room_types") and data["room_types"] is Dictionary:
+		room_types = (data["room_types"] as Dictionary).duplicate()
+		main_bedroom_cell = str(data.get("main_bedroom", ""))
 	floor_count = clampi(int(data.get("floor_count", kept_floors)), 1, HouseGrid.MAX_LEVELS)
 	basement_count = clampi(int(data.get("basement_count", kept_basements)), 0, HouseGrid.MAX_BASEMENTS)
 	repaired_count = repair()
@@ -365,3 +385,17 @@ func _shift(offset: Vector2i) -> void:
 						value["rect"] = [rect.position.x + offset.x, rect.position.y + offset.y, rect.size.x, rect.size.y]
 						moved[key] = value
 			level[layer] = moved
+	# Pulido 3B: los tipos de cuarto se mueven con la casa ("nivel:x,z").
+	var moved_types := {}
+	for key in room_types:
+		moved_types[_shift_room_key(str(key), offset)] = room_types[key]
+	room_types = moved_types
+	if main_bedroom_cell != "":
+		main_bedroom_cell = _shift_room_key(main_bedroom_cell, offset)
+
+
+static func _shift_room_key(key: String, offset: Vector2i) -> String:
+	var parts := key.split(":")
+	if parts.size() != 2:
+		return key
+	return "%s:%s" % [parts[0], HouseGrid.cell_key(HouseGrid.key_to_cell(parts[1]) + offset)]

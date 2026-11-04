@@ -326,7 +326,30 @@ func _test_pulido_faces_and_rooms() -> void:
 	_check(room["type"] == "bedroom" and room["name"] == "Dormitorio", "con una cama es dormitorio")
 	_check(HouseRooms.recommended_items(room)[0] in ["bed_basic", "bed_double"], "la Tienda recomienda primero cosas de dormitorio")
 	house.apply([HouseData.write(0, "objects", "k1", {"item": "stove_basic", "cell": [4, 1], "rot": 0})])
-	_check(HouseRooms.room_at(house, 0, Vector2i(4, 4))["type"] == "mixed", "cama y cocina: multiuso")
+	_check(HouseRooms.room_at(house, 0, Vector2i(4, 4))["type"] == "mixed", "cama y cocina: sin tipo (mixto)")
+	# Pulido 3B: el jugador le asigna un tipo y manda sobre lo deducido.
+	var mixed := HouseRooms.room_at(house, 0, Vector2i(4, 4))
+	_check(mixed["name"] == "Sin tipo" and not str(mixed["name"]).to_lower().contains("multiuso"), "ya no existe el nombre «Multiuso»")
+	HouseRooms.set_room_type(house, mixed, "kitchen")
+	var assigned := HouseRooms.room_at(house, 0, Vector2i(4, 4))
+	_check(assigned["type"] == "kitchen" and assigned["assigned"] and assigned["name"] == "Cocina", "lo asignado (cocina) manda sobre lo deducido")
+	_check(HouseRooms.recommended_items(assigned)[0] in ["stove_basic", "fridge_basic"], "«Recomendado» sigue al tipo asignado")
+	HouseRooms.set_room_type(house, assigned, "bedroom", true)
+	_check(HouseRooms.main_bedroom(house).get("main", false) and HouseRooms.main_bedroom(house)["level"] == 0, "dormitorio principal: Rooms.main_bedroom()")
+	var copy := HouseData.new()
+	copy.from_dict(JSON.parse_string(JSON.stringify(house.to_dict())))
+	_check(HouseRooms.room_at(copy, 0, Vector2i(4, 4))["type"] == "bedroom" and HouseRooms.room_at(copy, 0, Vector2i(4, 4))["main"], "los tipos se guardan y se cargan")
+	# Solo un principal: marcar otro dormitorio saca la marca del primero.
+	var other := {"level": 0, "cells": {"20,20": true, "21,20": true}}
+	HouseRooms.set_room_type(house, other, "bedroom", true)
+	_check(house.main_bedroom_cell == "0:20,20" and not HouseRooms.room_at(house, 0, Vector2i(4, 4)).get("main", false), "solo hay un dormitorio principal")
+	HouseRooms.set_room_type(house, other, "", false)
+	_check(house.main_bedroom_cell == "" and not house.room_types.has("0:20,20"), "sacarle el tipo vuelve a lo deducido")
+	# Una partida vieja (sin tipos) carga bien y conserva los tipos si el servidor no los manda.
+	var old := HouseData.new()
+	old.room_types = {"0:1,1": "study"}
+	old.from_dict({"levels": [], "format": 5, "lot_size": [HouseGrid.LOT_SIZE.x, HouseGrid.LOT_SIZE.y]})
+	_check(old.room_types == {"0:1,1": "study"}, "si no vienen tipos (servidor), se conservan los que había")
 	house.apply([HouseData.write(0, "walls", "h:0,0", null)])
 	_check(HouseRooms.room_at(house, 0, Vector2i(4, 4)).is_empty(), "si se abre una pared ya no es un cuarto")
 

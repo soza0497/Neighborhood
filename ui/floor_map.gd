@@ -35,6 +35,9 @@ const PITCH_DEGREES := 7.0
 const BASE_YAW_DEGREES := -22.0
 const STEP_DEGREES := 45.0
 const ANGLE_COUNT := 8
+## Una pared "mira hacia nosotros" si su normal tiene al menos esto de componente
+## hacia la cámara de la maqueta (las de atrás no dibujan sus aristas).
+const FACING_MIN := 0.05
 ## Grosor de las líneas, como fracción del tamaño de la cámara.
 const LINE_WIDTH := 0.016
 
@@ -242,7 +245,13 @@ func _draw_level(st: SurfaceTool, level: int, lo: Vector2, hi: Vector2, dir: Vec
 		var a := Vector3(a_v.x, y0, a_v.y)
 		var b := Vector3(b_v.x, y0, b_v.y)
 		var up := Vector3(0, FLOOR_HEIGHT, 0)
+		# Pulido 3B: la paredes de ATRÁS no dibujan sus aristas (si no, se ven
+		# los bordes del fondo como en un cubo transparente y ensucia). Solo se
+		# dibujan las aristas de las caras que miran hacia nosotros.
+		var facing := Vector2(w["normal"]).dot(dir) > FACING_MIN
 		_quad(st, a, b, b + up, a + up, fill_color)
+		if not facing:
+			continue
 		_line(st, a, b, line_color, view_dir, width)
 		_line(st, a + up, b + up, line_color, view_dir, width)
 		# Vertical solo donde la pared no sigue recta (esquinas y puntas).
@@ -251,7 +260,6 @@ func _draw_level(st: SurfaceTool, level: int, lo: Vector2, hi: Vector2, dir: Vec
 				var p := Vector3(v.x, y0, v.y)
 				_line(st, p, p + up, line_color, view_dir, width)
 		# Puerta y ventanas: solo en las paredes que miran hacia nosotros.
-		var facing := Vector2(w["normal"]).dot(dir) > 0.1
 		if facing and w["opening"] != "":
 			var normal := Vector3(w["normal"].x, 0, w["normal"].y) * 0.06
 			var mid := (a + b) / 2.0 + normal
@@ -291,27 +299,43 @@ func _draw_roof(st: SurfaceTool, rect: Rect2i, y: float, flat: bool, color: Colo
 	var x1 := x0 + rect.size.x
 	var z1 := z0 + rect.size.y
 	var base := [Vector3(x0, y, z0), Vector3(x1, y, z0), Vector3(x1, y, z1), Vector3(x0, y, z1)]
+	# Pulido 3B: solo las aristas del techo que miran hacia la cámara de la maqueta.
+	var toward := -Vector2(view_dir.x, view_dir.z)
+	var edge_normals := [Vector2(0, -1), Vector2(1, 0), Vector2(0, 1), Vector2(-1, 0)]
+	var facing := [false, false, false, false]
 	for i in 4:
-		_line(st, base[i], base[(i + 1) % 4], color, view_dir, width)
+		facing[i] = edge_normals[i].dot(toward) > FACING_MIN
+		if facing[i]:
+			_line(st, base[i], base[(i + 1) % 4], color, view_dir, width)
 	if flat:
 		return
+	# Una esquina se dibuja si toca una arista que mira hacia nosotros.
+	var corner_shown := func(c: int) -> bool: return facing[c] or facing[(c + 3) % 4]
 	var rise := minf(rect.size.x, rect.size.y) / 2.0 * 0.6 + 0.2
 	var ridge_a: Vector3
 	var ridge_b: Vector3
 	if rect.size.x >= rect.size.y:
 		ridge_a = Vector3(x0, y + rise, (z0 + z1) / 2.0)
 		ridge_b = Vector3(x1, y + rise, (z0 + z1) / 2.0)
-		_line(st, base[0], ridge_a, color, view_dir, width)
-		_line(st, base[3], ridge_a, color, view_dir, width)
-		_line(st, base[1], ridge_b, color, view_dir, width)
-		_line(st, base[2], ridge_b, color, view_dir, width)
+		if corner_shown.call(0):
+			_line(st, base[0], ridge_a, color, view_dir, width)
+		if corner_shown.call(3):
+			_line(st, base[3], ridge_a, color, view_dir, width)
+		if corner_shown.call(1):
+			_line(st, base[1], ridge_b, color, view_dir, width)
+		if corner_shown.call(2):
+			_line(st, base[2], ridge_b, color, view_dir, width)
 	else:
 		ridge_a = Vector3((x0 + x1) / 2.0, y + rise, z0)
 		ridge_b = Vector3((x0 + x1) / 2.0, y + rise, z1)
-		_line(st, base[0], ridge_a, color, view_dir, width)
-		_line(st, base[1], ridge_a, color, view_dir, width)
-		_line(st, base[3], ridge_b, color, view_dir, width)
-		_line(st, base[2], ridge_b, color, view_dir, width)
+		if corner_shown.call(0):
+			_line(st, base[0], ridge_a, color, view_dir, width)
+		if corner_shown.call(1):
+			_line(st, base[1], ridge_a, color, view_dir, width)
+		if corner_shown.call(3):
+			_line(st, base[3], ridge_b, color, view_dir, width)
+		if corner_shown.call(2):
+			_line(st, base[2], ridge_b, color, view_dir, width)
 	_line(st, ridge_a, ridge_b, color, view_dir, width)
 
 

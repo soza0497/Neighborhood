@@ -87,8 +87,16 @@ var _mode := "build"
 var _builder: Node
 var _house_data: HouseData
 var _boxes_button: Button
-var _pitch_button: Button
-var _pitch_index := 2
+## Pulido 3B: barra vertical del ángulo de la cámara (debajo del menú).
+var _pitch_slider: PitchSlider
+var _rooms_button: Button
+## Márgenes normales de la interfaz (izquierda, arriba, derecha, abajo).
+const BASE_MARGINS := Vector4(16, 34, 16, 22)
+## Cuántos grados por segundo cambia el ángulo con la perilla al tope.
+const PITCH_RATE := 60.0
+## Contenedor de la columna izquierda: así la columna no empuja la pantalla
+## fuera de sus bordes (si no cabe, se achica).
+var _left_holder: Control
 var _plan_bar: Control
 var _last_save_text := "sin guardar todavía"
 ## Lo que falta en la casa (HouseRules.problems) y los paneles que se
@@ -116,7 +124,11 @@ var _notice_tween: Tween
 func _ready() -> void:
 	_setup_icons()
 	_build_floor_selector()
-	_build_pitch_button()
+	_build_pitch_slider()
+	_build_rooms_button()
+	_build_left_holder()
+	get_viewport().size_changed.connect(_fit_to_screen)
+	_fit_to_screen.call_deferred()
 	_build_boxes_button()
 	EventBus.parcel_obstacle_tapped.connect(_show_obstacle)
 	EventBus.boxes_changed.connect(_on_boxes_changed)
@@ -130,6 +142,7 @@ func _ready() -> void:
 	_problems_button.pressed.connect(_show_problems)
 	EventBus.house_problems_changed.connect(_on_problems_changed)
 	EventBus.build_context_menu.connect(_show_context_menu)
+	EventBus.room_menu_requested.connect(_show_room_menu)
 	EventBus.proposal_changed.connect(_on_proposal_changed)
 
 	EventBus.game_saved.connect(_on_game_saved)
@@ -206,13 +219,19 @@ func setup_house(house: HouseData, character: Node3D, builder: Node) -> void:
 ## Pulido 2: el selector de pisos es el frente de la casa. Al lado van las
 ## flechas de arriba y abajo y, debajo, los botones para girarlo (8 ángulos).
 func _build_floor_selector() -> void:
+	# Pulido 3B: la CAJA (el cuadro translúcido) es solo para la casa en 3D; las
+	# flechas de subir y bajar y los botones de girar van FUERA de ella, con un
+	# color azul/verde translúcido parecido al de la caja.
 	var panel: Control = _floor_map.get_parent()
-	panel.remove_child(_floor_map)
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 6)
+	var column: Control = panel.get_parent()
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 6)
+	column.add_child(outer)
+	column.move_child(outer, panel.get_index())
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
-	row.add_child(_floor_map)
+	outer.add_child(row)
+	panel.reparent(row, false)
 	var arrows := VBoxContainer.new()
 	arrows.alignment = BoxContainer.ALIGNMENT_CENTER
 	arrows.add_theme_constant_override("separation", 10)
@@ -220,19 +239,34 @@ func _build_floor_selector() -> void:
 		var button := Icons.make_button("arrow", entry[0], 48)
 		button.icon = Icons.rotated("arrow", entry[2])
 		button.pressed.connect(EventBus.build_level_change_requested.emit.bind(entry[1]))
+		_tint_like_map(button)
 		arrows.add_child(button)
 	row.add_child(arrows)
-	column.add_child(row)
 	var turn := HBoxContainer.new()
 	turn.alignment = BoxContainer.ALIGNMENT_CENTER
 	turn.add_theme_constant_override("separation", 10)
 	for entry in [["Girar la fachada a la izquierda", -1, "left"], ["Girar la fachada a la derecha", 1, "right"]]:
 		var button := Icons.make_button(entry[2], entry[0], 44)
 		button.pressed.connect(_floor_map.turn.bind(entry[1]))
+		_tint_like_map(button)
 		turn.add_child(button)
-	column.add_child(turn)
-	panel.add_child(column)
+	outer.add_child(turn)
 	_floor_map.owner = self  # Para que %FloorMap siga encontrándose.
+
+
+## Botón del color de la caja del selector de pisos (azul/verde translúcido).
+func _tint_like_map(button: Button) -> void:
+	for state in ["normal", "hover", "pressed", "disabled", "hover_pressed"]:
+		var style := button.get_theme_stylebox(state).duplicate() as StyleBoxFlat
+		var color := Color(0.2, 0.62, 0.66, 0.5)
+		if state == "hover":
+			color = Color(0.27, 0.72, 0.74, 0.6)
+		elif state == "pressed" or state == "hover_pressed":
+			color = Color(0.35, 0.85, 0.8, 0.75)
+		style.bg_color = color
+		style.border_color = Color(0.4, 0.8, 1, 0.45)
+		style.set_border_width_all(2)
+		button.add_theme_stylebox_override(state, style)
 
 
 ## Pulido 2B: en Info, el contorno (calidad) y los volúmenes de sonido.
@@ -283,7 +317,7 @@ func _build_boxes_button() -> void:
 	_boxes_button.visible = false
 	_boxes_button.custom_minimum_size = Vector2(0, 52)
 	_boxes_button.pressed.connect(EventBus.boxes_open_all_requested.emit)
-	$Root/Layout/Middle/LeftColumn.add_child(_boxes_button)
+	%LeftColumn.add_child(_boxes_button)
 
 
 func _on_boxes_changed(dropped: int) -> void:
@@ -324,23 +358,129 @@ func _show_obstacle(id: String) -> void:
 	_popup_button(rows, "Cerrar", _close_popup)
 
 
-## Botón del ángulo vertical de la cámara (de frente … desde arriba).
-func _build_pitch_button() -> void:
-	_pitch_button = Icons.make_button("camera_angle", "Ángulo de la cámara")
-	_pitch_button.pressed.connect(_cycle_pitch)
-	$Root/Layout/Middle/LeftColumn/ViewIcons.add_child(_pitch_button)
-	var saved: float = float(GameState.camera.get("pitch", -50.0))
-	var best := 0
-	for i in CameraRig.PITCH_PRESETS.size():
-		if absf(CameraRig.PITCH_PRESETS[i] - saved) < absf(CameraRig.PITCH_PRESETS[best] - saved):
-			best = i
-	_pitch_index = best
+## Botón «Cuartos» (Pulido 3B): lista los cuartos del piso y deja elegir su tipo.
+func _build_rooms_button() -> void:
+	_rooms_button = Icons.make_button("room_tag", "Cuartos: elegí qué es cada uno")
+	_rooms_button.pressed.connect(_show_rooms_list)
+	%LeftColumn.get_node("ViewIcons").add_child(_rooms_button)
 
 
-func _cycle_pitch() -> void:
-	_pitch_index = (_pitch_index + 1) % CameraRig.PITCH_PRESETS.size()
-	EventBus.camera_pitch_requested.emit(CameraRig.PITCH_PRESETS[_pitch_index])
-	EventBus.toast.emit("Cámara: %s" % CameraRig.PITCH_NAMES[_pitch_index])
+## Lista de los cuartos del piso que se está viendo (tocar uno abre su menú).
+func _show_rooms_list() -> void:
+	var level: int = _builder.level if _builder != null else 0
+	var rooms := HouseRooms.detect(_house_data, level)
+	var rows := _open_popup("Cuartos de %s" % HouseGrid.level_name(level).to_lower())
+	if rooms.is_empty():
+		rows.add_child(_small_label("Todavía no hay cuartos cerrados en este piso.\nUn cuarto es un piso rodeado de paredes.", Color(0.85, 0.9, 1)))
+	var n := 0
+	for room in rooms:
+		n += 1
+		var first: Vector2i = HouseGrid.key_to_cell(room["cells"].keys()[0])
+		var text := "Cuarto %d: %s%s" % [n, room["name"], " (principal)" if room.get("main", false) else ""]
+		_popup_button(rows, text, func() -> void:
+			_show_room_menu(level, first))
+	_popup_button(rows, "Cerrar", _close_popup)
+
+
+## Menú del tipo de un cuarto (Pulido 3B): elegir cocina, dormitorio, baño, sala,
+## estudio… y, si es un dormitorio, si es el PRINCIPAL o uno secundario. Lo
+## elegido manda sobre lo que el juego deduce por los muebles.
+func _show_room_menu(level: int, cell: Vector2i) -> void:
+	var room := HouseRooms.room_at(_house_data, level, cell)
+	if room.is_empty():
+		EventBus.toast.emit("Ahí no hay un cuarto cerrado.")
+		return
+	var rows := _open_popup("Tipo de cuarto")
+	var origin := "elegido por vos" if room.get("assigned", false) else "según los muebles"
+	rows.add_child(_small_label("Ahora: %s%s (%s)" % [room["name"], " · principal" if room.get("main", false) else "", origin], Color(0.85, 0.9, 1)))
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	rows.add_child(grid)
+	for type in HouseRooms.choosable_types():
+		var is_current: bool = room.get("assigned", false) and room["type"] == type["id"]
+		var button := _popup_button(grid, ("✓ " if is_current else "") + str(type["name"]), func() -> void:
+			if type["id"] == HouseRooms.BEDROOM:
+				_show_bedroom_menu(room)
+			else:
+				_assign_room(room, str(type["id"]), false))
+		button.custom_minimum_size = Vector2(200, 52)
+	var auto := _popup_button(grid, "Que decida el juego", func() -> void: _assign_room(room, "", false))
+	auto.custom_minimum_size = Vector2(200, 52)
+	auto.disabled = not room.get("assigned", false)
+	_popup_button(rows, "Cerrar", _close_popup)
+
+
+## Segundo paso: ¿dormitorio principal o secundario? (solo hay un principal).
+func _show_bedroom_menu(room: Dictionary) -> void:
+	var rows := _open_popup("Dormitorio")
+	rows.add_child(_small_label("Solo uno es el principal del personaje.", Color(0.85, 0.9, 1)))
+	_popup_button(rows, "★ Principal", func() -> void: _assign_room(room, HouseRooms.BEDROOM, true))
+	_popup_button(rows, "Secundario", func() -> void: _assign_room(room, HouseRooms.BEDROOM, false))
+	_popup_button(rows, "Cerrar", _close_popup)
+
+
+func _assign_room(room: Dictionary, type_id: String, main: bool) -> void:
+	HouseRooms.set_room_type(_house_data, room, type_id, main)
+	_close_popup()
+	var label := "ya no tiene un tipo elegido" if type_id == "" else "ahora es %s%s" % [HouseRooms.type_name(type_id).to_lower(), " principal" if main else ""]
+	EventBus.toast.emit("El cuarto %s." % label)
+	EventBus.rooms_changed.emit()
+
+
+## Barra del ángulo de la cámara (Pulido 3B): costado derecho, debajo del menú.
+## Reemplaza al botón de antes (que pasaba de a saltos por 5 ángulos).
+func _build_pitch_slider() -> void:
+	_pitch_slider = PitchSlider.new()
+	_pitch_slider.name = "PitchSlider"
+	add_child(_pitch_slider)
+
+
+## Pulido 3B: la columna izquierda (íconos, selector de pisos, brújula) va dentro
+## de un contenedor que no le exige altura a la pantalla.
+func _build_left_holder() -> void:
+	var column: Control = %LeftColumn
+	var middle: Control = column.get_parent()
+	_left_holder = Control.new()
+	_left_holder.name = "LeftHolder"
+	_left_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_left_holder.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	middle.add_child(_left_holder)
+	middle.move_child(_left_holder, column.get_index())
+	column.reparent(_left_holder, false)
+	column.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	column.position = Vector2.ZERO
+	column.pivot_offset = Vector2.ZERO
+	column.resized.connect(_fit_to_screen.call_deferred)
+
+
+## Acomoda la interfaz a la pantalla (Pulido 3B): respeta el área segura, no se
+## sale de los bordes en ningún tamaño y ubica la barra del ángulo.
+func _fit_to_screen() -> void:
+	var root: MarginContainer = $Root
+	var view := get_viewport().get_visible_rect().size
+	var margins := SafeArea.margins(BASE_MARGINS, SafeArea.insets(get_window()))
+	root.add_theme_constant_override("margin_left", int(margins.x))
+	root.add_theme_constant_override("margin_top", int(margins.y))
+	root.add_theme_constant_override("margin_right", int(margins.z))
+	root.add_theme_constant_override("margin_bottom", int(margins.w))
+	# La columna izquierda se achica si no hay altura (pantalla baja + barra de abajo).
+	if _left_holder != null:
+		var column: Control = %LeftColumn
+		var need := column.get_combined_minimum_size()
+		_left_holder.custom_minimum_size = Vector2(need.x, 0.0)
+		column.size = need
+		var available := maxf(40.0, _left_holder.size.y)
+		var factor := clampf(available / maxf(1.0, need.y), 0.45, 1.0)
+		column.scale = Vector2(factor, factor)
+		column.position = Vector2(0.0, maxf(0.0, (available - need.y * factor) / 2.0))
+	# Barra del ángulo: costado derecho, debajo del menú hamburguesa.
+	if _pitch_slider != null:
+		var menu_bottom := margins.y + float(Icons.BUTTON_SIZE) + 10.0
+		var height := clampf(view.y - menu_bottom - margins.w - 150.0, 120.0, PitchSlider.TRACK_HEIGHT)
+		_pitch_slider.position = Vector2(view.x - margins.z - PitchSlider.TRACK_WIDTH, menu_bottom)
+		_pitch_slider.size = Vector2(PitchSlider.TRACK_WIDTH, height)
 
 
 ## Íconos propios en lugar de botones con texto (el texto queda de ayuda).
@@ -367,7 +507,10 @@ func _setup_icons() -> void:
 		pair[0].add_theme_constant_override("icon_max_width", 30)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	# Pulido 3B: con la perilla del ángulo desviada, la cámara sube o baja.
+	if _pitch_slider != null and absf(_pitch_slider.value) > 0.05:
+		EventBus.camera_pitch_step_requested.emit(_pitch_slider.value * PITCH_RATE * delta)
 	var fps_text := "%d FPS" % Engine.get_frames_per_second()
 	if _fps_label.visible:
 		_fps_label.text = fps_text
@@ -744,7 +887,7 @@ func _close_popup() -> void:
 	_popup = null
 
 
-func _popup_button(rows: VBoxContainer, text: String, on_pressed: Callable) -> Button:
+func _popup_button(rows: Control, text: String, on_pressed: Callable) -> Button:
 	var button := Button.new()
 	button.text = text
 	button.custom_minimum_size = Vector2(280, 56)

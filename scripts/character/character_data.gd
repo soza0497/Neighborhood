@@ -30,7 +30,8 @@ const LOW_NEED_EMOTION := {"hunger": "angry", "energy": "tired", "fun": "bored",
 const JOURNAL_MAX := 60
 
 var name := "Alex"
-## Colores: skin, hair, shirt, pants (texto "#rrggbb").
+## Colores: skin, hair, shirt, pants (texto "#rrggbb") y piezas: hairstyle,
+## eyes, mouth (ids de data/character_options.json).
 var appearance: Dictionary = {}
 ## Ids de rasgos (ver data/traits.json).
 var traits: Array = []
@@ -52,6 +53,9 @@ static func create_default() -> CharacterData:
 	data.name = defaults.get("name", "Alex")
 	for part in ["skin", "hair", "shirt", "pants"]:
 		data.appearance[part] = defaults.get(part, "#ffffff")
+	# Pulido 3B: piezas intercambiables (peinado, ojos, boca).
+	for part in CharacterLook.DEFAULT_PIECES:
+		data.appearance[part] = defaults.get(part, CharacterLook.DEFAULT_PIECES[part])
 	data.traits = defaults.get("traits", []).duplicate()
 	return data
 

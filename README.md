@@ -261,6 +261,11 @@ pegada a la calle (con niveles se abre hasta 96 × 96), con vallas de madera y v
 va cerca de la calle y el personaje esquiva árboles y rocas. Pruebas: `test_parcel.tscn` (sin pantalla),
 `lua5.1 server/tests/test_rules.lua` y `tests/polish3a_demo.tscn` (con ventana; capturas `p3a_*.png`).
 Los datos (zona, desbloqueos, casa) están en `data/parcel.json`; las vallas y vecinos, en `data/world.json`.
+**3B** — área segura de la pantalla, mueble que se gira antes de confirmar, rejilla flotante del techo, barra del
+ángulo de la cámara, maqueta de pisos sin aristas del fondo, tipo de cuarto elegido por el jugador (dormitorio
+principal) y creación de personaje al registrarse (peinados, ojos y bocas en `data/character_options.json`).
+Prueba: `tests/polish3b_demo.tscn` (con `xvfb-run -s "-screen 0 2560x2560x24"` para los tamaños de pantalla).
+**3C** — paredes con contorno continuo: `tests/polish3c_demo.tscn`.
 
 **2C — parcela de 96 × 96, servicios y sótanos:** `godot --headless --path . res://tests/test_parcel.tscn`
 (reglas de la parcela, sin pantalla ni red), `tests/polish2c_demo.tscn` (con ventana: limpiar

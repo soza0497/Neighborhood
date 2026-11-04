@@ -16,6 +16,7 @@ extends Node
 const STYLE_PATH := "res://data/style.json"
 const TOON_SHADER := preload("res://assets/shaders/toon.gdshader")
 const OUTLINE_SHADER := preload("res://assets/shaders/outline.gdshader")
+const INVISIBLE_SHADER := preload("res://assets/shaders/invisible.gdshader")
 
 ## Se prendió o apagó el contorno.
 signal outline_changed(enabled: bool)
@@ -70,6 +71,21 @@ func toon_material(base: Color, texture: Texture2D = null, outlined := true) -> 
 	mat.next_pass = _outline_material if (outline_enabled and outlined) else null
 	mat.set_meta("outlined", outlined)
 	_cache[key] = mat
+	return mat
+
+
+## Pulido 3C: material que no se ve, solo lleva el contorno (ver invisible.gdshader).
+## Se pone en una caja que envuelve toda una pared de varios tramos: el contorno
+## sale UNA sola vez alrededor de la silueta, sin costuras entre los tramos.
+## Se prende y apaga con el resto del contorno.
+func outline_only_material() -> ShaderMaterial:
+	if _cache.has("outline_only"):
+		return _cache["outline_only"]
+	var mat := ShaderMaterial.new()
+	mat.shader = INVISIBLE_SHADER
+	mat.next_pass = _outline_material if outline_enabled else null
+	mat.set_meta("outlined", true)
+	_cache["outline_only"] = mat
 	return mat
 
 

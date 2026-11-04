@@ -271,6 +271,10 @@ func _test_builder() -> void:
 	_check(_builder.place_diag, "girar una vez = 45°")
 	await _tap(_screen(Vector3(16.5, HouseGrid.level_y(0), 13.5)))
 	await _frames(3)
+	# Pulido 3B: el mueble queda sostenido hasta Confirmar (así se puede girar antes).
+	_check(_builder._awaiting_confirm, "la silla queda sostenida esperando Confirmar")
+	_builder.confirm_pending()
+	await _frames(4)
 	var chair_key := ""
 	for key in house.get_layer(0, "objects"):
 		if house.get_piece(0, "objects", key)["item"] == "chair_basic":

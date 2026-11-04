@@ -31,6 +31,13 @@ static func material(color: Color) -> Material:
 	return Style.toon_material(color)
 
 
+## Pulido 3C: igual pero SIN contorno propio. Lo usan los tramos de pared que
+## son parte de una pared más larga: el contorno lo dibuja una caja única que
+## envuelve toda la pared (HouseView), así no hay líneas entre tramos.
+static func material_no_outline(color: Color) -> Material:
+	return Style.toon_material(color, null, false)
+
+
 ## Material transparente (vidrios y "fantasmas" de vista previa).
 static func transparent_material(color: Color) -> StandardMaterial3D:
 	var key := "t" + color.to_html()
@@ -213,7 +220,7 @@ static func build_floor(cell: Vector2i, value: Dictionary) -> Node3D:
 ## `merge_start` / `merge_end`: su ventana se une con la de la pared vecina
 ## en ese extremo (el vidrio sigue de largo, sin columna en medio).
 static func build_wall(key: String, value: Dictionary, visible_height: float, full_length := false,
-		merge_start := false, merge_end := false) -> Node3D:
+		merge_start := false, merge_end := false, flat_edges := false) -> Node3D:
 	var node := Node3D.new()
 	node.position = HouseGrid.edge_center(key)
 	var horizontal := HouseGrid.is_edge_horizontal(key)
@@ -245,16 +252,20 @@ static func build_wall(key: String, value: Dictionary, visible_height: float, fu
 			_add_window(node, opening_item, bottom, minf(hole_top, visible_height), hole_top,
 				length, join_minus, join_plus)
 
+	# Pulido 3C: con `flat_edges` el tramo no lleva contorno propio (lo lleva la
+	# caja de toda la pared; las columnas de las esquinas tapan la juntura).
 	for part in solid:
 		var bottom: float = part[0]
 		var top: float = minf(part[1], visible_height)
 		if top - bottom <= 0.01:
 			continue
+		var mat_a := material_no_outline(color_a) if flat_edges else material(color_a)
+		var mat_b := material_no_outline(color_b) if flat_edges else material(color_b)
 		if color_a == color_b:
-			add_box(node, Vector3(0, (bottom + top) / 2.0, 0), Vector3(length, top - bottom, t), material(color_a))
+			add_box(node, Vector3(0, (bottom + top) / 2.0, 0), Vector3(length, top - bottom, t), mat_a)
 		else:
-			add_box(node, Vector3(0, (bottom + top) / 2.0, -t / 4.0), Vector3(length, top - bottom, t / 2.0), material(color_a))
-			add_box(node, Vector3(0, (bottom + top) / 2.0, t / 4.0), Vector3(length, top - bottom, t / 2.0), material(color_b))
+			add_box(node, Vector3(0, (bottom + top) / 2.0, -t / 4.0), Vector3(length, top - bottom, t / 2.0), mat_a)
+			add_box(node, Vector3(0, (bottom + top) / 2.0, t / 4.0), Vector3(length, top - bottom, t / 2.0), mat_b)
 	return node
 
 
@@ -310,7 +321,7 @@ static func _add_window(node: Node3D, item: Dictionary, bottom: float, top: floa
 ## Columna que tapa la esquina donde se juntan paredes.
 ## Si está entre dos ventanas unidas (`window_item`), la columna se corta a
 ## la altura de la ventana: ahí pasan el vidrio y los marcos de las paredes.
-static func build_post(vertex: Vector2i, color: Color, visible_height: float, window_item: Dictionary = {}) -> Node3D:
+static func build_post(vertex: Vector2i, color: Color, visible_height: float, window_item: Dictionary = {}, flat_edges := false) -> Node3D:
 	var node := Node3D.new()
 	var t := HouseGrid.WALL_THICKNESS
 	var center := Vector3(vertex.x, 0, vertex.y)
@@ -322,7 +333,8 @@ static func build_post(vertex: Vector2i, color: Color, visible_height: float, wi
 		var bottom: float = part[0]
 		var top: float = minf(part[1], visible_height)
 		if top - bottom > 0.01:
-			add_box(node, center + Vector3(0, (bottom + top) / 2.0, 0), Vector3(t, top - bottom, t), material(color))
+			add_box(node, center + Vector3(0, (bottom + top) / 2.0, 0), Vector3(t, top - bottom, t),
+				material_no_outline(color) if flat_edges else material(color))
 	return node
 
 

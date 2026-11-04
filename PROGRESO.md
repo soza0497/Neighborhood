@@ -6,10 +6,68 @@ Brief completo en `docs/pulido-3.md`. Tres sub-fases, un push a `pulido-3` al te
 **No se mergea a `main`, no se exporta APK.** Estado:
 
 - **3A parcela, camino y obstáculos: HECHO (2026-11-04)** — ver abajo.
-- 3B interfaz y personaje: pendiente.
-- 3C estilo (contorno sin costuras): pendiente.
+- **3B interfaz y personaje: HECHO (2026-11-04)** — ver «Pulido 3B» abajo.
+- **3C estilo (contorno sin costuras): HECHO (2026-11-04)** — ver «Pulido 3C» abajo.
 
-**Próximo paso:** 3B (empezar por el área segura de la pantalla).
+**Próximo paso:** el desarrollador principal verifica en la PC (checklist al final de esta nota, «Cómo
+probarlo»), corre las demos con Nakama que no se pudieron correr en la nube, y decide si se une
+`pulido-3` a `main` y se exporta el APK 0.10.0 (nada de eso se hizo: el brief lo prohíbe).
+
+### Pulido 3B — qué se hizo
+- **Pantalla cortada**: arreglada la causa (la columna izquierda exigía altura y agrandaba toda la interfaz) y
+  se respeta el **área segura** (`SafeArea`). Probado en 1920×1080, 1080×2400 y 2400×1080.
+- **Mueble**: al soltar queda **sostenido** y se puede **girar 45°** antes de Confirmar.
+- **Techo**: la rejilla **sube a la altura de las paredes** del piso.
+- **Ángulo de cámara**: **barra vertical con perilla** a la derecha, debajo del menú (vuelve sola al centro;
+  el botón viejo se quitó).
+- **Maqueta de pisos**: flechas **fuera de la caja**, azul/verde translúcido, **sin aristas del fondo**.
+- **Cuartos**: el jugador asigna el tipo (menú al tocar un cuarto o botón «Cuartos»), dormitorio **principal**
+  (`HouseRooms.main_bedroom`), «Multiuso» eliminado → **«★ Recomendado»**. Se guarda en la partida.
+- **Creación de personaje** al registrarse: nombre, 5 peinados, 4 ojos, 4 bocas, piel, pelo, ropa, con vista
+  previa que gira; opciones en `data/character_options.json`.
+- Pruebas: `test_house` **158**, `polish3b_demo` **52** (capturas `docs/capturas/p3b_*.png`).
+
+### Pulido 3C — qué se hizo
+- **Paredes continuas**: cajas de contorno por tramo recto, sin contorno entre tramos (costura 22 → 0 píxeles).
+  `polish3c_demo` **10** (capturas `p3c_*.png`: antes y después).
+
+### Pulido 3 — cómo probarlo en el teléfono
+1. [Claude, después de verificar] Unir `pulido-3` a `main`, **reiniciar Nakama** (`docker compose restart nakama`
+   en `server/`) y exportar el APK 0.10.0. Tu partida del Pulido 2 se migra sola (la casa se acerca a la calle).
+2. **Parcela**: al abrir, tu casa está cerca de la calle, con vallas a los costados y casas de vecinos detrás.
+   Solo se puede construir en 64 × 64 (lo demás se ve sombreado). Subí a nivel 4 y 6 para abrir más.
+   Mirá que la franja entre la casa y la calle esté sin árboles. Mandá al personaje a caminar y mirá que
+   rodee los árboles; limpiá uno y fijate que el camino se acorta.
+3. **Pantalla**: abrí la Tienda y elegí un mueble; las barras de arriba y abajo no se salen. Probá girando el
+   teléfono (vertical y horizontal).
+4. **Mueble**: Tienda → cama → tocá el piso: queda sostenida; tocá el botón de girar (45° cada vez) y
+   Confirmar (✓).
+5. **Techo**: Obra → Construir → Techos: la rejilla flota arriba de las paredes; arrastrá el rectángulo.
+6. **Ángulo**: arrastrá la perilla de la derecha hacia arriba (vista de cielo) y abajo; al soltar vuelve al centro.
+7. **Maqueta de pisos**: flechas afuera de la caja, sin las líneas de atrás.
+8. **Cuartos**: Obra → Modificar → tocá el piso de un cuarto → «Tipo de cuarto», o el botón de la etiqueta
+   (izquierda). Elegí Dormitorio → ★ Principal. Abrí la Tienda dentro del cuarto: pestaña «★ Recomendado».
+9. **Personaje**: cerrá sesión (menú) y creá una cuenta nueva: aparece la creación de personaje.
+10. **Contorno**: mirá las paredes desde varios ángulos (sin rayitas). Menú → Info → Mostrar FPS: medí los 30
+    FPS con una casa de dos pisos amueblada, con contorno encendido y apagado.
+
+### Pulido 3 — verificación final (nube: Godot 4.7.2 con SHA-512 verificado, Lua 5.1 de apt)
+Sin pantalla: casa **158**, personaje 34, economía 66, servidor 78, pareja 46, negocio 46, parcela **55**; Lua **322**.
+Demos con xvfb (OpenGL): `ui_demo` **41**, `polish2a_demo` 46, `polish2b_demo` 43, `polish2c_demo` 49,
+`polish3a_demo` **15**, `polish3b_demo` **52**, `polish3c_demo` **10**. Capturas en `docs/capturas/p3a_*`, `p3b_*`, `p3c_*`.
+**No se corrieron** (necesitan Nakama real; en la nube no hay Docker): `server_demo`, `economy_server_demo`,
+`couple_demo`, `couple_live_demo`, `login_demo`, `restaurant_demo`, `parcel_server_demo`. Las reglas del servidor
+(zona, migración a formato 5) están cubiertas por las pruebas Lua. **Pendiente en la PC**: reiniciar Nakama y
+correr esas demos (las de parcela y casa asumen la casa nueva cerca de la calle: `home_origin()` ya la sigue;
+`parcel_server_demo` se adaptó a ciegas, sin poder correrla). Los **30 FPS** y el **área segura real** (muesca,
+barra de gestos) solo se pueden medir en el teléfono.
+
+### Errores conocidos / pendientes de Pulido 3
+- `login_demo` no se adaptó para la pantalla de creación de personaje (el flujo real: crear cuenta → creación
+  → juego); probar a mano.
+- Los tipos de cuarto no viajan al servidor (a propósito); con otro teléfono de la misma cuenta no se ven.
+- Pared con puerta o ventana conserva el contorno por tramo (puede quedar una rayita en la juntura con el marco).
+- Cámara: no se limita a la zona abierta (se puede mirar todo el terreno, solo no se puede pisar ni construir).
 
 ### Pulido 3A — qué se hizo
 - **Zona disponible = el doble de la parcela original (32 → 64 × 64), pegada a la calle**;

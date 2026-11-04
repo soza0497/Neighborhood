@@ -114,6 +114,10 @@ func _ready() -> void:
 		if tool == "shop":
 			_show_category(current_category))
 	EventBus.economy_changed.connect(_on_economy_changed)
+	# Pulido 3B: si el jugador le cambia el tipo a un cuarto, «Recomendado» se actualiza.
+	EventBus.rooms_changed.connect(func() -> void:
+		if tool == "shop":
+			_fill_categories(SHOP_CATEGORIES, true))
 	EventBus.server_busy_changed.connect(func(busy: bool) -> void:
 		_server_busy = busy
 		if _confirm_button.visible:
@@ -263,7 +267,10 @@ func _fill_categories(ids: Array, with_recommended: bool) -> void:
 
 func _category_name(id: String) -> String:
 	if id == RECOMMENDED:
-		return "★ %s" % _room.get("name", "Este cuarto")
+		# Pulido 3B: "★ Recomendado" y, abajo, el tipo del cuarto si tiene uno
+		# (si no tiene tipo, solo lo más común: no se dice "multiuso").
+		var typed: bool = _room.get("type", "") not in ["", "mixed", "empty"]
+		return "★ Recomendado\n%s" % _room["name"] if typed else "★ Recomendado"
 	return Catalog.categories.get(id, {}).get("name", id)
 
 

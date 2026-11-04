@@ -104,6 +104,12 @@ signal box_tapped(level: int, key: String)
 signal ambulance_requested(patient: Node3D)
 ## Pulido 2: el ángulo vertical de la cámara cambió (grados hacia abajo).
 signal camera_pitch_requested(degrees: float)
+## Pulido 3B: abrir el menú de tipo de un cuarto (el que tiene esa celda en ese nivel).
+signal room_menu_requested(level: int, cell: Vector2i)
+## Pulido 3B: cambió el tipo de algún cuarto (la Tienda actualiza «Recomendado»).
+signal rooms_changed
+## Pulido 3B: la barra del ángulo pide subir (+) o bajar (-) el ángulo esos grados.
+signal camera_pitch_step_requested(degrees: float)
 ## La interfaz pide mandar o descartar mi propuesta, ver la de mi pareja (id
 ## del pedido) y responderla (aprobar o no) o cerrarla.
 signal proposal_send_requested

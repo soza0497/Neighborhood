@@ -60,6 +60,12 @@ func set_pitch(degrees: float) -> void:
 	_pitch.rotation_degrees.x = pitch_degrees
 
 
+## Sube (+) o baja (-) el ángulo `degrees` grados (lo usa la barra del ángulo).
+## Subir = mirar más desde arriba, hasta la vista aérea de cielo (-89).
+func step_pitch(degrees: float) -> void:
+	set_pitch(pitch_degrees - degrees)
+
+
 ## Pasa a la siguiente inclinación de PITCH_PRESETS. Devuelve su nombre.
 func cycle_pitch() -> String:
 	var best := 0

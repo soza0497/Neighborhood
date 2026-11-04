@@ -1114,3 +1114,81 @@ Decisiones menores tomadas por el desarrollador (el dueño no las pidió una por
   regenera, y (2) las celdas **vecinas de un obstáculo cuestan ×3** (`NEAR_OBSTACLE_COST`):
   el camino los rodea con aire cuando hay lugar. Prueba: `test_parcel` y `polish3a_demo`
   (el personaje llega al otro lado de un árbol sin pisarlo y, al limpiarlo, el camino se acorta).
+
+## Pulido 3B — interfaz y personaje (2026-11-04, nube, rama `pulido-3`)
+
+### Pantalla cortada → área segura
+- **Causa real**: la columna izquierda (íconos + selector de pisos + brújula, ≈ 370 de alto) le exigía
+  altura a la pantalla; con la barra de la Tienda abierta y un mueble elegido (fila de acciones) la suma
+  pasaba de los 720 de alto de la interfaz y **todo el `Root` se agrandaba más allá de los bordes**.
+  Ahora esa columna va dentro de un contenedor que **no exige altura** y **se achica** (hasta 45 %)
+  si no cabe (`HUD._fit_to_screen`).
+- **Área segura**: `SafeArea` (`ui/safe_area.gd`) lee `DisplayServer.get_display_safe_area()` (solo en
+  Android/iOS; en la PC no aplica) y la pasa a unidades de la interfaz; los márgenes del HUD son el mayor
+  entre el normal (16 / 34 / 16 / 22) y el del área segura + 8. Se vuelve a calcular al cambiar el tamaño.
+  Probado con áreas inventadas en 1920×1080, 1080×2400 y 2400×1080 (`polish3b_demo`): la interfaz mide
+  lo que la pantalla y las barras caben dentro del área segura.
+
+### Colocar un mueble y girarlo antes de confirmar
+- Antes, soltar el dedo ponía el mueble ya mismo y el botón de girar solo servía para el siguiente. Ahora
+  un mueble (o escalera o pilar) **queda «sostenido»** al soltar (fantasma + ✓/✗), el botón de **girar 45°**
+  lo gira en el momento, tocar otro lugar lo mueve y **Confirmar** lo pone. Reusa la espera de Confirmar
+  de las herramientas de arrastre (`_pending_plain`). Con la obra planificada sigue yendo a la factura.
+
+### Techo: rejilla flotante
+- Con la herramienta de techo la rejilla, el cursor, las manijas y lo que se toca **suben a la altura de
+  las paredes del piso actual** (`HouseBuilder.pick_height()`): se toca desde arriba sin que la pared tape.
+
+### Barra del ángulo de la cámara
+- `PitchSlider` (`ui/pitch_slider.gd`): barra vertical a la derecha, **debajo del menú**, con perilla central.
+  Arriba sube el ángulo (hasta -89°, de cielo), abajo lo baja (hasta -5°); la velocidad depende de cuánto
+  se desvía (hasta 60°/s); al soltar **vuelve sola al centro y el ángulo se queda**. Mouse y dedo (el toque
+  llega como clic). **Se quitó el botón viejo** de 5 saltos. `CameraRig.step_pitch`.
+
+### Maqueta de pisos
+- Las **flechas (subir, bajar, girar) salen de la caja** y van a su lado/abajo con color azul/verde
+  translúcido (`HUD._tint_like_map`). **Sin aristas del fondo**: solo se dibujan las aristas de las paredes
+  (y del techo) cuya cara mira hacia la cámara de la maqueta (`FloorMap.FACING_MIN`); el relleno tenue
+  se deja para poder tocar el piso.
+
+### Cuartos elegidos por el jugador
+- `HouseData.room_types` (`"nivel:x,z"` de **cada celda del cuarto** → tipo) y `main_bedroom_cell`
+  se guardan con la casa (y se mueven con las migraciones). Guardar todas las celdas hace que el tipo
+  sobreviva si el cuarto se agranda o se achica. **Lo asignado manda sobre lo deducido**
+  (`HouseRooms._classify`); si dos cuartos se unen con tipos distintos gana el de la celda más
+  «arriba a la izquierda». **Servidor: no se guarda** (no calcula nada con esto); si el servidor manda
+  una casa sin tipos, el teléfono conserva los que tenía.
+- Menú: **Modificar → tocar el piso de un cuarto → «Tipo de cuarto»** o el botón **«Cuartos»** (etiqueta,
+  junto a techo y paredes) que lista los del piso. Tipos: los de `data/rooms.json` (sin «restaurante»,
+  que es del negocio). Si es **dormitorio**: **★ Principal** o **Secundario** (solo hay un principal).
+  «Que decida el juego» saca lo elegido.
+- **`HouseRooms.main_bedroom(house)`** devuelve el dormitorio principal (el marcado; si no hay marcado,
+  el primer dormitorio) con `level`, `cells`, `type`. Es la «`Rooms.main_bedroom()`» del brief (lleva la
+  casa como parámetro porque no hay una casa global).
+- **«Multiuso» desapareció**: el tipo mixto se llama **«Sin tipo»** (sigue el id `mixed`). La pestaña de la
+  Tienda es **«★ Recomendado»** y, abajo, el tipo del cuarto (**«★ Recomendado / Dormitorio»**); sin tipo,
+  solo «★ Recomendado» con lo más común del cuarto.
+
+### Creación de personaje
+- Se **amplió `ui/character_editor`** (no hay pantalla nueva): vista previa 3D que **gira sola** (y se gira
+  arrastrando), **nombre, peinado (5), ojos (4), boca (4), piel, pelo, ropa (camisa) y pantalón**, más los
+  rasgos de antes. Modo creación (`open_for_creation`): sin «Cancelar», «Listo» emite `created`.
+- Después de **crear la cuenta por primera vez** (`LoginScreen.create_character`) se abre antes de entrar al
+  juego; lo elegido va a `GameState.character`. Desde el menú → Personaje se sigue pudiendo cambiar.
+- **Piezas intercambiables en datos** (`data/character_options.json`): `hairstyles`, `eyes`, `mouths`; cada
+  opción es una lista de formas simples (esfera o cápsula con posición, escala y giro). `CharacterLook.build`
+  las arma; una opción que no existe usa la primera (las partidas viejas no se rompen). Para sumar un peinado
+  se edita el JSON. Al personaje se le agregó **boca**.
+
+## Pulido 3C — contorno sin costuras (2026-11-04)
+- **Causa**: cada tramo (1 m) de pared y cada columna de esquina eran mallas con su propio contorno
+  (casco invertido); en las junturas el contorno de un tramo asomaba sobre el vecino (rayitas).
+- **Arreglo**: los tramos **macizos** (sin puerta ni ventana, que se ven normales: no en obra, ni previstos,
+  ni en rojo) y las columnas entre ellos **ya no llevan contorno propio**. En su lugar, por cada **tramo recto de
+  paredes contiguas** (misma línea y alto) una **caja invisible** (`invisible.gdshader`, descarta todo y solo lleva
+  el contorno como `next_pass`; `Style.outline_only_material`) envuelve la silueta completa: la pared se ve
+  continua. Se rearma una vez por cuadro cuando cambia una pared (`HouseView._rebuild_outlines`). Lo que tiene
+  puerta o ventana conserva su contorno de antes. «Contorno» en Info apaga también estas cajas.
+- **Medido** (`polish3c_demo`, 4 ángulos): píxeles oscuros en la juntura de dos tramos **22 → 0**; pasadas de
+  contorno de la casa de prueba **260 → 194** (menos llamadas de dibujo, no más). En la nube no hay GPU: el
+  cuadro sin y con contorno se compara pero **los 30 FPS siguen por medir en el teléfono del dueño**.

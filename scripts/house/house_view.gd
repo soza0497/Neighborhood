@@ -40,6 +40,13 @@ var _pending: Dictionary = {}
 ## Piezas con problemas (sin apoyo), pintadas de rojo: "nivel|capa|clave" → true.
 var _problem_ids: Dictionary = {}
 var _last_pending_count := -1
+## Pulido 3C: las cajas que dan el contorno de cada pared completa se vuelven a
+## armar (una vez por cuadro, como mucho) cuando cambia alguna pared.
+var _outlines_dirty := true
+## Pulido 3C: false = el contorno de antes (por tramo, con costuras). Solo lo
+## usan las demos para comparar «antes y después».
+static var seamless_outline := true
+var _outline_nodes: Dictionary = {}
 
 
 func _ready() -> void:
@@ -233,6 +240,8 @@ func set_boxed(ids: Dictionary) -> void:
 
 
 func _process(delta: float) -> void:
+	if _outlines_dirty:
+		_rebuild_outlines()
 	if _planned_materials.is_empty():
 		return
 	_glow_clock = fmod(_glow_clock + delta, PLAN_GLOW_PERIOD)
@@ -248,6 +257,79 @@ func _process(delta: float) -> void:
 func _refresh_by_id(id: String) -> void:
 	var parts := id.split("|")
 	_refresh_piece(int(parts[0]), parts[1], parts[2])
+	if parts[1] == "walls":
+		for vertex in HouseGrid.edge_vertices(parts[2]):
+			_refresh_post(int(parts[0]), vertex)
+
+
+# --- Contorno sin costuras (Pulido 3C) ---
+
+## ¿Este tramo de pared forma parte del contorno "de pared completa"? Sí si es
+## macizo (sin puerta ni ventana) y se ve normal (no en obra, ni prevista, ni
+## en rojo): esos tramos no llevan contorno propio y una sola caja envuelve
+## todos los que son contiguos en línea recta, así la pared se ve continua.
+func _wall_is_flat(level: int, key: String, value: Variant) -> bool:
+	if not seamless_outline or value == null or str(value.get("opening", "")) != "":
+		return false
+	if HouseData.is_under_construction(value):
+		return false
+	var id := _node_id(level, "walls", key)
+	return not _planned.has(id) and not _problem_ids.has(id)
+
+
+## Arma, por nivel, una caja invisible por cada tramo recto de paredes contiguas
+## (misma línea y mismo alto): lleva el contorno de toda la silueta de una vez.
+func _rebuild_outlines() -> void:
+	_outlines_dirty = false
+	for node in _outline_nodes.values():
+		node.get_parent().remove_child(node)  # Se saca ya (si no, el nombre nuevo se renombra).
+		node.queue_free()
+	_outline_nodes.clear()
+	if house == null:
+		return
+	var t := HouseGrid.WALL_THICKNESS
+	for level in HouseGrid.level_range():
+		var layer := house.get_layer(level, "walls")
+		if layer.is_empty():
+			continue
+		# Línea → posiciones de los tramos sueltos (horizontales: z → [x...]).
+		var lines := {}
+		for key in layer:
+			if not _wall_is_flat(level, key, layer[key]):
+				continue
+			var v := HouseGrid.edge_vertex(key)
+			var horizontal := HouseGrid.is_edge_horizontal(key)
+			var line_id := "%s%d" % ["h" if horizontal else "v", v.y if horizontal else v.x]
+			if not lines.has(line_id):
+				lines[line_id] = []
+			lines[line_id].append(v.x if horizontal else v.y)
+		if lines.is_empty():
+			continue
+		var holder := Node3D.new()
+		holder.name = "WallOutlines"
+		_levels[HouseGrid.level_index(level)].add_child(holder)
+		_outline_nodes[level] = holder
+		var height := wall_height(level)
+		for line_id in lines:
+			var positions: Array = lines[line_id]
+			positions.sort()
+			var horizontal: bool = str(line_id).begins_with("h")
+			var line_pos := float(str(line_id).substr(1))
+			var run_start: int = positions[0]
+			var previous: int = positions[0]
+			for i in range(1, positions.size() + 1):
+				if i < positions.size() and positions[i] == previous + 1:
+					previous = positions[i]
+					continue
+				var count := previous - run_start + 1
+				var mid := run_start + count / 2.0
+				var center := Vector3(mid, height / 2.0, line_pos) if horizontal else Vector3(line_pos, height / 2.0, mid)
+				var size := Vector3(count + t, height, t) if horizontal else Vector3(t, height, count + t)
+				var box := HousePieces.add_box(holder, center, size, Style.outline_only_material())
+				box.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				if i < positions.size():
+					run_start = positions[i]
+					previous = positions[i]
 
 
 ## Contenedor de un nivel (para poner cosas a la altura de ese piso).
@@ -264,6 +346,7 @@ func rebuild_all() -> void:
 	_nodes.clear()
 	_posts.clear()
 	_pending.clear()
+	_outlines_dirty = true
 	if house == null:
 		return
 	for level in HouseGrid.level_range():
@@ -289,7 +372,8 @@ func make_piece(level: int, layer: String, key: String, value: Dictionary, previ
 			var vertices := HouseGrid.edge_vertices(key)
 			return HousePieces.build_wall(key, value, wall_height(level), preview,
 				not preview and not _merged_window(level, vertices[0]).is_empty(),
-				not preview and not _merged_window(level, vertices[1]).is_empty())
+				not preview and not _merged_window(level, vertices[1]).is_empty(),
+				not preview and _wall_is_flat(level, key, value))
 		"objects":
 			var boxed: String = _boxed.get(_node_id(level, layer, key), "")
 			if boxed == "transit":
@@ -319,6 +403,8 @@ func _on_piece_changed(level: int, layer: String, key: String) -> void:
 
 ## Quita el 3D viejo de una pieza y pone el nuevo (si la pieza existe).
 func _refresh_piece(level: int, layer: String, key: String) -> void:
+	if layer == "walls":
+		_outlines_dirty = true
 	var id := _node_id(level, layer, key)
 	if _nodes.has(id):
 		_nodes[id].queue_free()
@@ -353,8 +439,14 @@ func _refresh_post(level: int, vertex: Vector2i) -> void:
 	if walls.is_empty():
 		return
 	var first: Dictionary = house.get_piece(level, "walls", walls[0])
+	# Pulido 3C: la columna no lleva contorno propio si todas las paredes que
+	# llegan ahí tampoco (lo lleva la caja de la pared completa).
+	var flat := true
+	for edge in walls:
+		if not _wall_is_flat(level, edge, house.get_piece(level, "walls", edge)):
+			flat = false
 	var post := HousePieces.build_post(vertex, HousePieces.wall_face_color(first, "b"), wall_height(level),
-		_merged_window(level, vertex))
+		_merged_window(level, vertex), flat and _merged_window(level, vertex).is_empty())
 	_levels[HouseGrid.level_index(level)].add_child(post)
 	_posts[id] = post
 
