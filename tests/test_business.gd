@@ -17,6 +17,10 @@ var _svc: Dictionary
 func _ready() -> void:
 	HouseGrid.use_test_lot()  # Estas pruebas arman casas en un lote de 32 (la parcela real, desde el Pulido 2C, es de 96).
 	_svc = RestaurantSim.normalize_service(Catalog.business["restaurant"]["service"])
+	# Pulido 5A: estas pruebas son del restaurante, así que prenden el interruptor
+	# (en el juego normal está apagado en data/features.json).
+	_test_feature_switch()
+	Catalog.features["player_business"] = true
 	_test_data()
 	_test_random()
 	_test_customers()
@@ -28,6 +32,23 @@ func _ready() -> void:
 	await _test_screen()
 	print("\nPRUEBAS: %d pasaron, %d fallaron" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
+
+
+## Pulido 5A: con «player_business» apagado el jugador no ve el restaurante, pero los datos siguen.
+func _test_feature_switch() -> void:
+	_check(not Catalog.feature("player_business"), "5A: por defecto no hay negocios propios (data/features.json)")
+	_check(not Catalog.category_visible("restaurant") and Catalog.category_visible("furniture"),
+		"5A: apagado se esconde solo la categoría Restaurante")
+	_check(not Catalog.item_visible("counter_restaurant") and Catalog.item_visible("chair_basic"),
+		"5A: apagado se esconden los muebles de restaurante")
+	_check(Catalog.categories.has("restaurant") and not Catalog.get_item("counter_restaurant").is_empty(),
+		"5A: los datos del restaurante siguen en el catálogo (nada se borra)")
+	Catalog.features["player_business"] = true
+	_check(Catalog.category_visible("restaurant") and Catalog.item_visible("stove_restaurant"), "5A: prendido todo se ve")
+	Catalog.features["player_business"] = false
+	var bar := BuildBar.new()  # Sin escena: solo se mira la lista de pestañas de la Tienda.
+	_check(not BuildBar.SHOP_CATEGORIES.filter(Catalog.category_visible).has("restaurant"), "5A: la Tienda no ofrece Restaurante")
+	bar.free()
 
 
 func _check(condition: bool, description: String) -> void:

@@ -1,0 +1,4 @@
+{
+	"_ayuda": "Interruptores de funciones (Pulido 5A). player_business = false oculta TODO lo del restaurante propio en la interfaz y la Tienda (botón del menú, categoría y muebles de restaurante). El código, el servidor y sus pruebas siguen ahí: poné true para volver a verlo. Una partida que ya tenía restaurante no pierde nada.",
+	"player_business": false
+}

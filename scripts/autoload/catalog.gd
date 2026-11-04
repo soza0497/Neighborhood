@@ -12,6 +12,7 @@ const CHARACTER_OPTIONS_PATH := "res://data/character_options.json"
 const PROGRESSION_PATH := "res://data/progression.json"
 const JOBS_PATH := "res://data/jobs.json"
 const BUSINESS_PATH := "res://data/business.json"
+const FEATURES_PATH := "res://data/features.json"
 
 ## Campos que todo objeto del catálogo debe tener.
 const REQUIRED_ITEM_FIELDS := ["id", "name", "category", "kind", "price"]
@@ -34,6 +35,10 @@ var progression: Dictionary = {}
 var jobs: Dictionary = {}
 ## Negocios (Fase 6, ver data/business.json): {"restaurant": {...}}.
 var business: Dictionary = {}
+## Interruptores de funciones (Pulido 5A, ver data/features.json).
+var features: Dictionary = {}
+## Categorías que solo se ven con el interruptor "player_business" prendido.
+const BUSINESS_CATEGORIES := ["restaurant"]
 
 
 func _ready() -> void:
@@ -76,6 +81,22 @@ func get_item(item_id: String) -> Dictionary:
 	return items.get(item_id, {})
 
 
+## ¿Está prendida una función? (data/features.json; si falta, `default`).
+func feature(name: String, default := false) -> bool:
+	return bool(features.get(name, default))
+
+
+## ¿Se muestra esta categoría al jugador? (Pulido 5A: sin negocios propios
+## se esconde la del restaurante; los datos siguen en el catálogo.)
+func category_visible(category_id: String) -> bool:
+	return feature("player_business") or not BUSINESS_CATEGORIES.has(category_id)
+
+
+## ¿Se muestra este objeto al jugador? (ver `category_visible`).
+func item_visible(item_id: String) -> bool:
+	return category_visible(get_item(item_id).get("category", ""))
+
+
 ## Devuelve todos los objetos de una categoría.
 func get_items_in_category(category_id: String) -> Array:
 	var result: Array = []
@@ -115,6 +136,7 @@ func _load_character_data() -> void:
 	for job in _read_json(JOBS_PATH).get("jobs", []):
 		jobs[job["id"]] = job
 	business = _read_json(BUSINESS_PATH)
+	features = _read_json(FEATURES_PATH)
 
 	# Avisa si un mueble pide una acción que no existe.
 	for item in items.values():

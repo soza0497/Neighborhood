@@ -160,6 +160,7 @@ func _ready() -> void:
 	_diary_button.pressed.connect(_open_from_menu.bind(EventBus.journal_requested))
 	_jobs_button.pressed.connect(_open_from_menu.bind(EventBus.jobs_requested))
 	_restaurant_button.pressed.connect(_open_from_menu.bind(EventBus.restaurant_panel_requested))
+	_restaurant_button.visible = Catalog.feature("player_business")  # Pulido 5A
 	_info_button.pressed.connect(_open_info)
 	_info_close_button.pressed.connect(_info_panel.hide)
 	_builds_button.pressed.connect(EventBus.construction_accelerate_requested.emit)
