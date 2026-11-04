@@ -1,0 +1,418 @@
+{
+ "_ayuda": "La isla (Isla 1A, prototipo). Coordenadas en METROS: (0, 0) = centro del parque, +Z = sur (avenida y muelle), -Z = norte (volcán de fondo). 'lots' = parcelas: size S/M/L (lados en 'rules.sizes'), center = [x, z], yaw = giro en grados (el frente de la casa mira al centro de la isla), ring = anillo (A cerca del parque ... D junto a la playa), start = true si existe desde el comienzo (30), state = player (tu parcela regalada), npc (vecino simulado), free (libre: terreno verde con marcador) o future (todavía no abierta). Para mover un lote basta con cambiar center/yaw; que no se encimen ni pisen una calle lo comprueba tests/test_island.tscn. 'zones' = parque, comercios (solo decorados, apagados), playa, muelle y volcán. 'streets' = calles radiales (ángulo: x = cos, z = sin; 90 = sur) y circulares. 'rules' = tamaños, límite de piezas por parcela, tope de parcelas por jugador y precios base. 'houses' = rangos de las casas simuladas. 'lod' = distancias (metros desde la cámara) de cada nivel de detalle y su histéresis. tools/make_island_data.py rehace el reparto de lotes (opcional).",
+ "format_version": 1,
+ "seed": 20261105,
+ "island": {
+  "radius": 352.0,
+  "sea_size": 3600.0,
+  "sea_level": -0.35,
+  "sand_width": 22.0,
+  "south_sand_width": 40.0,
+  "south_sand_span": 130.0,
+  "ring_segments": 96
+ },
+ "colors": {
+  "sea": "#47b6d6",
+  "ground": "#8fd16a",
+  "lot_npc": "#a2dc7a",
+  "lot_free": "#c3ec8e",
+  "lot_future": "#97cf74",
+  "lot_player": "#ffd86b",
+  "road": "#6e6a7c",
+  "road_edge": "#d9d2c3",
+  "sand": "#f2e0a6",
+  "park": "#79cf6b",
+  "plaza": "#eadbb8",
+  "lake": "#56c3e6",
+  "lake_edge": "#e8d9a8",
+  "commerce_floor": "#d8c8aa",
+  "path": "#e3d3aa",
+  "pier": "#b98a57",
+  "pier_post": "#7a5a3a",
+  "volcano": "#7b5a4f",
+  "volcano_dark": "#5a3f38",
+  "lava": "#ff7a3d",
+  "smoke": "#d6cfdc",
+  "trunk": "#8a5a3a",
+  "crowns": [
+   "#4fae5a",
+   "#69c06a",
+   "#3f9a55"
+  ],
+  "marker": "#ff5d73",
+  "marker_future": "#c9a9ff",
+  "bench": "#a56f45",
+  "gazebo_roof": "#e0675a",
+  "umbrella": [
+   "#ff7a7a",
+   "#ffd25c",
+   "#6ec6ff"
+  ],
+  "shop_off": "#6b6475",
+  "shop_walls": [
+   "#f4d9d0",
+   "#fff0b8",
+   "#dfe9f5",
+   "#e6f0d4",
+   "#e4d9f2"
+  ],
+  "shop_awnings": [
+   "#e0675a",
+   "#5b8fd6",
+   "#59b89c",
+   "#f2a65a"
+  ],
+  "door": "#8a5a3a",
+  "glass": "#a9d6f5",
+  "foundation": "#b8a58c",
+  "map_sea": "#47b6d6",
+  "map_land": "#cfe9a0",
+  "map_sand": "#f2e0a6",
+  "map_road": "#ffffff",
+  "map_park": "#79cf6b",
+  "map_lake": "#56c3e6",
+  "map_commerce": "#f2a65a",
+  "map_lot_outline": "#5a4a66",
+  "map_lot_free": "#e8f7c6",
+  "map_lot_future": "#b7c9a0",
+  "map_player": "#ffd86b",
+  "map_pier": "#b98a57"
+ },
+ "rules": {
+  "sizes": {
+   "S": 32,
+   "M": 48,
+   "L": 64
+  },
+  "start_lots": 30,
+  "max_lots": 60,
+  "max_lots_per_player": 3,
+  "gift_size": "S",
+  "max_pieces_per_lot": {
+   "S": 700,
+   "M": 1500,
+   "L": 2600
+  },
+  "base_price": {
+   "S": 6000,
+   "M": 18000,
+   "L": 48000
+  },
+  "ring_factor": {
+   "A": 1.25,
+   "B": 1.0,
+   "C": 0.9,
+   "D": 0.8
+  },
+  "premium_factor": 1.3,
+  "lot_gap": 2.0,
+  "street_margin": 2.0
+ },
+ "zones": {
+  "park": {
+   "center": [
+    0,
+    0
+   ],
+   "radius": 34.0,
+   "lake": {
+    "center": [
+     -9,
+     -6
+    ],
+    "radius": 12.0
+   },
+   "plaza": {
+    "center": [
+     0,
+     22
+    ],
+    "radius": 8.0
+   },
+   "gazebo": {
+    "center": [
+     14,
+     6
+    ],
+    "radius": 4.5,
+    "height": 4.4
+   },
+   "trees": 20,
+   "benches": 6
+  },
+  "commerce": {
+   "inner": 37.0,
+   "outer": 47.0,
+   "count": 18,
+   "depth": 8.0,
+   "min_width": 9.0,
+   "max_width": 13.0,
+   "min_height": 4.5,
+   "max_height": 8.5,
+   "active": false
+  },
+  "beach": {
+   "umbrellas": 10,
+   "palms": 36
+  },
+  "pier": {
+   "angle": 90,
+   "length": 90.0,
+   "width": 9.0,
+   "post_every": 6.0,
+   "end_platform": 16.0
+  },
+  "volcano": {
+   "center": [
+    40.0,
+    -600.0
+   ],
+   "base_radius": 170.0,
+   "height": 210.0,
+   "crater_radius": 34.0,
+   "crater_depth": 14.0,
+   "segments": 20,
+   "smoke": {
+    "enabled": true,
+    "puffs": 7
+   }
+  }
+ },
+ "streets": {
+  "radial": [
+   {
+    "id": "avenida",
+    "name": "Avenida del Muelle",
+    "angle": 90,
+    "width": 12,
+    "from": 34,
+    "to": 328.0
+   },
+   {
+    "id": "calle_oeste",
+    "name": "Calle del Faro",
+    "angle": 180,
+    "width": 7,
+    "from": 34,
+    "to": 328.0
+   },
+   {
+    "id": "calle_norte",
+    "name": "Calle de la Ceiba",
+    "angle": 270,
+    "width": 7,
+    "from": 34,
+    "to": 328.0
+   },
+   {
+    "id": "calle_este",
+    "name": "Calle del Sol",
+    "angle": 0,
+    "width": 7,
+    "from": 34,
+    "to": 328.0
+   }
+  ],
+  "rings": [
+   {
+    "id": "r1",
+    "radius": 52.0,
+    "width": 8.0,
+    "arc": [
+     0,
+     360
+    ]
+   },
+   {
+    "id": "r2",
+    "radius": 112.0,
+    "width": 8.0,
+    "arc": [
+     0,
+     360
+    ]
+   },
+   {
+    "id": "r3",
+    "radius": 193.0,
+    "width": 8.0,
+    "arc": [
+     0,
+     360
+    ]
+   },
+   {
+    "id": "r4",
+    "radius": 256.0,
+    "width": 8.0,
+    "arc": [
+     20,
+     160
+    ]
+   }
+  ],
+  "sidewalk": 2.0,
+  "tree_spacing": 16.0
+ },
+ "houses": {
+  "S": {
+   "cols": [
+    8,
+    13
+   ],
+   "rows": [
+    7,
+    10
+   ],
+   "floors": [
+    1,
+    2
+   ]
+  },
+  "M": {
+   "cols": [
+    13,
+    20
+   ],
+   "rows": [
+    9,
+    14
+   ],
+   "floors": [
+    1,
+    3
+   ]
+  },
+  "L": {
+   "cols": [
+    18,
+    28
+   ],
+   "rows": [
+    12,
+    18
+   ],
+   "floors": [
+    2,
+    3
+   ]
+  },
+  "front_gap": 4.0,
+  "l_shape_chance": 0.35,
+  "flat_roof_chance": 0.25,
+  "setback_chance": 0.6,
+  "garden_trees": [
+   2,
+   4
+  ]
+ },
+ "lod": {
+  "distances": [
+   70.0,
+   230.0,
+   520.0
+  ],
+  "hysteresis": 0.12,
+  "map_enter_radii": 2.9,
+  "map_exit_radii": 2.5,
+  "update_interval": 0.15,
+  "builds_per_frame": 2,
+  "lod0_max": 3,
+  "vegetation_range": 320.0,
+  "vegetation_hysteresis": 0.15,
+  "vegetation_chunk": 140.0,
+  "outline_max_level": 1
+ },
+ "demo": {
+  "stress_lots": 60,
+  "stress_houses": 100,
+  "stress_spacing": 52.0,
+  "warmup_frames": 40,
+  "measure_seconds": 2.0,
+  "presets": [
+   {
+    "name": "calle",
+    "focus": "player",
+    "distance": 42.0,
+    "yaw": 20.0,
+    "pitch": -40.0
+   },
+   {
+    "name": "barrio",
+    "focus": "i12",
+    "distance": 210.0,
+    "yaw": 20.0,
+    "pitch": -50.0
+   },
+   {
+    "name": "isla",
+    "focus": "center",
+    "distance": 760.0,
+    "yaw": 0.0,
+    "pitch": -62.0
+   }
+  ]
+ },
+ "lots": [
+  {"id": "i01", "ring": "A", "sector": 0, "cluster": "A0", "size": "S", "center": [-36.4, 64.4], "yaw": 150.6, "angle": 119.4, "price": 0, "premium": ["park"], "start": true, "state": "player"},
+  {"id": "i02", "ring": "A", "sector": 0, "cluster": "A0", "size": "S", "center": [-66.0, 33.6], "yaw": 117.0, "angle": 153.0, "price": 9800, "premium": ["park"], "start": true, "state": "npc"},
+  {"id": "i03", "ring": "A", "sector": 1, "cluster": "A1", "size": "S", "center": [-65.2, -35.0], "yaw": 61.8, "angle": 208.2, "price": 9800, "premium": ["park"], "start": true, "state": "npc"},
+  {"id": "i04", "ring": "A", "sector": 1, "cluster": "A1", "size": "S", "center": [-35.0, -65.2], "yaw": 28.2, "angle": 241.8, "price": 9800, "premium": ["park"], "start": true, "state": "free"},
+  {"id": "i05", "ring": "A", "sector": 2, "cluster": "A2", "size": "S", "center": [35.0, -65.2], "yaw": -28.2, "angle": 298.2, "price": 9800, "premium": ["park"], "start": true, "state": "npc"},
+  {"id": "i06", "ring": "A", "sector": 2, "cluster": "A2", "size": "S", "center": [65.2, -35.0], "yaw": -61.8, "angle": 331.8, "price": 9800, "premium": ["park"], "start": true, "state": "npc"},
+  {"id": "i07", "ring": "A", "sector": 3, "cluster": "A3", "size": "S", "center": [66.0, 33.6], "yaw": -117.0, "angle": 27.0, "price": 9800, "premium": ["park"], "start": true, "state": "free"},
+  {"id": "i08", "ring": "A", "sector": 3, "cluster": "A3", "size": "S", "center": [36.4, 64.4], "yaw": -150.6, "angle": 60.6, "price": 9800, "premium": ["park"], "start": true, "state": "npc"},
+  {"id": "i09", "ring": "B", "sector": 0, "cluster": "B0", "size": "S", "center": [-30.3, 130.5], "yaw": 166.9, "angle": 103.1, "price": 6000, "premium": [], "start": true, "state": "npc"},
+  {"id": "i10", "ring": "B", "sector": 0, "cluster": "B0", "size": "L", "center": [-91.0, 119.2], "yaw": 142.6, "angle": 127.4, "price": 48000, "premium": [], "start": true, "state": "free"},
+  {"id": "i11", "ring": "B", "sector": 0, "cluster": "B0", "size": "S", "center": [-117.9, 63.7], "yaw": 118.4, "angle": 151.6, "price": 6000, "premium": [], "start": true, "state": "npc"},
+  {"id": "i12", "ring": "B", "sector": 0, "cluster": "B0", "size": "S", "center": [-131.1, 27.5], "yaw": 101.9, "angle": 168.1, "price": 6000, "premium": [], "start": true, "state": "npc"},
+  {"id": "i13", "ring": "B", "sector": 1, "cluster": "B1", "size": "S", "center": [-130.8, -28.9], "yaw": 77.5, "angle": 192.5, "price": 6000, "premium": [], "start": true, "state": "free"},
+  {"id": "i14", "ring": "B", "sector": 1, "cluster": "B1", "size": "L", "center": [-120.2, -89.7], "yaw": 53.3, "angle": 216.7, "price": 48000, "premium": [], "start": true, "state": "npc"},
+  {"id": "i15", "ring": "B", "sector": 1, "cluster": "B1", "size": "S", "center": [-64.9, -117.2], "yaw": 29.0, "angle": 241.0, "price": 6000, "premium": [], "start": true, "state": "npc"},
+  {"id": "i16", "ring": "B", "sector": 1, "cluster": "B1", "size": "S", "center": [-28.9, -130.8], "yaw": 12.5, "angle": 257.5, "price": 6000, "premium": [], "start": true, "state": "free"},
+  {"id": "i17", "ring": "B", "sector": 2, "cluster": "B2", "size": "S", "center": [28.9, -130.8], "yaw": -12.5, "angle": 282.5, "price": 6000, "premium": [], "start": true, "state": "npc"},
+  {"id": "i18", "ring": "B", "sector": 2, "cluster": "B2", "size": "L", "center": [89.7, -120.2], "yaw": -36.7, "angle": 306.7, "price": 48000, "premium": [], "start": true, "state": "npc"},
+  {"id": "i19", "ring": "B", "sector": 2, "cluster": "B2", "size": "S", "center": [117.2, -64.9], "yaw": -61.0, "angle": 331.0, "price": 6000, "premium": [], "start": true, "state": "free"},
+  {"id": "i20", "ring": "B", "sector": 2, "cluster": "B2", "size": "S", "center": [130.8, -28.9], "yaw": -77.5, "angle": 347.5, "price": 6000, "premium": [], "start": true, "state": "npc"},
+  {"id": "i21", "ring": "B", "sector": 3, "cluster": "B3", "size": "S", "center": [131.1, 27.5], "yaw": -101.9, "angle": 11.9, "price": 6000, "premium": [], "start": true, "state": "npc"},
+  {"id": "i22", "ring": "B", "sector": 3, "cluster": "B3", "size": "L", "center": [121.1, 88.5], "yaw": -126.1, "angle": 36.1, "price": 48000, "premium": [], "start": true, "state": "free"},
+  {"id": "i23", "ring": "B", "sector": 3, "cluster": "B3", "size": "S", "center": [66.2, 116.5], "yaw": -150.4, "angle": 60.4, "price": 6000, "premium": [], "start": true, "state": "npc"},
+  {"id": "i24", "ring": "B", "sector": 3, "cluster": "B3", "size": "S", "center": [30.3, 130.5], "yaw": -166.9, "angle": 76.9, "price": 6000, "premium": [], "start": true, "state": "npc"},
+  {"id": "i25", "ring": "C", "sector": 0, "cluster": "C0", "size": "S", "center": [-42.4, 210.8], "yaw": 168.6, "angle": 101.4, "price": 5400, "premium": [], "start": true, "state": "free"},
+  {"id": "i26", "ring": "C", "sector": 0, "cluster": "C0", "size": "S", "center": [-77.7, 200.5], "yaw": 158.8, "angle": 111.2, "price": 5400, "premium": [], "start": true, "state": "npc"},
+  {"id": "i27", "ring": "C", "sector": 0, "cluster": "C0", "size": "M", "center": [-122.3, 186.5], "yaw": 146.7, "angle": 123.3, "price": 16200, "premium": [], "start": true, "state": "npc"},
+  {"id": "i28", "ring": "C", "sector": 0, "cluster": "C0", "size": "S", "center": [-153.0, 151.1], "yaw": 134.6, "angle": 135.4, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i29", "ring": "C", "sector": 0, "cluster": "C0", "size": "S", "center": [-176.4, 122.9], "yaw": 124.9, "angle": 145.1, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i30", "ring": "C", "sector": 0, "cluster": "C0", "size": "S", "center": [-194.8, 91.1], "yaw": 115.1, "angle": 154.9, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i31", "ring": "C", "sector": 0, "cluster": "C0", "size": "M", "center": [-217.3, 50.0], "yaw": 103.0, "angle": 167.0, "price": 16200, "premium": [], "start": false, "state": "future"},
+  {"id": "i32", "ring": "C", "sector": 1, "cluster": "C1", "size": "S", "center": [-211.0, -41.1], "yaw": 79.0, "angle": 191.0, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i33", "ring": "C", "sector": 1, "cluster": "C1", "size": "S", "center": [-201.0, -76.4], "yaw": 69.2, "angle": 200.8, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i34", "ring": "C", "sector": 1, "cluster": "C1", "size": "M", "center": [-187.2, -121.2], "yaw": 57.1, "angle": 212.9, "price": 16200, "premium": [], "start": false, "state": "future"},
+  {"id": "i35", "ring": "C", "sector": 1, "cluster": "C1", "size": "S", "center": [-152.0, -152.0], "yaw": 45.0, "angle": 225.0, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i36", "ring": "C", "sector": 1, "cluster": "C1", "size": "S", "center": [-124.0, -175.7], "yaw": 35.2, "angle": 234.8, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i37", "ring": "C", "sector": 1, "cluster": "C1", "size": "S", "center": [-92.3, -194.2], "yaw": 25.4, "angle": 244.6, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i38", "ring": "C", "sector": 1, "cluster": "C1", "size": "M", "center": [-51.4, -217.0], "yaw": 13.3, "angle": 256.7, "price": 16200, "premium": [], "start": false, "state": "future"},
+  {"id": "i39", "ring": "C", "sector": 2, "cluster": "C2", "size": "S", "center": [41.1, -211.0], "yaw": -11.0, "angle": 281.0, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i40", "ring": "C", "sector": 2, "cluster": "C2", "size": "S", "center": [76.4, -201.0], "yaw": -20.8, "angle": 290.8, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i41", "ring": "C", "sector": 2, "cluster": "C2", "size": "M", "center": [121.2, -187.2], "yaw": -32.9, "angle": 302.9, "price": 16200, "premium": [], "start": false, "state": "future"},
+  {"id": "i42", "ring": "C", "sector": 2, "cluster": "C2", "size": "S", "center": [152.0, -152.0], "yaw": -45.0, "angle": 315.0, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i43", "ring": "C", "sector": 2, "cluster": "C2", "size": "S", "center": [175.7, -124.0], "yaw": -54.8, "angle": 324.8, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i44", "ring": "C", "sector": 2, "cluster": "C2", "size": "S", "center": [194.2, -92.3], "yaw": -64.6, "angle": 334.6, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i45", "ring": "C", "sector": 2, "cluster": "C2", "size": "M", "center": [217.0, -51.4], "yaw": -76.7, "angle": 346.7, "price": 16200, "premium": [], "start": false, "state": "future"},
+  {"id": "i46", "ring": "C", "sector": 3, "cluster": "C3", "size": "S", "center": [211.3, 39.8], "yaw": -100.7, "angle": 10.7, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i47", "ring": "C", "sector": 3, "cluster": "C3", "size": "S", "center": [201.4, 75.1], "yaw": -110.5, "angle": 20.5, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i48", "ring": "C", "sector": 3, "cluster": "C3", "size": "M", "center": [188.0, 120.0], "yaw": -122.5, "angle": 32.5, "price": 16200, "premium": [], "start": false, "state": "future"},
+  {"id": "i49", "ring": "C", "sector": 3, "cluster": "C3", "size": "S", "center": [153.0, 151.1], "yaw": -134.6, "angle": 44.6, "price": 5400, "premium": [], "start": false, "state": "future"},
+  {"id": "i50", "ring": "C", "sector": 3, "cluster": "C3", "size": "S", "center": [125.1, 174.9], "yaw": -144.4, "angle": 54.4, "price": 5400, "premium": [], "start": true, "state": "free"},
+  {"id": "i51", "ring": "C", "sector": 3, "cluster": "C3", "size": "S", "center": [93.5, 193.6], "yaw": -154.2, "angle": 64.2, "price": 5400, "premium": [], "start": true, "state": "npc"},
+  {"id": "i52", "ring": "C", "sector": 3, "cluster": "C3", "size": "M", "center": [52.8, 216.7], "yaw": -166.3, "angle": 76.3, "price": 16200, "premium": [], "start": true, "state": "npc"},
+  {"id": "i53", "ring": "D", "sector": 0, "cluster": "D0", "size": "L", "center": [-63.5, 287.1], "yaw": 167.5, "angle": 102.5, "price": 49900, "premium": ["beach"], "start": false, "state": "future"},
+  {"id": "i54", "ring": "D", "sector": 0, "cluster": "D0", "size": "M", "center": [-121.6, 258.9], "yaw": 154.8, "angle": 115.2, "price": 18700, "premium": ["beach"], "start": false, "state": "future"},
+  {"id": "i55", "ring": "D", "sector": 0, "cluster": "D0", "size": "S", "center": [-156.8, 229.5], "yaw": 145.7, "angle": 124.3, "price": 6200, "premium": ["beach"], "start": false, "state": "future"},
+  {"id": "i56", "ring": "D", "sector": 0, "cluster": "D0", "size": "L", "center": [-208.9, 206.9], "yaw": 134.7, "angle": 135.3, "price": 49900, "premium": ["beach"], "start": false, "state": "future"},
+  {"id": "i57", "ring": "D", "sector": 3, "cluster": "D3", "size": "L", "center": [208.9, 206.9], "yaw": -134.7, "angle": 44.7, "price": 49900, "premium": ["beach"], "start": false, "state": "future"},
+  {"id": "i58", "ring": "D", "sector": 3, "cluster": "D3", "size": "L", "center": [150.7, 252.4], "yaw": -149.2, "angle": 59.2, "price": 49900, "premium": ["beach"], "start": false, "state": "future"},
+  {"id": "i59", "ring": "D", "sector": 3, "cluster": "D3", "size": "M", "center": [89.1, 271.8], "yaw": -161.8, "angle": 71.8, "price": 18700, "premium": ["beach"], "start": false, "state": "future"},
+  {"id": "i60", "ring": "D", "sector": 3, "cluster": "D3", "size": "S", "center": [43.4, 274.6], "yaw": -171.0, "angle": 81.0, "price": 6200, "premium": ["beach"], "start": false, "state": "future"}
+ ]
+}
