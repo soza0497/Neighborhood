@@ -345,11 +345,29 @@ func _test_rooms() -> void:
 	await _frames(3)
 	var main_room := HouseRooms.main_bedroom(_house)
 	_check(not main_room.is_empty() and main_room["main"], "Rooms.main_bedroom() devuelve el principal (%s)" % str(main_room.get("name", "")))
-	_hud._rooms_button.pressed.emit()
+	# Pulido 4A: ya no hay botón «Cuartos» en la columna izquierda; es una herramienta de
+	# Obra y la lista de cuartos está en el panel «Casa».
+	var left_icons: Array = _hud.get_node("%LeftColumn").get_node("ViewIcons").get_children()
+	_check(left_icons.all(func(b): return b is Button and b.tooltip_text.find("Cuartos") == -1), "la columna izquierda ya no tiene el botón de cuartos")
+	var build_bar: BuildBar = _hud.get_node("%BottomBar")
+	build_bar._tool_buttons["build"].button_pressed = true
+	build_bar._mode_buttons["rooms"].button_pressed = true
 	await _frames(3)
-	_check(_popup_buttons().any(func(b): return str(b.text).contains("principal")), "el botón «Cuartos» lista los cuartos del piso")
-	await _shot("p3b_lista_cuartos.png")
-	_hud._close_popup()
+	var builder: HouseBuilder = _main.get_node("House/Builder")
+	_check(builder.tool == HouseBuilder.Tool.ROOMS and builder._room_overlay.visible and builder._room_overlay.get_child_count() > 0,
+		"la herramienta «Cuartos» (Obra) resalta los cuartos (%d celdas)" % builder._room_overlay.get_child_count())
+	await _shot("p4a_herramienta_cuartos.png")
+	build_bar._mode_buttons["modify"].button_pressed = true
+	await _frames(2)
+	_check(not builder._room_overlay.visible, "con otra herramienta el resalte se esconde")
+	build_bar._tool_buttons["build"].button_pressed = false
+	EventBus.home_panel_requested.emit()
+	await _frames(3)
+	var home_panel: Control = _hud.get_node("HomePanel")
+	var home_texts := home_panel.find_children("*", "Label", true, false).map(func(l): return l.text)
+	_check(home_texts.any(func(t): return str(t).contains("principal")), "el panel «Casa» lista los cuartos con su tipo")
+	await _shot("p4a_casa_cuartos.png")
+	home_panel.hide()
 	# La Tienda: «Recomendado» con el tipo; sin «multiuso».
 	var bar: BuildBar = _hud.get_node("%BottomBar")
 	bar._tool_buttons["shop"].button_pressed = true

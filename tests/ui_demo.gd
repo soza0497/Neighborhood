@@ -253,6 +253,9 @@ func _test_builder() -> void:
 	await _frames(2)
 	var room := _builder.room_here()
 	_check(room.get("type", "") == "bedroom", "el cuarto que se mira es: %s" % room.get("name", "ninguno"))
+	# Pulido 4A: la columna izquierda ya no tiene el botón de cuartos (es una herramienta de Obra).
+	var left_buttons: Array = _hud.get_node("%LeftColumn").get_node("ViewIcons").get_children()
+	_check(left_buttons.size() == 2, "la columna izquierda solo tiene techo y paredes (%d íconos)" % left_buttons.size())
 	bar._tool_buttons["shop"].button_pressed = true
 	await _frames(2)
 	var tabs := _hud.get_node("%Categories").get_children().filter(func(b): return not b.is_queued_for_deletion())

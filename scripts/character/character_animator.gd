@@ -8,7 +8,7 @@ extends Node
 ## animaciones de esos mismos nombres, se usan esas en vez de estas.
 
 ## Animaciones que el juego puede pedir.
-const ANIMATIONS := ["idle", "walk", "sleep", "sit", "cook", "eat", "shower", "use", "arrive", "wave", "cough", "hurt"]
+const ANIMATIONS := ["idle", "walk", "sleep", "sit", "cook", "eat", "shower", "use", "arrive", "wave", "cough", "hurt", "fall", "trip", "burn"]
 
 ## La figura que se mueve (el nodo "Body" de CharacterLook).
 var body: Node3D
@@ -19,6 +19,8 @@ var animation_player: AnimationPlayer
 var _clip_names: Dictionary = {}
 var current := "idle"
 var _time := 0.0
+## Pulido 4B: segundos desde el último play() (para fall y trip, que no se repiten en bucle).
+var _time_since_play := 0.0
 
 
 ## Fase 7: busca un AnimationPlayer en el cuerpo armado (si algún .glb lo trae)
@@ -57,6 +59,7 @@ func play(anim: String) -> void:
 	if not anim in ANIMATIONS:
 		anim = "idle"
 	current = anim
+	_time_since_play = 0.0
 	if _has_clip(anim):
 		animation_player.play(_clip_names[anim])
 
@@ -65,6 +68,7 @@ func _process(delta: float) -> void:
 	if body == null or _has_clip(current):
 		return
 	_time += delta
+	_time_since_play += delta
 	# Se parte de la pose neutra y cada animación la modifica un poco.
 	body.position = Vector3.ZERO
 	body.rotation = Vector3.ZERO
@@ -91,6 +95,22 @@ func _process(delta: float) -> void:
 			body.rotation.x = -PI / 2.0
 			body.position = Vector3(0, 0.12, 0.3)
 			body.scale.y = 1.0 + sin(_time * 3.0) * 0.015
+		"fall":
+			# Pulido 4B: cae de espaldas y queda tendido (gancho: si el modelo trae «fall», se usa).
+			var fall_t := minf(_time_since_play * 3.0, 1.0)
+			body.rotation.x = -PI / 2.0 * fall_t
+			body.position = Vector3(0, 0.12 * fall_t, 0.3 * fall_t)
+		"trip":
+			# Pulido 4B: tropiezo: se inclina hacia adelante, se sacude y se endereza.
+			var trip_t := minf(_time_since_play, 1.2)
+			body.rotation.x = sin(trip_t / 1.2 * PI) * 0.55
+			body.rotation.z = sin(_time * 22.0) * 0.05 * (1.2 - trip_t)
+			body.position.y = absf(sin(trip_t / 1.2 * PI)) * 0.04
+		"burn":
+			# Pulido 4B: se quema: salta y sacude las manos (gancho: «burn» del modelo).
+			body.position.y = absf(sin(_time * 14.0)) * 0.12
+			body.rotation.z = sin(_time * 28.0) * 0.14
+			body.rotation.x = 0.1
 		"wave":
 			# Se despide: se mece de lado a lado.
 			body.rotation.z = sin(_time * 10.0) * 0.18

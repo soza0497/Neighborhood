@@ -9,6 +9,9 @@ extends Control
 ## Montos de los botones para aportar a la caja.
 const CONTRIBUTIONS := [100, 500, 1000]
 
+## Pulido 4A: la casa (la pone el HUD). Sirve para listar los cuartos.
+var house: HouseData
+
 @onready var _title: Label = %Title
 @onready var _status_label: Label = %StatusLabel
 @onready var _content: VBoxContainer = %Content
@@ -19,6 +22,7 @@ func _ready() -> void:
 	visible = false
 	_close_button.pressed.connect(hide)
 	EventBus.home_panel_requested.connect(open)
+	EventBus.rooms_changed.connect(_on_changed)
 	EventBus.couple_changed.connect(_on_changed)
 	EventBus.fund_changed.connect(func(_shared: bool, _fund: int) -> void: _on_changed())
 	EventBus.server_status_changed.connect(func(_online: bool, _user: String) -> void: _on_changed())
@@ -57,10 +61,44 @@ func _rebuild() -> void:
 	if not GameServer.online and Economy.server_mode:
 		_status_label.text += "\n" + Economy.OFFLINE_TEXT + "."
 
+	_build_settings()
 	if Couple.shared():
 		_build_fund(usable)
 	_build_requests(home, usable)
 	_build_log(home, usable)
+
+
+## Pulido 4A: «Casa» es también el lugar de los ajustes de la casa: cuartos con su
+## tipo (tocar uno abre el menú para cambiarlo) y si se puede visitar.
+func _build_settings() -> void:
+	_content.add_child(PanelRows.title("Cuartos de la casa"))
+	var any := false
+	if house != null:
+		for level in HouseGrid.level_range():
+			var n := 0
+			for room in HouseRooms.detect(house, level):
+				any = true
+				n += 1
+				var text := "%s · Cuarto %d: %s%s" % [HouseGrid.level_name(level), n, room["name"],
+					" ★ principal" if room.get("main", false) else ""]
+				var first: Vector2i = HouseGrid.key_to_cell(room["cells"].keys()[0])
+				_content.add_child(PanelRows.row([
+					PanelRows.label(text, 16),
+					PanelRows.button("Cambiar tipo", _on_room_change.bind(level, first), false, 150),
+				]))
+	if not any:
+		_content.add_child(PanelRows.label("Todavía no hay cuartos cerrados. Un cuarto es un piso rodeado de paredes.", 15, Color(0.8, 0.9, 1)))
+	_content.add_child(PanelRows.check("Mi casa se puede visitar", NeighborhoodMap.is_my_house_visitable(), _on_visitable_toggled))
+
+
+func _on_room_change(level: int, cell: Vector2i) -> void:
+	hide()
+	EventBus.room_menu_requested.emit(level, cell)
+
+
+func _on_visitable_toggled(on: bool) -> void:
+	NeighborhoodMap.set_my_house_visitable(on)
+	EventBus.toast.emit("Tu casa %s." % ("se puede visitar" if on else "es privada"))
 
 
 func _build_fund(usable: bool) -> void:

@@ -60,6 +60,9 @@ func _builder_idle() -> bool:
 
 
 func _on_tap(screen_pos: Vector2) -> void:
+	# Pulido 4B: con el panel del modo desarrollador abierto, los toques en el mundo son para él.
+	if DevPanel.picking:
+		return
 	var cam := get_viewport().get_camera_3d()
 	var origin := to_local(cam.project_ray_origin(screen_pos))
 	var direction := global_transform.basis.inverse() * cam.project_ray_normal(screen_pos)

@@ -17,6 +17,19 @@ const CLOUD_COLLECTION := "cloud"
 const OWNER_ONLY := 1
 
 
+## Pulido 4B: opciones que son SOLO de este teléfono y nunca viajan al servidor (el modo
+## desarrollador). Si un día se agrega otra, va acá.
+const LOCAL_ONLY_SETTINGS := ["dev_mode"]
+
+
+## Las opciones sin las que son solo locales (lo único que se sube al servidor).
+static func public_settings(settings: Dictionary) -> Dictionary:
+	var result := settings.duplicate(true)
+	for key in LOCAL_ONLY_SETTINGS:
+		result.erase(key)
+	return result
+
+
 ## Lo que se manda a game_import (casa, personaje y opciones como texto JSON).
 static func import_payload(state: Dictionary) -> Dictionary:
 	var economy: Dictionary = state.get("economy", {})
@@ -26,7 +39,7 @@ static func import_payload(state: Dictionary) -> Dictionary:
 		"discovered": as_array(economy.get("discovered", [])),
 		"job_id": str((economy.get("job", {}) as Dictionary).get("job_id", "")),
 		"character": _to_text(state.get("character", {})),
-		"settings": _to_text(state.get("settings", {})),
+		"settings": _to_text(public_settings(state.get("settings", {}))),
 	}
 
 
@@ -48,7 +61,7 @@ static func merge(local: Dictionary, server: Dictionary, user_id: String, userna
 			or int(cloud_character.get("saved_unix", 0)) > int(local_character.get("saved_unix", 0))):
 		result["character"] = cloud_character
 
-	var cloud_settings := _from_text(server.get("settings", ""))
+	var cloud_settings := public_settings(_from_text(server.get("settings", "")))
 	if not cloud_settings.is_empty() and (result.get("settings", {}) as Dictionary).is_empty():
 		result["settings"] = cloud_settings
 
@@ -63,7 +76,7 @@ static func cloud_objects(state: Dictionary) -> Array:
 	var character: Dictionary = state.get("character", {})
 	if not character.is_empty():
 		objects.append(_object("character", character, int(character.get("saved_unix", 0))))
-	var settings: Dictionary = state.get("settings", {})
+	var settings := public_settings(state.get("settings", {}))
 	if not settings.is_empty():
 		# Las opciones no usan la hora (gana el teléfono), así el valor no
 		# cambia si no cambian y no se vuelven a subir.

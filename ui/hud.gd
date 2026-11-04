@@ -88,9 +88,12 @@ var _mode := "build"
 var _builder: Node
 var _house_data: HouseData
 var _boxes_button: Button
+## Pulido 4B: modo desarrollador (ícono arriba y panel). Solo se ven con el interruptor de Info prendido.
+var _dev_button: Button
+var _dev_panel: DevPanel
+var _character: Character
 ## Pulido 3B: barra vertical del ángulo de la cámara (debajo del menú).
 var _pitch_slider: PitchSlider
-var _rooms_button: Button
 ## Márgenes normales de la interfaz (izquierda, arriba, derecha, abajo).
 const BASE_MARGINS := Vector4(16, 34, 16, 22)
 ## Cuántos grados por segundo cambia el ángulo con la perilla al tope.
@@ -126,11 +129,11 @@ func _ready() -> void:
 	_setup_icons()
 	_build_floor_selector()
 	_build_pitch_slider()
-	_build_rooms_button()
 	_build_left_holder()
 	get_viewport().size_changed.connect(_fit_to_screen)
 	_fit_to_screen.call_deferred()
 	_build_boxes_button()
+	_build_dev_mode()
 	EventBus.parcel_obstacle_tapped.connect(_show_obstacle)
 	EventBus.boxes_changed.connect(_on_boxes_changed)
 
@@ -214,8 +217,31 @@ func setup_house(house: HouseData, character: Node3D, builder: Node) -> void:
 	_house_data = house
 	_floor_map.setup(house, character)
 	$RestaurantPanel.house = house
+	$HomePanel.house = house
+	_character = character as Character
 	_compass_button.target = character
 	_bottom_bar.setup(_action_row, builder, character)
+
+
+## Pulido 4B: ícono del modo desarrollador junto al menú y su panel. La escena principal
+## llama a `setup_dev` con la navegación y la vista de la casa.
+func _build_dev_mode() -> void:
+	_dev_button = Icons.make_button("dev", "Modo desarrollador")
+	_dev_button.visible = DevMode.is_enabled()
+	var top_buttons: Control = %MenuButton.get_parent()
+	top_buttons.add_child(_dev_button)
+	top_buttons.move_child(_dev_button, %MenuButton.get_index())
+	_dev_panel = (load("res://ui/dev_panel.tscn") as PackedScene).instantiate()
+	_dev_panel.name = "DevPanel"
+	add_child(_dev_panel)
+	_dev_button.pressed.connect(_dev_panel.toggle)
+	EventBus.dev_mode_changed.connect(func(on: bool) -> void:
+		_dev_button.visible = on)
+
+
+## La escena principal pasa lo que necesita el panel para elegir cosas en el mundo.
+func setup_dev(character: Character, nav: HouseNav, view: HouseView) -> void:
+	_dev_panel.setup(character, nav, view)
 
 
 ## Pulido 2: el selector de pisos es el frente de la casa. Al lado van las
@@ -298,6 +324,17 @@ func _build_info_extras() -> void:
 	rows.add_child(use_models)
 	rows.move_child(use_models, anchor)
 	anchor += 1
+	# Pulido 4B: modo desarrollador (apagado por defecto; solo de este teléfono, nunca se sube).
+	var dev_check := CheckButton.new()
+	dev_check.text = "Modo desarrollador (probar situaciones)"
+	dev_check.add_theme_font_size_override("font_size", 20)
+	dev_check.focus_mode = Control.FOCUS_NONE
+	dev_check.button_pressed = DevMode.is_enabled()
+	dev_check.toggled.connect(func(on: bool) -> void:
+		DevMode.set_enabled(on, _character))
+	rows.add_child(dev_check)
+	rows.move_child(dev_check, anchor)
+	anchor += 1
 	for entry in [["master", "Volumen"], ["sfx", "Efectos"], ["music", "Música"]]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
@@ -369,30 +406,6 @@ func _show_obstacle(id: String) -> void:
 			var result: Dictionary = await Parcel.call_service(id, _house_data)
 			EventBus.toast.emit("Viene el servicio: %s." % service_text if result["ok"] else str(result["error"])))
 		call.disabled = not access["ok"] or Economy.money < cost
-	_popup_button(rows, "Cerrar", _close_popup)
-
-
-## Botón «Cuartos» (Pulido 3B): lista los cuartos del piso y deja elegir su tipo.
-func _build_rooms_button() -> void:
-	_rooms_button = Icons.make_button("room_tag", "Cuartos: elegí qué es cada uno")
-	_rooms_button.pressed.connect(_show_rooms_list)
-	%LeftColumn.get_node("ViewIcons").add_child(_rooms_button)
-
-
-## Lista de los cuartos del piso que se está viendo (tocar uno abre su menú).
-func _show_rooms_list() -> void:
-	var level: int = _builder.level if _builder != null else 0
-	var rooms := HouseRooms.detect(_house_data, level)
-	var rows := _open_popup("Cuartos de %s" % HouseGrid.level_name(level).to_lower())
-	if rooms.is_empty():
-		rows.add_child(_small_label("Todavía no hay cuartos cerrados en este piso.\nUn cuarto es un piso rodeado de paredes.", Color(0.85, 0.9, 1)))
-	var n := 0
-	for room in rooms:
-		n += 1
-		var first: Vector2i = HouseGrid.key_to_cell(room["cells"].keys()[0])
-		var text := "Cuarto %d: %s%s" % [n, room["name"], " (principal)" if room.get("main", false) else ""]
-		_popup_button(rows, text, func() -> void:
-			_show_room_menu(level, first))
 	_popup_button(rows, "Cerrar", _close_popup)
 
 

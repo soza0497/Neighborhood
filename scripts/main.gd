@@ -140,11 +140,18 @@ func _ready() -> void:
 	add_child(_neighborhood)
 	_neighborhood.setup(self)
 
+	# Pulido 4B: marcadores de las celdas peligrosas (solo con el modo desarrollador prendido).
+	var hazard_view := HazardView.new()
+	hazard_view.name = "HazardView"
+	_house_view.add_child(hazard_view)
+	hazard_view.setup(nav)
+
 	set_mode("live")
 	_update_partner_character()
 	_emit_view()
 	if has_node("HUD"):
 		$HUD.setup_house(house, _character, _builder)
+		$HUD.setup_dev(_character, nav, _house_view)
 	_set_level(_character.level)  # Se empieza viendo el piso del personaje.
 	history.refresh()
 

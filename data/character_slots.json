@@ -40,6 +40,9 @@
 		"arrive": ["arrive", "happy_jump"],
 		"wave": ["wave", "saludar"],
 		"cough": ["cough", "toser"],
-		"hurt": ["hurt", "lying_down"]
+		"hurt": ["hurt", "lying_down"],
+		"fall": ["fall", "falling", "caer"],
+		"trip": ["trip", "stumble", "tropezar"],
+		"burn": ["burn", "burned", "quemarse"]
 	}
 }
