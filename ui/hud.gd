@@ -216,6 +216,7 @@ func setup_house(house: HouseData, character: Node3D, builder: Node) -> void:
 	_house_data = house
 	_floor_map.setup(house, character)
 	$RestaurantPanel.house = house
+	$HomePanel.house = house  # Pulido 5E: guardar plantillas de la casa.
 	_compass_button.target = character
 	_bottom_bar.setup(_action_row, builder, character)
 

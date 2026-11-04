@@ -778,6 +778,29 @@ func confirm_plan() -> bool:
 	return applied
 
 
+# --- Plantillas de casa (Pulido 5E) ---
+
+## Coloca una plantilla que ya se revisó (HouseTemplate.check). Entra por el MISMO
+## camino que cualquier obra: va al plan (se paga en la factura) y, en la casa
+## compartida, a la propuesta; sin plan, se cobra en el momento. Con servidor lo
+## cobra y lo revisa el servidor (build_apply), y es UN solo paso de deshacer.
+## Devuelve true si quedó en el plan o se construyó.
+func place_template(writes: Array) -> bool:
+	if writes.is_empty():
+		return false
+	if _draft_mode == "review":
+		EventBus.build_hint.emit("Estás viendo la propuesta de tu pareja: cerrala para construir.")
+		return false
+	if not Economy.can_request():
+		return false
+	HouseTemplate.claim_ids(house, writes)
+	if not needs_approval(writes) and plan_enabled and not _plan_bypass and (_draft_mode == "" or _draft_mode == "plan"):
+		_add_to_draft(writes, "plan")
+		EventBus.build_hint.emit("La plantilla quedó prevista. Tocá «Factura» para construirla (o deshacé para sacarla).")
+		return true
+	return await _apply(writes)
+
+
 # --- Entrada (toques y mouse) ---
 
 func _unhandled_input(event: InputEvent) -> void:
