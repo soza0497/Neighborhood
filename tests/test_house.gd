@@ -20,6 +20,8 @@ func _ready() -> void:
 	_test_pulido_rules()
 	_test_pulido_faces_and_rooms()
 	_test_pulido_migration()
+	_test_pulido2_roofs_and_floors()
+	_test_pulido2_erase_everything()
 	print("\nPRUEBAS: %d pasaron, %d fallaron" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -351,3 +353,89 @@ func _test_pulido_migration() -> void:
 	var save := SaveMigrations.migrate({"format_version": 2, "state": {"house": old.duplicate(true), "economy": {}}}, 3)
 	_check(save["state"]["house"]["format"] == 3
 		and save["state"]["house"]["levels"][0]["walls"]["h:1,1"].get("color_b") == "#ffd966", "guardado v2 → v3")
+
+
+## Pulido 2A: el techo "trabado". Causa real: un techo en un piso más alto
+## que cualquier cosa construida no tenía a dónde ir (el selector de pisos
+## solo ofrecía "lo construido + 1"), y uno roto (sin medidas o fuera de la
+## parcela) no se podía tocar. Ahora: todo piso con algo cuenta, y lo roto se
+## saca al cargar.
+func _test_pulido2_roofs_and_floors() -> void:
+	var house := _box_house()
+	_check(house.floors_total() == 1, "casa de un piso: 1 piso (sin piso de regalo)")
+	# Techo "viejo" en el piso 3, sin nada abajo.
+	house.apply([HouseData.write(3, "roofs", "o50", {"item": "roof_basic", "rect": [0, 0, 6, 6]})])
+	_check(house.floors_total() == 4, "un techo en el piso 3 hace que el piso 3 exista (se puede llegar y borrar)")
+	var erase := HouseRules.removal_closure(house, HouseData.write(3, "roofs", "o50", null))
+	_check(erase.size() == 1, "un techo se borra solo, sin arrastrar nada")
+	house.apply(erase)
+	_check(house.floors_total() == 1, "al borrarlo, el piso fantasma desaparece")
+
+	# Techos rotos se sacan al cargar.
+	var broken := _box_house().to_dict()
+	broken["levels"][0]["roofs"] = {
+		"o1": {"item": "roof_basic", "rect": [30, 30, 9, 9]},
+		"o2": {"item": "roof_basic", "rect": [1, 1, 0, 3]},
+		"o3": {"item": "roof_basic"},
+		"o4": {"item": "roof_basic", "rect": [0, 0, 6, 6]},
+	}
+	var loaded := HouseData.new()
+	loaded.from_dict(broken)
+	_check(loaded.repaired_count == 3 and loaded.get_layer(0, "roofs").keys() == ["o4"], "al cargar se sacan los 3 techos rotos y queda el sano")
+
+	# Agregar piso.
+	var base := _box_house()
+	_check(HouseRules.add_floor_problem(base) == "", "casa sin techo: se puede agregar un piso")
+	base.apply([HouseData.write(0, "roofs", "o60", {"item": "roof_basic", "rect": [0, 0, 6, 6]})])
+	_check(HouseRules.add_floor_problem(base) == "Para agregar un piso tiene que haber una parte sin techo.",
+		"todo el piso techado: avisa que falta una parte sin techo")
+	base.apply([HouseData.write(0, "roofs", "o60", {"item": "roof_basic", "rect": [0, 0, 3, 6]})])
+	_check(HouseRules.add_floor_problem(base) == "", "con una parte sin techo, sí se puede")
+	base.floor_count = 2
+	_check(base.floors_total() == 2, "piso agregado (vacío) cuenta como piso")
+	_check(HouseRules.add_floor_problem(base).begins_with("Primero construí"), "no se agrega otro piso sobre uno vacío")
+	_check(HouseData.new().floors_total() == 1 and HouseRules.add_floor_problem(HouseData.new()).begins_with("Primero construí"),
+		"casa vacía: no se puede agregar piso")
+	var five := _box_house()
+	five.floor_count = HouseGrid.MAX_LEVELS
+	_check(HouseRules.add_floor_problem(five).begins_with("Ya tenés"), "tope de pisos")
+	var saved := HouseData.new()
+	saved.from_dict(base.to_dict())
+	_check(saved.floors_total() == 2, "los pisos agregados se guardan")
+
+	# El dibujo de la fachada: solo paredes de afuera, con puerta y ventana.
+	var facade := _box_house()
+	facade.apply([HouseData.write(0, "walls", "h:2,6", {"item": "wall_basic", "opening": "door_basic"}),
+		HouseData.write(0, "walls", "h:4,6", {"item": "wall_basic", "opening": "window_basic"}),
+		HouseData.write(0, "walls", "h:3,2", {"item": "wall_basic"})])  # Una de adentro.
+	var walls := FloorMap.exterior_walls(facade, 0)
+	_check(walls.size() == 24, "la fachada dibuja las 24 paredes de afuera, no la de adentro (%d)" % walls.size())
+	var door: Dictionary = walls.filter(func(w): return w["key"] == "h:2,6")[0]
+	_check(door["opening"] == "door" and door["normal"] == Vector2i(0, 1), "la puerta del frente mira hacia la calle (+Z)")
+	_check(FloorMap.view_direction(0).y > 0.9 and FloorMap.view_direction(4).y < -0.9, "8 ángulos: el 4 mira desde atrás")
+
+
+## Pulido 2A: el basurero borra cualquier pieza (con lo que se apoya en ella).
+func _test_pulido2_erase_everything() -> void:
+	var house := _box_house()
+	house.apply([HouseData.write(1, "floors", "2,2", {"item": "floor_basic"}),
+		HouseData.write(0, "objects", "o1", {"item": "chair_basic", "cell": [3, 3], "rot": 0}),
+		HouseData.write(0, "roofs", "o2", {"item": "roof_basic", "rect": [0, 0, 6, 6]})])
+	for entry in [[0, "roofs", "o2"], [0, "objects", "o1"], [0, "walls", "h:1,0"], [0, "floors", "1,1"], [1, "floors", "2,2"]]:
+		var closure := HouseRules.removal_closure(house, HouseData.write(entry[0], entry[1], entry[2], null))
+		var copy := house.duplicate_data()
+		copy.apply(closure)
+		_check(not copy.has_piece(entry[0], entry[1], entry[2]), "se puede borrar %s de %s" % [entry[2], entry[1]])
+		_check(HouseRules.problems(copy).filter(func(p): return p["layer"] != "").size() <= HouseRules.problems(house).filter(func(p): return p["layer"] != "").size(),
+			"borrar %s no deja piezas en el aire" % entry[2])
+	# Los cimientos arrastran piso, paredes y mueble de esa celda.
+	var closure := HouseRules.removal_closure(house, HouseData.write(0, "foundation", "3,3", null))
+	var ids := closure.map(func(w): return "%s:%s" % [w["layer"], w["key"]])
+	_check("floors:3,3" in ids and "objects:o1" in ids, "borrar cimientos se lleva el piso y el mueble de arriba")
+	# Una pared que sostiene un piso de arriba se lleva ese piso.
+	var upper := _box_house()
+	upper.apply([HouseData.write(0, "floors", "2,0", null)])
+	upper.apply([HouseData.write(1, "floors", "2,0", {"item": "floor_basic"})])
+	var wall_closure := HouseRules.removal_closure(upper, HouseData.write(0, "walls", "h:2,0", null))
+	_check(wall_closure.size() >= 2 and wall_closure.any(func(w): return w["layer"] == "floors" and w["level"] == 1),
+		"borrar la pared que sostiene el piso de arriba borra también ese piso")

@@ -45,3 +45,13 @@ static func make_button(icon_name: String, tooltip: String, size := BUTTON_SIZE,
 	button.toggle_mode = toggle
 	setup(button, icon_name, tooltip, size)
 	return button
+
+
+## Textura de un ícono girada `turns` cuartos de vuelta (sentido del reloj).
+static func rotated(icon_name: String, turns: int) -> Texture2D:
+	var image := texture(icon_name).get_image()
+	if image.is_compressed():
+		image.decompress()
+	for i in posmod(turns, 4):
+		image.rotate_90(CLOCKWISE)
+	return ImageTexture.create_from_image(image)

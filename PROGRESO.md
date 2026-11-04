@@ -1,5 +1,65 @@
 # Progreso
 
+## Fase actual: Pulido 2 (versión 0.9.0) — en la nube, rama `pulido-2`
+
+Orden (lo pidió el dueño): **2A errores y claridad → 2B estilo y vida → 2C parcela,
+servicios y entregas.** Cada sub-fase termina con pruebas en verde, commit y push
+a `pulido-2`. Estado de cada una abajo.
+
+### Pulido 2A — errores y claridad: HECHO (2026-11-04)
+- **Techo "trabado"**: causa real encontrada y con prueba que la reproduce (un
+  techo en un piso más alto que lo construido no tenía a dónde ir; o venía
+  roto). Ahora todo piso con algo existe y lo roto se saca al cargar (teléfono
+  y servidor). DECISIONES → "Pulido 2A".
+- **Basurero**: borra TODO (techos, paredes, cimientos, pisos, muebles); lo que
+  se apoyaba solo en la pieza cae con ella, todo en rojo y con confirmación.
+- **Menú hamburguesa**: se cierra tocándolo otra vez o tocando afuera.
+- **Sin piso fantasma**: **Agregar piso** es una opción aparte en Obra; avisa
+  "Para agregar un piso tiene que haber una parte sin techo".
+- **Selector de pisos de frente** (holograma azul, un color por piso, puerta y
+  ventanas, punto parpadeante, flechas ↑↓ y girar de a 45°, recuerda el ángulo).
+- **Obra** con tres modos con ícono: Construir (llave y martillo), Modificar
+  (cruz de flechas) y Borrar (basurero).
+- **Construcción planificada**: lo que agregás queda *previsto* y brilla cada
+  3 s; **Factura** (qué se agrega, total, espera) → Confirmar → cobra y corre
+  el tiempo (en pareja, antes aprueba ella). Descartar lo deshace.
+- **Márgenes** arriba (34) y abajo (22) y **ángulo vertical de la cámara**
+  (5 posiciones, botón a la izquierda).
+- Pruebas: ver "Verificación" más abajo. Demo nueva `polish2a_demo` con capturas
+  (`docs/capturas/p2a_*.png`).
+
+### Pulido 2A — verificación (nube, Godot 4.7.2, Nakama 3.41.0 + PostgreSQL 16 de prueba)
+Sin red: casa **127** (99 + 28 nuevas), personaje 34, economía 66, servidor 78,
+pareja 46, negocio 46 = **397**. Lua **275** (273 + 2). Demos: `server_demo` 24,
+`login_demo` 17, `couple_demo` 78, `couple_live_demo` 12, `ui_demo` 40,
+`restaurant_demo` 32, **`polish2a_demo` 46** (nueva, capturas `docs/capturas/p2a_*.png`).
+**Ojo:** `economy_server_demo` da 35/39 en esta máquina de la nube **también en
+`main` sin ningún cambio** (se probó con un `git worktree` de `6e96076`): falla
+el turno de trabajo con el reloj a x5 (depende de la velocidad de la máquina).
+No es de esta tanda; en la PC del dueño pasaba 39/39. Verificar allá.
+
+### Pulido 2A — cómo probarlo en el teléfono (para el dueño)
+1. [Claude] Unir `pulido-2` a `main`, reiniciar Nakama (`docker compose restart
+   nakama` en `server/`) y exportar el APK 0.9.0 (cuando lo pidas).
+2. [Dueño] Instalar el APK.
+3. Tocá **☰**: se abre. Tocá **☰** otra vez (o afuera): se cierra.
+4. Los íconos de arriba y abajo tienen más aire; el botón del **ángulo** (a la
+   izquierda, junto a techo y paredes) recorre 5 inclinaciones, de frente a
+   desde arriba.
+5. Construir → **Obra**: ahora hay **Construir / Modificar / Borrar** (íconos) y,
+   al lado, **Agregar piso**.
+6. Con la casa toda techada, **Agregar piso** dice "Para agregar un piso tiene
+   que haber una parte sin techo". Sacá un pedazo de techo y probá de nuevo.
+7. A la izquierda: el **frente de la casa** en azul. Tocá un piso para ir;
+   usá ↑ ↓ y ← → (girar). Cerrá el juego y abrilo: recuerda el ángulo.
+8. **Borrar**: probá techos (también viejos), paredes, pisos y cimientos. Si
+   algo sostiene otra cosa, la pregunta lo dice y se pone todo en rojo.
+9. **Construir** una pared o piso: queda *previsto* (brilla). Aparece arriba
+   "Obra prevista" → **Factura**. Probá Seguir planeando, Descartar y
+   Confirmar y construir (cobra y empieza la espera).
+10. Si algún techo viejo seguía "trabado": al abrir esta versión debería
+    poder borrarse; si no, avisame cuál era (piso y dónde).
+
 ## Fase actual: 6 — Primer negocio: restaurante (verificada en la PC; falta probarla en el teléfono)
 
 **Fase 6 verificada en la PC (2026-11-04).** Rama `fase-6` unida a `main`.

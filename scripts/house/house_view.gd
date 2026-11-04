@@ -187,6 +187,44 @@ func set_problems(problems: Array) -> void:
 			_refresh_by_id(id)
 
 
+## Pulido 2: piezas "previstas" (el plan de obra sin confirmar). Se ven tal
+## cual, un poco transparentes, y brillan un instante cada PLAN_GLOW_PERIOD s.
+const PLAN_GLOW_PERIOD := 3.0
+const PLAN_GLOW_SECONDS := 0.8
+var _planned: Dictionary = {}
+var _planned_materials: Array = []
+var _glow_clock := 0.0
+
+
+## `ids`: "nivel|capa|clave" → true. Se vuelven a dibujar solo las que cambian.
+func set_planned(ids: Dictionary) -> void:
+	var old := _planned
+	_planned = ids
+	if old.is_empty() and ids.is_empty():
+		return
+	for id in old:
+		if not ids.has(id):
+			_refresh_by_id(id)
+	for id in ids:
+		if not old.has(id):
+			_refresh_by_id(id)
+	if ids.is_empty():
+		_planned_materials.clear()
+
+
+func _process(delta: float) -> void:
+	if _planned_materials.is_empty():
+		return
+	_glow_clock = fmod(_glow_clock + delta, PLAN_GLOW_PERIOD)
+	# Un destello que sube y baja suave al principio de cada período.
+	var glow := 0.0
+	if _glow_clock < PLAN_GLOW_SECONDS:
+		glow = sin(_glow_clock / PLAN_GLOW_SECONDS * PI)
+	for mat in _planned_materials:
+		if is_instance_valid(mat):
+			mat.emission_energy_multiplier = glow * 1.6
+
+
 func _refresh_by_id(id: String) -> void:
 	var parts := id.split("|")
 	_refresh_piece(int(parts[0]), parts[1], parts[2])
@@ -264,6 +302,8 @@ func _refresh_piece(level: int, layer: String, key: String) -> void:
 	var node := make_piece(level, layer, key, value)
 	_pending.erase(id)
 	if node != null:
+		if _planned.has(id):
+			_planned_materials.append_array(HousePieces.make_planned(node))
 		if _problem_ids.has(id):
 			HousePieces.make_problem(node)
 		elif HouseData.is_under_construction(value):

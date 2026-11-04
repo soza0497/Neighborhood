@@ -17,6 +17,10 @@ extends Node3D
 @export var default_distance := 22.0
 ## Inclinación de la vista, en grados (más negativo = más desde arriba).
 @export var pitch_degrees := -50.0
+## Pulido 2: inclinaciones que se pueden elegir (grados hacia abajo), de
+## "de frente" (casi horizontal) a "desde arriba" del todo. Editables acá.
+const PITCH_PRESETS := [-8.0, -25.0, -50.0, -70.0, -89.0]
+const PITCH_NAMES := ["De frente", "Baja", "Normal", "Alta", "Desde arriba"]
 ## Giro inicial, en grados.
 @export var default_yaw_degrees := 45.0
 ## Hasta dónde se puede mover el punto que se mira, desde el centro del mapa.
@@ -46,6 +50,23 @@ func _ready() -> void:
 	_pitch.rotation_degrees.x = pitch_degrees
 	reset_view()
 	EventBus.camera_reset_requested.connect(reset_view)
+
+
+## Cambia la inclinación vertical (grados; negativo = mira hacia abajo).
+func set_pitch(degrees: float) -> void:
+	pitch_degrees = clampf(degrees, -89.0, -5.0)
+	_pitch.rotation_degrees.x = pitch_degrees
+
+
+## Pasa a la siguiente inclinación de PITCH_PRESETS. Devuelve su nombre.
+func cycle_pitch() -> String:
+	var best := 0
+	for i in PITCH_PRESETS.size():
+		if absf(PITCH_PRESETS[i] - pitch_degrees) < absf(PITCH_PRESETS[best] - pitch_degrees):
+			best = i
+	var next := (best + 1) % PITCH_PRESETS.size()
+	set_pitch(PITCH_PRESETS[next])
+	return PITCH_NAMES[next]
 
 
 ## Vuelve la cámara a su posición inicial.
@@ -79,6 +100,7 @@ func get_state() -> Dictionary:
 		"z": position.z,
 		"yaw": rotation_degrees.y,
 		"distance": _distance,
+		"pitch": pitch_degrees,
 	}
 
 
@@ -87,6 +109,8 @@ func set_state(state: Dictionary) -> void:
 	position = Vector3(state.get("x", 0.0), 0.0, state.get("z", 0.0))
 	rotation_degrees.y = state.get("yaw", default_yaw_degrees)
 	_set_distance(state.get("distance", default_distance))
+	# Una partida vieja (sin ángulo) vuelve al ángulo normal.
+	set_pitch(float(state.get("pitch", PITCH_PRESETS[2])))
 	_clamp_position()
 
 

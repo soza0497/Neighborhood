@@ -43,6 +43,11 @@ var rev := 0
 ## Si al cargar se movió la casa (parcela de otro tamaño), cuánto se movió.
 ## Quien guarda posiciones aparte (el personaje) debe moverse igual.
 var migrated_offset := Vector2i.ZERO
+## Pulido 2: cuántos pisos tiene la casa porque el jugador los agregó con
+## "Agregar piso" (mínimo 1). Nunca hay un piso "de regalo": ver floors_total.
+var floor_count := 1
+## Cuántas piezas rotas se sacaron al cargar (ver repair).
+var repaired_count := 0
 
 
 func _init() -> void:
@@ -58,6 +63,24 @@ func clear() -> void:
 			level[layer] = {}
 		levels.append(level)
 	next_id = 1
+	floor_count = 1
+
+
+## Piso más alto con algo construido (cualquier capa: techos y muebles
+## también cuentan). 0 si la casa está vacía.
+func used_top_level() -> int:
+	for level in range(levels.size() - 1, -1, -1):
+		for layer in LAYERS:
+			if not levels[level][layer].is_empty():
+				return level
+	return 0
+
+
+## Cuántos pisos hay: los que agregó el jugador o los que tienen algo
+## construido (lo que sea más alto). Así ninguna pieza queda en un piso al
+## que no se puede ir, y no aparece un piso vacío "de regalo".
+func floors_total() -> int:
+	return clampi(maxi(floor_count, used_top_level() + 1), 1, HouseGrid.MAX_LEVELS)
 
 
 ## Devuelve la pieza (un diccionario) o null si no hay nada.
@@ -180,11 +203,14 @@ func to_dict() -> Dictionary:
 		"next_id": next_id,
 		"lot_size": [HouseGrid.LOT_SIZE.x, HouseGrid.LOT_SIZE.y],
 		"format": FORMAT,
+		"floor_count": floor_count,
 	}
 
 
 ## Llena la casa a partir de un diccionario leído del archivo.
 func from_dict(data: Dictionary) -> void:
+	# El servidor no guarda "floor_count": si falta, se conserva lo que había.
+	var kept_floors := floor_count
 	clear()
 	var saved_levels: Array = data.get("levels", [])
 	for i in mini(saved_levels.size(), levels.size()):
@@ -200,7 +226,36 @@ func from_dict(data: Dictionary) -> void:
 	migrated_offset = (HouseGrid.LOT_SIZE - Vector2i(int(saved_lot[0]), int(saved_lot[1]))) / 2
 	if migrated_offset != Vector2i.ZERO:
 		_shift(migrated_offset)
+	floor_count = clampi(int(data.get("floor_count", kept_floors)), 1, HouseGrid.MAX_LEVELS)
+	repaired_count = repair()
 	reloaded.emit()
+
+
+## Saca las piezas rotas que una edición vieja pudo dejar (por ejemplo un
+## techo sin medidas o fuera de la parcela, que no se podía tocar ni borrar).
+## Devuelve cuántas sacó. El servidor hace lo mismo al leer la casa
+## (neighborhood_rules.lua, normalize_house).
+func repair() -> int:
+	var removed := 0
+	for level in levels:
+		for key in level["roofs"].keys():
+			if not _roof_is_sane(level["roofs"][key]):
+				level["roofs"].erase(key)
+				removed += 1
+	return removed
+
+
+static func _roof_is_sane(value: Variant) -> bool:
+	if typeof(value) != TYPE_DICTIONARY or not value.has("rect") or typeof(value["rect"]) != TYPE_ARRAY:
+		return false
+	var r: Array = value["rect"]
+	if r.size() != 4:
+		return false
+	for n in r:
+		if typeof(n) != TYPE_FLOAT and typeof(n) != TYPE_INT:
+			return false
+	var rect := Rect2i(int(r[0]), int(r[1]), int(r[2]), int(r[3]))
+	return rect.size.x >= 1 and rect.size.y >= 1 and Rect2i(Vector2i.ZERO, HouseGrid.LOT_SIZE).encloses(rect)
 
 
 ## Casas de antes del Pulido 1 (sin "format"): la misma cuenta que

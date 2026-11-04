@@ -127,6 +127,57 @@ static func roof_blocker(house: HouseData, level: int, rect: Rect2i) -> String:
 	return ""
 
 
+## Lo que se borra de verdad al quitar una pieza (Pulido 2: el basurero borra
+## TODO): la pieza y, en cascada, lo que se apoyaba solo en ella y quedaría en
+## el aire (paredes de un cimiento, el piso de arriba de una pared...).
+## Devuelve la lista de escrituras de quitar, la pieza pedida primero.
+static func removal_closure(house: HouseData, first: Dictionary) -> Array:
+	var result: Array = [first]
+	var sim := house.duplicate_data()
+	sim.apply([first])
+	var changed := true
+	while changed:
+		changed = false
+		var fallen: Array = []
+		for level in HouseGrid.MAX_LEVELS:
+			for layer in HouseData.LAYERS:
+				for key in sim.get_layer(level, layer):
+					var value: Dictionary = sim.get_piece(level, layer, key)
+					# Solo cae lo que estaba bien apoyado antes y ahora no.
+					if is_supported(house, level, layer, key, house.get_piece(level, layer, key)) \
+							and not is_supported(sim, level, layer, key, value):
+						fallen.append(HouseData.write(level, layer, key, null))
+		if not fallen.is_empty():
+			changed = true
+			result.append_array(fallen)
+			sim.apply(fallen)
+	return result
+
+
+## ¿Se puede agregar otro piso? "" si sí; si no, el motivo en palabras.
+## Hace falta algo construido en el piso de arriba y que no todo esté tapado
+## por un techo (nada se apoya en un techo).
+static func add_floor_problem(house: HouseData) -> String:
+	var total := house.floors_total()
+	if total >= HouseGrid.MAX_LEVELS:
+		return "Ya tenés todos los pisos que entran (la planta baja y %d más)." % (HouseGrid.MAX_LEVELS - 1)
+	var top := total - 1
+	var cells: Array = []
+	for key in house.get_layer(top, "floors"):
+		cells.append(HouseGrid.key_to_cell(key))
+	if top == 0:
+		for key in house.get_layer(0, "foundation"):
+			var cell := HouseGrid.key_to_cell(key)
+			if not cell in cells:
+				cells.append(cell)
+	if cells.is_empty():
+		return "Primero construí el piso de abajo (cimientos o piso)."
+	for cell in cells:
+		if not is_under_roof(house, top, [cell]):
+			return ""
+	return "Para agregar un piso tiene que haber una parte sin techo."
+
+
 ## Piezas que se apoyan en esta (si se quita, podrían quedar en el aire).
 ## Devuelve una lista de [nivel, capa, clave].
 static func dependents(house: HouseData, level: int, layer: String, key: String) -> Array:

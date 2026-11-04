@@ -140,6 +140,7 @@ func _wait_until(condition: Callable, seconds := 15.0) -> bool:
 func _build_with_server(main: Node) -> void:
 	print("1b) Construir con el servidor")
 	var builder: HouseBuilder = main.get_node("House/Builder")
+	builder.plan_enabled = false
 	var camera := get_viewport().get_camera_3d()
 	var to_screen := func(cell: Vector2) -> Vector2:
 		return camera.unproject_position(main.get_node("House").to_global(Vector3(cell.x, 0.3, cell.y)))

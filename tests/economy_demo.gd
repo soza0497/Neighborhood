@@ -21,6 +21,7 @@ func _ready() -> void:
 	_main = preload("res://scenes/main.tscn").instantiate()
 	add_child(_main)
 	_builder = _main.get_node("House/Builder")
+	_builder.plan_enabled = false  # Estas pruebas construyen de una (sin plan ni factura).
 	_house = _main.get_node("House")
 	_camera = get_viewport().get_camera_3d()
 	_run.call_deferred()

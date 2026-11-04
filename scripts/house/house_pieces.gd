@@ -91,6 +91,26 @@ static func make_ghost(node: Node, valid: bool) -> void:
 	_apply_override(node, transparent_material(color))
 
 
+## Pulido 2: deja una pieza "prevista": igual que la real pero un poco
+## transparente y con brillo que la vista prende y apaga. Devuelve los
+## materiales (copias propias de esta pieza) para animarles el brillo.
+static func make_planned(node: Node) -> Array:
+	var result: Array = []
+	if node is MeshInstance3D and node.material_override is StandardMaterial3D:
+		var mat: StandardMaterial3D = node.material_override.duplicate()
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color.a = 0.68
+		mat.emission_enabled = true
+		mat.emission = Color(0.75, 0.95, 1.0)
+		mat.emission_energy_multiplier = 0.0
+		node.material_override = mat
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		result.append(mat)
+	for child in node.get_children():
+		result.append_array(make_planned(child))
+	return result
+
+
 static func _apply_override(node: Node, mat: Material) -> void:
 	if node is MeshInstance3D:
 		node.material_override = mat

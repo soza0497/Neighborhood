@@ -61,7 +61,7 @@ const JOINT_PICK_PIXELS := 40.0
 const DIRECTIONS := {"N": Vector2i(0, -1), "S": Vector2i(0, 1), "E": Vector2i(1, 0), "O": Vector2i(-1, 0)}
 
 const HINTS := {
-	Tool.NONE: "Elegí Tienda, Obra o Borrar.",
+	Tool.NONE: "Elegí Tienda u Obra (Construir, Modificar o Borrar).",
 	Tool.FOUNDATION: "Arrastrá para marcar el terreno de la casa (cimientos).",
 	Tool.FLOOR: "Arrastrá sobre los cimientos para poner piso.",
 	Tool.WALL: "Arrastrá de esquina a esquina para levantar una pared.",
@@ -108,6 +108,12 @@ var selected_key := ""
 var erase_multi := false
 ## Color de pintura elegido (id del catálogo).
 var paint_item_id := ""
+## Pulido 2: construcción planificada. Lo que se agrega queda como "previsto"
+## (brilla cada pocos segundos) hasta que se toca Factura → Confirmar. Se
+## puede apagar (las pruebas viejas construyen de una).
+var plan_enabled := true
+## true mientras se confirma el plan (así no vuelve a quedar como plan).
+var _plan_bypass := false
 
 # --- Estado del gesto ---
 var _pressing := false
@@ -268,7 +274,8 @@ func set_erase_mode(value: bool) -> void:
 
 ## Cambia de nivel (piso). Devuelve el nivel que quedó.
 func set_level(new_level: int) -> int:
-	level = clampi(new_level, 0, HouseGrid.MAX_LEVELS - 1)
+	# Solo se puede ir a pisos que existen (los construidos o los agregados).
+	level = clampi(new_level, 0, house.floors_total() - 1)
 	_erase_items.clear()
 	_cancel_gesture()
 	select_object("")
@@ -277,6 +284,22 @@ func set_level(new_level: int) -> int:
 	_grid.position.y = HouseGrid.level_y(level) + 0.03
 	_joints_dirty = true
 	return level
+
+
+## "Agregar piso" (Obra): suma un piso arriba y lo muestra. Si no se puede
+## (no hay una parte sin techo, no hay piso de abajo...), avisa por qué.
+## Devuelve true si lo agregó.
+func add_floor() -> bool:
+	var problem := HouseRules.add_floor_problem(house)
+	if problem != "":
+		EventBus.build_hint.emit(problem)
+		EventBus.toast.emit(problem)
+		return false
+	house.floor_count = house.floors_total() + 1
+	EventBus.floors_changed.emit(house.floors_total())
+	EventBus.build_level_set_requested.emit(house.floors_total() - 1)
+	EventBus.build_hint.emit("Piso agregado. Construí ahí arriba.")
+	return true
 
 
 ## Botón de girar: gira lo elegido, o el mueble que se va a colocar. Los
@@ -561,7 +584,7 @@ func draft_writes() -> Array:
 
 ## Deshacer dentro de la propuesta: saca el último cambio.
 func draft_undo() -> void:
-	if _draft_mode != "own" or _draft_steps.is_empty():
+	if not (_draft_mode == "own" or _draft_mode == "plan") or _draft_steps.is_empty():
 		return
 	var step: Dictionary = _draft_steps.pop_back()
 	house.apply(step["inverse"])
@@ -624,8 +647,22 @@ func review_request() -> Dictionary:
 	return _review_request
 
 
-func _add_to_draft(writes: Array) -> void:
-	_draft_mode = "own"
+## ¿Estas escrituras van al plan? Solo lo que AGREGA piezas con una
+## herramienta de poner (no mover, pintar ni borrar).
+func _should_plan(writes: Array) -> bool:
+	if not plan_enabled or _plan_bypass or not (_draft_mode == "" or _draft_mode == "plan"):
+		return false
+	if not tool in [Tool.FOUNDATION, Tool.FLOOR, Tool.WALL, Tool.ROOM, Tool.ROOF, Tool.OPENING, Tool.OBJECT]:
+		return false
+	for w in writes:
+		if w["value"] == null:
+			return false
+	return true
+
+
+func _add_to_draft(writes: Array, mode := "own") -> void:
+	# Un plan que se vuelve propuesta (cambio estructural en pareja) queda "own".
+	_draft_mode = "own" if (mode == "own" or _draft_mode == "own") else "plan"
 	var inverse := house.apply(writes)
 	_draft_steps.append({"writes": writes, "inverse": inverse})
 	_announce_draft()
@@ -635,11 +672,67 @@ func _end_draft() -> void:
 	_draft_steps.clear()
 	_draft_mode = ""
 	_review_request = {}
+	view.set_planned({})
 	EventBus.proposal_changed.emit("", {})
 
 
 func _announce_draft() -> void:
+	_mark_planned()
 	EventBus.proposal_changed.emit(_draft_mode, draft_summary())
+
+
+## Le dice a la vista qué piezas están previstas (para que brillen).
+func _mark_planned() -> void:
+	var ids := {}
+	if _draft_mode == "plan":
+		for w in draft_writes():
+			ids["%d|%s|%s" % [w["level"], w["layer"], w["key"]]] = true
+	view.set_planned(ids)
+
+
+# --- Plan y factura (Pulido 2) ---
+
+## La factura del plan: {lines: [{name, qty, cost}], total, seconds}.
+## `total` es lo que se paga (negativo = te devuelven). `seconds` es la
+## espera hasta que termina la obra más larga.
+func plan_invoice() -> Dictionary:
+	var writes := draft_writes()
+	var original := house_without_draft()
+	var quote := Economy.quote(original, writes)
+	var grouped := {}
+	var longest := 0
+	for w in quote["writes"]:
+		var value: Variant = w["value"]
+		if value == null:
+			continue
+		var old: Variant = original.get_piece(w["level"], w["layer"], w["key"])
+		var piece_name: String = Catalog.get_item(value.get("item", "")).get("name", _piece_name(w["layer"], value))
+		var line: Dictionary = grouped.get(piece_name, {"name": piece_name, "qty": 0, "cost": 0})
+		line["qty"] += 1
+		line["cost"] += -Economy.change_for(w["layer"], old, value)
+		grouped[piece_name] = line
+		longest = maxi(longest, int(value.get("ready_at", 0)) - Economy.now())
+	return {"lines": grouped.values(), "total": -int(quote["money"]), "seconds": longest}
+
+
+## Factura aceptada: se saca lo previsto y se construye de verdad (cobra,
+## pone el temporizador y, en pareja, pide la aprobación). Si no se puede
+## (falta plata, sin conexión), el plan vuelve a quedar previsto.
+func confirm_plan() -> bool:
+	if _draft_mode != "plan" or not Economy.can_request():
+		return false
+	var writes := draft_writes()
+	var money_change: int = Economy.quote(house_without_draft(), writes)["money"]
+	if not Economy.can_change(money_change):
+		EventBus.build_hint.emit("Te faltan $%d para esta factura. Sacá algo del plan." % (-money_change - Economy.money))
+		return false
+	discard_draft()
+	_plan_bypass = true
+	var applied: bool = await _apply(writes)
+	_plan_bypass = false
+	if not applied:
+		_add_to_draft(writes, "plan")
+	return applied
 
 
 # --- Entrada (toques y mouse) ---
@@ -1063,16 +1156,23 @@ func _erase_entry(target: Dictionary, opening_only := false) -> Dictionary:
 		var writes: Array = [HouseData.write(lvl, layer, key, wall)]
 		writes.append_array(_unjoin_previous(lvl, key))
 		return {"id": "%d|%s|%s|opening" % [lvl, layer, key], "label": opening_name.to_lower(), "writes": writes}
-	var w := HouseData.write(lvl, layer, key, null)
-	var reason := HouseRules.removal_reason(house, w)
-	if reason != "":
-		EventBus.build_hint.emit(reason)
-		EventBus.toast.emit(reason)
-		return {}
-	var writes: Array = [w]
-	if layer == "walls":
-		writes.append_array(_unjoin_previous(lvl, key))
-	return {"id": "%d|%s|%s" % [lvl, layer, key], "label": _piece_name(layer, value), "writes": writes}
+	# Pulido 2: el basurero borra TODO. Lo que se apoyaba solo en la pieza
+	# (paredes de un cimiento, el piso de arriba de una pared...) se borra
+	# con ella: la pregunta lo dice y todo se ve en rojo.
+	var closure := HouseRules.removal_closure(house, HouseData.write(lvl, layer, key, null))
+	var removing := {}
+	for c in closure:
+		removing["%d|%s|%s" % [c["level"], c["layer"], c["key"]]] = true
+	var writes: Array = closure.duplicate()
+	for c in closure:
+		if c["layer"] == "walls":
+			var previous := HouseGrid.previous_in_line(c["key"])
+			if not removing.has("%d|walls|%s" % [c["level"], previous]):
+				writes.append_array(_unjoin_previous(c["level"], c["key"]))
+	var label := _piece_name(layer, value)
+	if closure.size() > 1:
+		label += " y %d pieza%s que se apoya%s" % [closure.size() - 1, "" if closure.size() == 2 else "s", "" if closure.size() == 2 else "n"]
+	return {"id": "%d|%s|%s" % [lvl, layer, key], "label": label, "writes": writes}
 
 
 ## Si la pared de antes estaba unida a esta, se separa (la juntura se va).
@@ -1201,6 +1301,11 @@ func _apply(writes: Array) -> bool:
 	if needs_approval(writes):
 		_add_to_draft(writes)
 		EventBus.build_hint.emit("Agregado a la propuesta. Cuando termines, mandala a %s." % Couple.partner_name())
+		return true
+	# Pulido 2: lo que se agrega queda previsto en un plan; se paga al confirmar la factura.
+	if _should_plan(writes):
+		_add_to_draft(writes, "plan")
+		EventBus.build_hint.emit("Quedó previsto. Seguí agregando y, al terminar, tocá «Factura».")
 		return true
 	var quote := Economy.quote(house, writes)
 	var money_change: int = quote["money"]
@@ -1775,9 +1880,13 @@ func _pick_object(screen_pos: Vector2) -> String:
 ## mueble, pared, piso y cimientos. {level, layer, key, side?} o {}.
 func _pick_any(screen_pos: Vector2) -> Dictionary:
 	var ray := _ray(screen_pos)
-	var roof := view.pick_roof(ray[0], ray[1], level)
-	if roof != "":
-		return {"level": level, "layer": "roofs", "key": roof}
+	# Techos del piso actual y del de abajo (los de abajo se ven desde acá).
+	for roof_level in [level, level - 1]:
+		if roof_level < 0:
+			continue
+		var roof := view.pick_roof(ray[0], ray[1], roof_level)
+		if roof != "":
+			return {"level": roof_level, "layer": "roofs", "key": roof}
 	var object_key := _pick_object(screen_pos)
 	if object_key != "":
 		return {"level": level, "layer": "objects", "key": object_key}

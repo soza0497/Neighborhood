@@ -90,6 +90,10 @@ func _ready() -> void:
 	EventBus.build_context_action_requested.connect(_builder.context_action)
 	EventBus.build_erase_multi_toggled.connect(_builder.set_erase_multi)
 	EventBus.build_copy_outline_requested.connect(_builder.copy_outline)
+	EventBus.build_add_floor_requested.connect(_builder.add_floor)
+	EventBus.plan_confirm_requested.connect(_builder.confirm_plan)
+	EventBus.plan_discard_requested.connect(_builder.discard_draft)
+	EventBus.camera_pitch_requested.connect(_camera_rig.set_pitch)
 	EventBus.proposal_send_requested.connect(_builder.send_draft)
 	EventBus.proposal_discard_requested.connect(_builder.discard_draft)
 	EventBus.proposal_review_requested.connect(_on_proposal_review_requested)
@@ -178,6 +182,9 @@ func set_mode(new_mode: String) -> void:
 	if new_mode == "live" and _builder.has_draft():
 		if _builder.draft_mode() == "own":
 			EventBus.toast.emit("Primero mandá o descartá la propuesta.")
+			return
+		if _builder.draft_mode() == "plan":
+			EventBus.toast.emit("Tenés obras previstas: tocá Factura para construirlas o descartalas.")
 			return
 		_builder.close_review()
 	mode = new_mode

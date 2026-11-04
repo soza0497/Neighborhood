@@ -31,6 +31,7 @@ func _ready() -> void:
 	Economy.debug_unlock_all()
 	_hud = _main.get_node("HUD")
 	_builder = _main.get_node("House/Builder")
+	_builder.plan_enabled = false  # Estas pruebas construyen de una (sin plan ni factura).
 	_run.call_deferred()
 
 
@@ -168,7 +169,7 @@ func _test_builder() -> void:
 	var tips: Array = []
 	for button in _hud.get_node("%ToolButtons").get_children():
 		tips.append(button.tooltip_text)
-	_check(tips == ["Tienda", "Obra", "Borrar"], "herramientas: %s (nunca el trío de otro juego)" % ", ".join(tips))
+	_check(tips == ["Tienda", "Obra"], "herramientas: %s" % ", ".join(tips))
 
 	print("\n8) Pintar una cara de pared (Obra → Modificar → color)")
 	bar._tool_buttons["build"].button_pressed = true
@@ -197,7 +198,8 @@ func _test_builder() -> void:
 	_check(_painted_faces(house) == painted_before + 1, "la flecha pinta la pared de al lado")
 
 	print("\n9) Borrar un techo, con confirmación")
-	bar._tool_buttons["erase"].button_pressed = true
+	bar._tool_buttons["build"].button_pressed = true
+	bar._mode_buttons["erase"].button_pressed = true
 	await _frames(2)
 	var view: HouseView = _main.get_node("House")
 	if not view.show_roofs:
@@ -221,11 +223,15 @@ func _test_builder() -> void:
 	var toasts: Array = []
 	var on_toast := func(text: String) -> void: toasts.append(text)
 	EventBus.toast.connect(on_toast)
-	await _tap(_wall_screen("h:12,12", 1.6))
+	await _tap(_wall_screen("h:12,12", 0.5))
 	await _frames(2)
 	EventBus.toast.disconnect(on_toast)
-	_check(toasts.any(func(t): return t == "Esta pared sostiene el piso de arriba.") and not confirm.visible,
-		"aviso: \"Esta pared sostiene el piso de arriba.\"")
+	# Pulido 2: el basurero borra TODO; la pared que sostiene el piso de arriba
+	# se borra con ese piso, y la pregunta lo dice (en rojo, con confirmación).
+	_check(confirm.visible and _hud.get_node("%HintLabel").text.contains("se apoya"),
+		"pregunta que también se lleva lo de arriba: \"%s\"" % _hud.get_node("%HintLabel").text)
+	EventBus.build_cancel_requested.emit()
+	await _frames(2)
 
 	print("\n11) Borrar varias cosas a la vez (modo selección)")
 	EventBus.build_erase_multi_toggled.emit(true)
@@ -272,6 +278,7 @@ func _test_builder() -> void:
 	await _shot("ui_10_silla_diagonal.png")
 
 	print("\n14) Copiar el contorno de abajo y lo que falta")
+	house.floor_count = 3  # "Agregar piso" (Pulido 2): el piso 2 existe aunque esté vacío.
 	_main._set_level(2)
 	bar._tool_buttons["build"].button_pressed = true
 	bar._mode_buttons["add"].button_pressed = true
@@ -329,7 +336,7 @@ func _wall_screen(edge: String, height: float) -> Vector2:
 ## Punto de la pantalla donde se ve un piso en la maqueta.
 func _map_point(map: FloorMap, level: int) -> Vector2:
 	var cam: Camera3D = map.get_child(0).get_child(0)
-	var screen := cam.unproject_position(Vector3(map._center.x, level * FloorMap.LEVEL_SPACING, map._center.z))
+	var screen := cam.unproject_position(Vector3(map._center.x, FloorMap._level_y(level) + FloorMap.FLOOR_HEIGHT / 2.0, map._center.z))
 	var vp_size := Vector2(map.get_child(0).size)
 	return map.get_global_rect().position + screen * map.size / vp_size
 

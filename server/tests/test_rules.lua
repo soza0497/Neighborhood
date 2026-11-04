@@ -924,5 +924,20 @@ check(rules.normalize_home({ business = { kind = "restaurant" } }, "u1").busines
   "el hogar guarda el negocio")
 check(next(rules.normalize_home(nil, "u1").business) == nil, "hogar nuevo: sin negocio")
 
+-- Pulido 2A: techos rotos de una edición vieja se sacan al leer la casa.
+local broken_house = rules.normalize_house({ levels = { { roofs = {
+  o1 = { item = "roof_basic", rect = { 30, 30, 9, 9 } },
+  o2 = { item = "roof_basic", rect = { 1, 1, 0, 3 } },
+  o3 = { item = "roof_basic" },
+  o4 = { item = "roof_basic", rect = { 0, 0, 6, 6 } },
+} } }, next_id = 5, format = 3 })
+check(broken_house.levels[1].roofs.o4 ~= nil and broken_house.levels[1].roofs.o1 == nil
+  and broken_house.levels[1].roofs.o2 == nil and broken_house.levels[1].roofs.o3 == nil,
+  "casa vieja: se sacan los 3 techos rotos y queda el sano")
+-- Quitar un techo (también el del piso 4) y una cascada de cimientos entran en un solo pedido.
+local roofhouse = rules.normalize_house({ levels = { {}, {}, {}, { roofs = { o9 = { item = "roof_basic", rect = { 2, 2, 3, 3 } } } } } })
+check(hr.check_batch(data, roofhouse, { { level = 3, layer = "roofs", key = "o9", value = nil } }),
+  "se puede quitar un techo suelto del piso 3")
+
 print(string.format("\nPRUEBAS LUA: %d pasaron, %d fallaron", passed, failed))
 os.exit(failed > 0 and 1 or 0)

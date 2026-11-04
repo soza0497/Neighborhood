@@ -797,3 +797,73 @@ demo con capturas).
   para el teléfono); panel `ui/restaurant_panel.gd` (Menú → Restaurante).
 - `tests/restaurant_bot.gd`: jugador automático **solo para pruebas y demos**.
 - **Versión 0.8.0.**
+
+
+## Pulido 2A — errores y claridad (2026-11-04, nube, rama `pulido-2`)
+
+Decisiones menores tomadas por el desarrollador (el dueño no las pidió una por una):
+
+### Techos y pisos
+- **Causa real del techo "trabado"**: el selector de pisos ofrecía solo "lo
+  construido + 1", y un techo (o un mueble) en un piso más alto quedaba en un
+  piso al que no se podía ir; además un techo roto (sin medidas o fuera de la
+  parcela) no se podía tocar. Arreglo: **todo piso que tiene algo (en cualquier
+  capa, incluidos techos) existe** (`HouseData.floors_total`), y **al cargar se
+  sacan los techos rotos** (`HouseData.repair`, y lo mismo en el servidor,
+  `rules.repair_house`). Prueba que lo reproduce: `test_house.gd`
+  `_test_pulido2_roofs_and_floors` y la demo `polish2a_demo` (techo en el piso 3).
+- Los techos del piso de abajo también se pueden tocar desde el piso actual
+  (se ven desde ahí).
+- **No hay piso "de regalo"**: la cantidad de pisos = el más alto con algo, o
+  los que se agregan con **Agregar piso** (Obra). `floor_count` se guarda en
+  la casa del teléfono; el servidor no lo guarda (un piso agregado y vacío se
+  pierde al recargar desde el servidor: no pasa nada, no tiene nada).
+- **Agregar piso** pide algo construido en el piso de arriba y una parte sin
+  techo (el techo no sostiene nada). Mensajes en `HouseRules.add_floor_problem`.
+
+### Basurero
+- **Borra TODO** (techo, pared, cimiento, piso, mueble). Si algo se apoyaba solo
+  en la pieza, se borra **con ella en cascada** (`HouseRules.removal_closure`):
+  la pregunta lo dice ("¿Borrar la pared y 1 pieza que se apoya?"), todo se ve
+  en rojo y hay que confirmar. Ya no hay "no se puede borrar, tiene algo
+  encima". El servidor no cambia: ya revisa el pedido entero (`check_batch`).
+  Mover con las flechas sigue sin permitir lo que deja algo en el aire.
+
+### Interfaz
+- **Obra** tiene tres modos con ícono: **Construir** (llave y martillo),
+  **Modificar** (cruz de flechas) y **Borrar** (basurero). "Borrar" ya no es una
+  herramienta aparte de la barra. **Agregar piso** es un botón al lado de los modos.
+- **Menú hamburguesa**: el mismo botón lo abre y lo cierra, y tocar afuera lo cierra
+  (comparte el velo transparente de la tarjeta del ánimo).
+- **Márgenes**: arriba 34 px, abajo 22 px (en el menú de construir se siente
+  un poco menos); los costados siguen en 16.
+- **Cámara**: 5 inclinaciones (`CameraRig.PITCH_PRESETS`: de frente −8°, baja
+  −25°, normal −50° [la de antes], alta −70°, desde arriba −89°). Un botón
+  (ícono de ángulo, a la izquierda) las recorre; se guarda con la cámara.
+- **Selector de pisos de frente** (`ui/floor_map.gd`, reemplaza la maqueta
+  vista desde arriba): holograma azul semitransparente, solo paredes de afuera
+  con puerta y ventanas dibujadas (las que miran hacia la cámara), techo, un color
+  por piso, punto parpadeante del personaje, flechas arriba/abajo y botones para
+  girar de a 45° (8 ángulos; se recuerda en `settings.floor_front_angle`).
+  Colores, grosor y alto se cambian en las constantes de la clase.
+
+### Construcción planificada y factura
+- En **Construir/Tienda**, lo que se agrega **no se paga ni se pone de una**: queda
+  como **plan** (se ve tal cual, un poco transparente, y **brilla 0,8 s cada
+  3 s**). Aparece arriba "Obra prevista: N pasos · $X" con **Factura** y
+  **Descartar**; Deshacer saca el último paso del plan.
+- **Factura** = lista agrupada por pieza, total y espera. **Confirmar** quita lo
+  previsto y construye de verdad con el flujo de siempre (cobra, temporizador,
+  y en pareja pide la aprobación de la Fase 5). Si falta plata o no hay conexión,
+  el plan queda como estaba.
+- Mover, pintar y borrar siguen siendo inmediatos (no son "agregar"). No se puede
+  pasar a Vivir con un plan abierto (hay que confirmar o descartar).
+- En casa compartida, un cambio estructural convierte el plan en la
+  **propuesta** de siempre (misma barra, misma aprobación).
+- `HouseBuilder.plan_enabled` lo apaga (las demos viejas construyen de una).
+- La **entrega con camión** de lo comprado va en 2C.
+
+### Técnica
+- Íconos nuevos en `assets/icons/` (build_tools, move, add_floor, invoice,
+  camera_angle, truck, sound). Señales nuevas en `EventBus`.
+- Versión **0.9.0** (`project.godot` y `export_presets.cfg`, código 9).

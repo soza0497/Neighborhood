@@ -325,6 +325,37 @@ function rules.upgrade_legacy(data, house)
   house.format = rules.HOUSE_FORMAT
 end
 
+-- Pulido 2: saca los techos rotos que una edición vieja pudo dejar (sin
+-- medidas o fuera de la parcela: no se podían tocar ni borrar). Es la misma
+-- cuenta que HouseData.repair en el teléfono. Devuelve cuántos sacó.
+function rules.repair_house(house)
+  local removed = 0
+  for _, level in ipairs(house.levels) do
+    if type(level.roofs) == "table" then
+      for key, roof in pairs(level.roofs) do
+        local r = type(roof) == "table" and roof.rect or nil
+        local ok = type(r) == "table" and #r == 4
+        if ok then
+          for i = 1, 4 do
+            if num(r[i]) == nil then
+              ok = false
+            end
+          end
+        end
+        if ok then
+          local x, z, w, d = math.floor(r[1]), math.floor(r[2]), math.floor(r[3]), math.floor(r[4])
+          ok = w >= 1 and d >= 1 and x >= 0 and z >= 0 and x + w <= rules.LOT_SIZE and z + d <= rules.LOT_SIZE
+        end
+        if not ok then
+          level.roofs[key] = nil
+          removed = removed + 1
+        end
+      end
+    end
+  end
+  return removed
+end
+
 -- Completa una casa leída (le pueden faltar niveles o capas vacías).
 function rules.normalize_house(house)
   if type(house) ~= "table" then
@@ -341,6 +372,7 @@ function rules.normalize_house(house)
   end
   house.next_id = math.floor(num(house.next_id) or 1)
   house.lot_size = house.lot_size or { rules.LOT_SIZE, rules.LOT_SIZE }
+  rules.repair_house(house)
   if (num(house.format) or 1) < rules.HOUSE_FORMAT then
     rules.upgrade_legacy(rules.data, house)
   end

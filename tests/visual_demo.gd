@@ -25,6 +25,7 @@ func _ready() -> void:
 	add_child(_main)
 	Economy.debug_unlock_all()  # Sin límites de dinero ni de nivel.
 	_builder = _main.get_node("House/Builder")
+	_builder.plan_enabled = false  # Estas pruebas construyen de una (sin plan ni factura).
 	_house = _main.get_node("House")
 	_camera = get_viewport().get_camera_3d()
 	_run.call_deferred()

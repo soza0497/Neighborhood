@@ -89,6 +89,13 @@ signal house_problems_changed(problems: Array)
 ## Propuesta en la casa compartida: mode = "own" (la armo yo), "review" (veo
 ## la de mi pareja) o "" (ninguna); summary = {steps, pieces, cost}.
 signal proposal_changed(mode: String, summary: Dictionary)
+## Pulido 2: se agregó un piso (o cambió cuántos hay) y pedidos del plan.
+signal floors_changed(total: int)
+signal build_add_floor_requested
+signal plan_confirm_requested
+signal plan_discard_requested
+## Pulido 2: el ángulo vertical de la cámara cambió (grados hacia abajo).
+signal camera_pitch_requested(degrees: float)
 ## La interfaz pide mandar o descartar mi propuesta, ver la de mi pareja (id
 ## del pedido) y responderla (aprobar o no) o cerrarla.
 signal proposal_send_requested
