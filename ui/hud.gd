@@ -78,6 +78,7 @@ const NEED_COLORS := {
 @onready var _fund_label: Label = %FundLabel
 @onready var _couple_button: Button = %CoupleButton
 @onready var _home_button: Button = %HomeButton
+@onready var _neighborhood_button: Button = %NeighborhoodButton
 @onready var _notice_box: Control = %NoticeBox
 @onready var _notice_label: Label = %NoticeLabel
 @onready var _notice_undo_button: Button = %NoticeUndoButton
@@ -190,6 +191,7 @@ func _ready() -> void:
 	# Fase 5
 	_couple_button.pressed.connect(_open_from_menu.bind(EventBus.couple_panel_requested))
 	_home_button.pressed.connect(_open_from_menu.bind(EventBus.home_panel_requested))
+	_neighborhood_button.pressed.connect(_open_from_menu.bind(EventBus.neighborhood_panel_requested))
 	EventBus.couple_changed.connect(_update_partner_label)
 	EventBus.partner_presence_changed.connect(func(_online: bool, _intention: Dictionary) -> void: _update_partner_label())
 	EventBus.fund_changed.connect(_on_fund_changed)
@@ -502,7 +504,7 @@ func _setup_icons() -> void:
 	_speed_button.add_theme_font_size_override("font_size", 22)
 	_speed_button.text = "x%d" % GameClock.speed
 	for pair in [[_character_button, "person"], [_diary_button, "diary"], [_jobs_button, "work"], [_restaurant_button, "dish"],
-			[_couple_button, "heart"], [_home_button, "home"], [_info_button, "info"], [_logout_button, "logout"]]:
+			[_couple_button, "heart"], [_home_button, "home"], [_neighborhood_button, "home"], [_info_button, "info"], [_logout_button, "logout"]]:
 		pair[0].icon = Icons.texture(pair[1])
 		pair[0].add_theme_constant_override("icon_max_width", 30)
 

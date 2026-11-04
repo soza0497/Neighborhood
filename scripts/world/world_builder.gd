@@ -15,6 +15,8 @@ const CONFIG_PATH := "res://data/world.json"
 
 var config: Dictionary = {}
 var life: WorldLife
+## Fase 8A: el barrio dibujado alrededor de la parcela (ver NeighborhoodBuilder).
+var neighborhood: NeighborhoodBuilder
 ## Dónde está la calle (para quien necesite saberlo: personajes, servicios).
 var lot_half := Vector2(16, 16)
 var sidewalk_z := 17.25
@@ -39,12 +41,20 @@ func _ready() -> void:
 	# Pulido 3A: vallas y vecinos laterales siguen a la zona disponible.
 	Parcel.changed.connect(_build_zone_decor)
 	_build_zone_decor()
+	# Fase 8A: el barrio (calles, farolas, plazoleta y las casas de los vecinos).
+	neighborhood = NeighborhoodBuilder.new()
+	add_child(neighborhood)
 	# Hojitas que caen despacio sobre la parcela (partículas, solo decoración).
 	if bool(config.get("life", {}).get("particles", true)):
 		Fx.falling_leaves(self, Vector3(0, 8.0, 0), Vector3(lot_half.x, 0.5, lot_half.y), 14)
 	life = WorldLife.new()
 	life.name = "Life"
 	life.config = config.get("life", {})
+	if NeighborhoodMap.enabled():
+		# Fase 8C: con barrio, la vida (autos y gente) la maneja NeighborhoodLife.
+		life.config = life.config.duplicate()
+		life.config["cars"] = 0
+		life.config["pedestrians"] = 0
 	life.road_z = road_z
 	life.sidewalk_z = sidewalk_z
 	life.road_width = road_width
@@ -113,6 +123,13 @@ func _build_forest() -> void:
 		for i in int(forest.get("side_trees", 160)):
 			spots.append(Vector3(side * (lot_half.x + gap + _rng.randf() * depth),
 				0, _rng.randf_range(-lot_half.y - gap, lot_half.y + 1.0)))
+	# Fase 8A: no se planta bosque donde están los lotes de los vecinos.
+	if NeighborhoodMap.enabled():
+		var free_spots: Array[Vector3] = []
+		for spot in spots:
+			if not NeighborhoodMap.is_built_area(spot.x, spot.z, 6.0):
+				free_spots.append(spot)
+		spots = free_spots
 	var trunk_mesh := CylinderMesh.new()
 	trunk_mesh.top_radius = 0.14
 	trunk_mesh.bottom_radius = 0.2
@@ -240,7 +257,10 @@ func _build_zone_decor() -> void:
 		return  # Parcela de pruebas: sin zonas.
 	var bounds := Parcel.zone_bounds()
 	_build_fences(bounds)
-	_build_side_neighbors(bounds)
+	# Fase 8A: con barrio, la casa de detrás de la valla es la del lote vecino
+	# real del mapa (la dibuja NeighborhoodBuilder); si no hay barrio, la de azar.
+	if not NeighborhoodMap.enabled():
+		_build_side_neighbors(bounds)
 	_build_locked_shade(bounds)
 
 

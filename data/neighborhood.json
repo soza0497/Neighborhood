@@ -1,0 +1,454 @@
+{
+	"_ayuda": "El barrio (Fase 8A). Coordenadas del MUNDO en metros: el origen es el centro de la parcela del jugador (96 x 96), la calle principal corre por el eje X y queda al frente (+Z) de la casa del jugador. 'lots' = lotes: rect [x, z, ancho, fondo]; kind = player (tu parcela, ya existente), house (casa de vecino generada) o park (plazoleta); facing = hacia dónde mira el frente de la casa (south = +Z, north = -Z); slot = lugar en la fila (0 = el del medio). Los vecinos NO son jugadores reales: cada casa sale de la 'seed' y el id del lote, siempre igual (nombre de familia, colores y diseño con piezas del catálogo). 'streets' = calles (rect del asfalto y de las aceras); la principal es la misma que dibuja world.json. 'lamps' = una farola cada tantos metros; 'trees' = árboles de acera. 'houses' = rangos del diseño de las casas vecinas (en celdas). 'life' = vida del barrio (Fase 8C). 'goal' = meta del barrio (Fase 8D). Para agregar lotes basta con sumar filas a 'lots' (que no se encimen).",
+	"format_version": 1,
+	"seed": 20261104,
+	"lot_depth": 36,
+	"lot_width": 24,
+	"streets": [
+  {
+   "id": "main",
+   "name": "Calle Principal",
+   "axis": "x",
+   "center": 54.0,
+   "road_width": 7.0,
+   "sidewalk_width": 2.5,
+   "from": -300,
+   "to": 300
+  }
+ ],
+	"lamps": {
+  "spacing": 24.0,
+  "height": 3.4,
+  "light_color": "#fff1b0"
+ },
+	"trees": {
+  "spacing": 12.0,
+  "offset": 6.0,
+  "trunk_height": 1.1,
+  "crown_radius": 1.0
+ },
+	"park": {
+  "benches": 4,
+  "trees": 6,
+  "fountain_radius": 2.0
+ },
+	"houses": {
+  "cols": [
+   5,
+   8
+  ],
+  "rows": [
+   4,
+   6
+  ],
+  "front_gap": 5.0,
+  "near_edge_gap": 3.0,
+  "wall_colors": [
+   "#f2e3c6",
+   "#dfe9f5",
+   "#f4d9d0",
+   "#e6f0d4",
+   "#fff0b8",
+   "#e4d9f2"
+  ],
+  "roof_items": [
+   "roof_basic",
+   "roof_blue"
+  ],
+  "roof_colors": [
+   "#e0675a",
+   "#5b8fd6",
+   "#8a6b5a",
+   "#6a8f6a",
+   "#c9884a",
+   "#9b6fd1"
+  ],
+  "floor_items": [
+   "floor_basic",
+   "floor_tile"
+  ],
+  "furniture": [
+   "bed_basic",
+   "bed_double",
+   "table_basic",
+   "sofa_basic",
+   "fridge_basic",
+   "stove_basic",
+   "tv_basic",
+   "bookshelf_basic",
+   "desk_basic",
+   "plant_pot",
+   "lamp_floor"
+  ],
+  "families": [
+   "Pérez",
+   "Gómez",
+   "Rojas",
+   "Vargas",
+   "Mora",
+   "Soto",
+   "Castro",
+   "Jiménez",
+   "Araya",
+   "Campos",
+   "Solís",
+   "Navarro",
+   "Quesada",
+   "Rivas",
+   "Cordero",
+   "Salas",
+   "Ortiz",
+   "Montero",
+   "Aguilar",
+   "Blanco",
+   "Chaves",
+   "Duarte",
+   "Esquivel",
+   "Fonseca",
+   "Guzmán",
+   "Herrera",
+   "Ibarra",
+   "Lara",
+   "Madrigal",
+   "Núñez"
+  ]
+ },
+	"life": {
+  "max_walkers": 10,
+  "max_cars": 4,
+  "walker_speed": [
+   0.9,
+   1.3
+  ],
+  "car_speed": [
+   3.0,
+   5.0
+  ],
+  "car_gap": 7.0,
+  "greet_distance": 3.0,
+  "enter_house_chance": 0.25,
+  "lod_near": 45.0,
+  "lod_far": 110.0,
+  "sound_dir": "res://data/sounds/"
+ },
+	"goal": {
+  "id": "plants_together",
+  "name": "Plantar 50 plantas entre todos",
+  "target": 50
+ },
+	"lots": [
+  {
+   "id": "player",
+   "kind": "player",
+   "rect": [
+    -48,
+    -48,
+    96,
+    96
+   ],
+   "facing": "south",
+   "row": "north",
+   "slot": 0
+  },
+  {
+   "id": "n_l1",
+   "kind": "house",
+   "rect": [
+    -72,
+    12,
+    24,
+    36
+   ],
+   "facing": "south",
+   "row": "north",
+   "slot": -1
+  },
+  {
+   "id": "n_l2",
+   "kind": "house",
+   "rect": [
+    -96,
+    12,
+    24,
+    36
+   ],
+   "facing": "south",
+   "row": "north",
+   "slot": -2
+  },
+  {
+   "id": "n_l3",
+   "kind": "house",
+   "rect": [
+    -120,
+    12,
+    24,
+    36
+   ],
+   "facing": "south",
+   "row": "north",
+   "slot": -3
+  },
+  {
+   "id": "n_l4",
+   "kind": "house",
+   "rect": [
+    -144,
+    12,
+    24,
+    36
+   ],
+   "facing": "south",
+   "row": "north",
+   "slot": -4
+  },
+  {
+   "id": "n_l5",
+   "kind": "house",
+   "rect": [
+    -168,
+    12,
+    24,
+    36
+   ],
+   "facing": "south",
+   "row": "north",
+   "slot": -5
+  },
+  {
+   "id": "n_r1",
+   "kind": "house",
+   "rect": [
+    48,
+    12,
+    24,
+    36
+   ],
+   "facing": "south",
+   "row": "north",
+   "slot": 1
+  },
+  {
+   "id": "n_r2",
+   "kind": "house",
+   "rect": [
+    72,
+    12,
+    24,
+    36
+   ],
+   "facing": "south",
+   "row": "north",
+   "slot": 2
+  },
+  {
+   "id": "n_r3",
+   "kind": "house",
+   "rect": [
+    96,
+    12,
+    24,
+    36
+   ],
+   "facing": "south",
+   "row": "north",
+   "slot": 3
+  },
+  {
+   "id": "n_r4",
+   "kind": "house",
+   "rect": [
+    120,
+    12,
+    24,
+    36
+   ],
+   "facing": "south",
+   "row": "north",
+   "slot": 4
+  },
+  {
+   "id": "n_r5",
+   "kind": "house",
+   "rect": [
+    144,
+    12,
+    24,
+    36
+   ],
+   "facing": "south",
+   "row": "north",
+   "slot": 5
+  },
+  {
+   "id": "s_01",
+   "kind": "house",
+   "rect": [
+    -168,
+    60,
+    24,
+    36
+   ],
+   "facing": "north",
+   "row": "south",
+   "slot": -7
+  },
+  {
+   "id": "s_02",
+   "kind": "house",
+   "rect": [
+    -144,
+    60,
+    24,
+    36
+   ],
+   "facing": "north",
+   "row": "south",
+   "slot": -6
+  },
+  {
+   "id": "s_03",
+   "kind": "house",
+   "rect": [
+    -120,
+    60,
+    24,
+    36
+   ],
+   "facing": "north",
+   "row": "south",
+   "slot": -5
+  },
+  {
+   "id": "s_04",
+   "kind": "house",
+   "rect": [
+    -96,
+    60,
+    24,
+    36
+   ],
+   "facing": "north",
+   "row": "south",
+   "slot": -4
+  },
+  {
+   "id": "s_05",
+   "kind": "house",
+   "rect": [
+    -72,
+    60,
+    24,
+    36
+   ],
+   "facing": "north",
+   "row": "south",
+   "slot": -3
+  },
+  {
+   "id": "s_06",
+   "kind": "house",
+   "rect": [
+    -48,
+    60,
+    24,
+    36
+   ],
+   "facing": "north",
+   "row": "south",
+   "slot": -2
+  },
+  {
+   "id": "s_09",
+   "kind": "house",
+   "rect": [
+    24,
+    60,
+    24,
+    36
+   ],
+   "facing": "north",
+   "row": "south",
+   "slot": 1
+  },
+  {
+   "id": "s_10",
+   "kind": "house",
+   "rect": [
+    48,
+    60,
+    24,
+    36
+   ],
+   "facing": "north",
+   "row": "south",
+   "slot": 2
+  },
+  {
+   "id": "s_11",
+   "kind": "house",
+   "rect": [
+    72,
+    60,
+    24,
+    36
+   ],
+   "facing": "north",
+   "row": "south",
+   "slot": 3
+  },
+  {
+   "id": "s_12",
+   "kind": "house",
+   "rect": [
+    96,
+    60,
+    24,
+    36
+   ],
+   "facing": "north",
+   "row": "south",
+   "slot": 4
+  },
+  {
+   "id": "s_13",
+   "kind": "house",
+   "rect": [
+    120,
+    60,
+    24,
+    36
+   ],
+   "facing": "north",
+   "row": "south",
+   "slot": 5
+  },
+  {
+   "id": "s_14",
+   "kind": "house",
+   "rect": [
+    144,
+    60,
+    24,
+    36
+   ],
+   "facing": "north",
+   "row": "south",
+   "slot": 6
+  },
+  {
+   "id": "park",
+   "kind": "park",
+   "name": "Plazoleta",
+   "rect": [
+    -24,
+    60,
+    48,
+    36
+   ],
+   "facing": "north",
+   "row": "south",
+   "slot": 0
+  }
+ ]
+}

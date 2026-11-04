@@ -50,6 +50,7 @@ var _parcel_view: ParcelView
 var _services: Services
 var _delivery: Delivery
 var _problems_timer := 0.0
+var _neighborhood: NeighborhoodController
 const PROBLEMS_INTERVAL := 0.4
 
 
@@ -131,6 +132,12 @@ func _ready() -> void:
 	_was_online = GameServer.online
 	house.rev = Economy.house_rev
 	Economy.own_rev = -1
+
+	# Fase 8: el barrio (vista aérea, visitas, vida y metas).
+	_neighborhood = NeighborhoodController.new()
+	_neighborhood.name = "NeighborhoodController"
+	add_child(_neighborhood)
+	_neighborhood.setup(self)
 
 	set_mode("live")
 	_update_partner_character()
