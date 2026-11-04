@@ -38,6 +38,13 @@ abajo). Después: cerrar la Fase 5 en dos teléfonos y seguir con la **Fase 6**
   `couple_live_demo` 12/12, y la demo nueva **`ui_demo` 40/40** (con
   capturas `ui_1` a `ui_11`, copiadas en `docs/capturas/`). No se exportó el APK (lo pidió así la sesión).
 
+### Pulido 1 — verificado por la sesión principal (2026-11-03)
+Unido a `main`. Nakama del dueño reiniciado sin errores (41 piezas). Sin red
+323/323, Lua 214/214, `server_demo` 24/24, `economy_server_demo` 39/39,
+`login_demo` 17/17, `couple_demo` 78/78, `couple_live_demo` 12/12, `ui_demo`
+40/40 (capturas revisadas). Partida del dueño intacta. APK 0.7.0 exportado en
+`build/neighborhood.apk`.
+
 ### Pulido 1 — cómo probarlo en el teléfono (para el dueño)
 1. [Claude, cuando lo pidas] Unir la rama `pulido-1` a `main` y exportar el
    APK 0.7.0 (`build/neighborhood.apk`). **Ojo**: el Nakama de la PC lee los
@@ -84,6 +91,8 @@ abajo). Después: cerrar la Fase 5 en dos teléfonos y seguir con la **Fase 6**
   cerrarla (no antes).
 - `export_presets.cfg` sigue con versión "0.0.1" para Android (lo que se ve
   en la ficha del APK); el juego muestra 0.7.0 (de `project.godot`).
+- Los avisos de abajo del menú de arriba se apilan y a veces quedan dos a la
+  vez ("Elegí Tienda, Obra o Borrar" + otro); visto en las capturas.
 
 ## Fase 5 — Pareja y casa compartida (verificada en la PC; falta probarla en dos teléfonos)
 
