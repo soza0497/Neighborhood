@@ -185,4 +185,7 @@ func build() -> ArrayMesh:
 	arrays[Mesh.ARRAY_COLOR] = _colors
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	# Se anota la cantidad de triángulos en la propia malla (IslandStats la lee de acá:
+	# así cuenta bien aunque no haya ventana y el motor no guarde los datos de la malla).
+	mesh.set_meta("island_triangles", triangle_count())
 	return mesh

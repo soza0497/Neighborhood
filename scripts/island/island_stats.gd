@@ -10,8 +10,6 @@ extends RefCounted
 ##                     (RenderingServer.get_rendering_info); sin ventana da 0.
 ## En el teléfono vale lo segundo; lo primero sirve para comparar y para las pruebas.
 
-static var _triangle_cache: Dictionary = {}
-
 
 ## Lo que dibujó el motor el último cuadro: {draws, triangles, objects}.
 static func rendering() -> Dictionary:
@@ -67,15 +65,13 @@ static func _add_mesh(node: GeometryInstance3D, mesh: Mesh, instances: int, resu
 
 @warning_ignore("integer_division")
 static func _surface_triangles(mesh: Mesh, surface: int) -> int:
-	var key := "%d:%d" % [mesh.get_instance_id(), surface]
-	if _triangle_cache.has(key):
-		return _triangle_cache[key]
 	var count := 0
-	if mesh is ArrayMesh:
+	if mesh.has_meta("island_triangles"):
+		count = int(mesh.get_meta("island_triangles"))
+	elif mesh is ArrayMesh:
 		var array_mesh := mesh as ArrayMesh
 		var indices := array_mesh.surface_get_array_index_len(surface)
 		count = (indices if indices > 0 else array_mesh.surface_get_array_len(surface)) / 3
 	else:
 		count = mesh.get_faces().size() / 3
-	_triangle_cache[key] = count
 	return count
