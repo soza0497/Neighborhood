@@ -1229,3 +1229,41 @@ pivote en el centro de la base, **contorno por shader (no modelado)**; el arte s
   se ajustó (guarda y devuelve el `model` de la silla). El dueño puede quitar esas dos líneas `model` del catálogo en cualquier momento.
 - **Versión 0.11.0** (`project.godot`, `export_presets.cfg` code 11). No se exportó APK.
 - **Sin ejecutar**: esta nube no tenía Godot ni Lua y el brief prohíbe bajar binarios. Todo el GDScript está **sin correr**; ver PROGRESO.
+
+
+## Fase 8A/8B — Barrio (versión 0.11.0)
+
+- **Mapa en datos** (`data/neighborhood.json`): coordenadas del MUNDO (origen = centro de tu parcela de 96×96, la
+  calle principal por el eje X al frente). 24 lotes de 24×36 m: tu parcela, 5+5 a los lados en tu fila, 12 enfrente y
+  una plazoleta (2 lotes). Para agregar lotes basta sumar filas. Solo se dibuja con la parcela de 96 (las pruebas con
+  la parcela chica de 32 no ven el barrio: `NeighborhoodMap.enabled()`).
+- **Vecinos = generados, no jugadores.** Todo sale de la semilla + el id del lote (`String.hash()` → `RandomNumberGenerator`),
+  así es igual en todos los teléfonos sin guardar ni sincronizar nada. Apellido distinto por casa (30 apellidos
+  genéricos hispanos, barajados con la semilla). Más adelante, un lote ocupado por un jugador real reemplaza al generado.
+- **Casa vecina** = `HouseData` armada con piezas del catálogo (cimientos, piso, paredes con puerta y ventanas, techo,
+  4–9 muebles sin encimarse). De lejos se dibuja la **silueta** (cajas + techo; barato) y recién al visitarla se arma
+  el interior con `HouseView` (techo fuera, paredes bajas). Así 23 casas no cuestan 23 casas completas.
+- **La casa detrás de la valla** = la del lote vecino de verdad; las dos casas pegadas a tu parcela se arriman a 3 m
+  de su borde. El bosque de decoración no planta árboles dentro de los lotes. Los autos/gente viejos de `WorldLife`
+  se apagan (cars/pedestrians = 0) cuando hay barrio: los reemplaza la vida del barrio (8C).
+- **Modo «visit»** en `main.gd` (reusa `set_mode`): ni constructor ni personaje controlable, interfaz normal escondida,
+  una barrita con «Volver / Vista aérea / Casas». La cámara es la MISMA (`CameraRig`), solo con límites más amplios
+  (`enter_neighborhood_view`) y un viaje suave (`fly_to`). Esc también vuelve. La niebla se amplía mientras se está en el barrio.
+- **Privacidad:** `house_visitable` (apagado por defecto) en `GameState.settings`; hoy nadie puede entrar a tu casa,
+  queda listo para cuando haya visitantes reales. Las casas generadas siempre se pueden ver (solo ver).
+- **Calles:** una sola calle principal (la de `world.json`) con 2 aceras. Una calle transversal queda para después.
+- Paleta/estilo (`style.json`) NO se tocó (es de la Fase 7): los colores propios del barrio están en `neighborhood.json`.
+
+## Fase 8C — Vida del barrio
+
+- **Local y sin servidor:** los vecinos y los autos solo existen en cada teléfono (`NeighborhoodLife`); no se guardan.
+- **Rutas por puntos, no HouseNav:** el interior de las casas vecinas solo se arma al visitar, así que «entrar a casa»
+  es: caminar hasta la puerta, desaparecer unos segundos (adentro) y volver a salir. HouseNav para vecinos queda pendiente.
+- **Autos sin choques:** dos carriles (uno por sentido); cada auto mira al de adelante en su carril (en círculo) y
+  nunca avanza más de lo que le deja libre (distancia mínima 4,6 m entre centros). Frenan si alguien cruza. Con 4 autos
+  no hace falta más lógica; una calle transversal con giros queda para después.
+- **Rendimiento:** máximo 10 vecinos y 4 autos (`data/neighborhood.json`, `life`); LOD de 3 niveles (cerca: animados;
+  medio: se mueven sin animar el cuerpo; lejos: escondidos y su lógica corre cada 0,5 s); si los FPS están bajo 24 durante
+  3 s, hay un vecino activo menos (mínimo 3). Hay que medirlo en el teléfono (meta: 30 FPS).
+- **Sonido:** solo la señal `EventBus.neighborhood_sound(evento, posición)` (`greet`, `door`, `car_pass`); si existe
+  `data/sounds/<nombre>.ogg|wav|mp3` suena en 3D, si no se prueba `assets/audio/`, y si no hay nada, no pasa nada.

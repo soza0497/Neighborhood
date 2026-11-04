@@ -51,6 +51,10 @@ RPC (el teléfono las llama con GameServer.call_rpc):
   service_start       empezar el minijuego: el servidor da la semilla
   service_finish      {actions}  los toques del jugador; el servidor repite
                       el servicio y paga lo que calcula él (tope diario)
+  -- Fase 8D: meta del barrio por participación (neighborhood_goals.lua) --
+  goal_load           la meta: el servidor cuenta las plantas de TU casa y acredita
+                      (tope diario); los vecinos aportan un valor simulado
+  goal_claim          retirar la recompensa (opcional, una sola vez)
 
 Toda respuesta es {ok, error?, state, ...}. ok = false con un texto para el
 jugador cuando una regla no lo deja (no alcanza el dinero, nivel...).
@@ -64,6 +68,7 @@ Dónde se guarda cada cosa (storage de Nakama, por usuario):
                   pertenecen)                       (solo el servidor)
   game/relation   relación con la pareja            (solo el servidor)
   game/business   servicio en marcha y tope diario del restaurante (solo el servidor)
+  game/goal       aporte del jugador a la meta del barrio  (solo el servidor)
   cloud/character personaje                         (lo escribe el teléfono)
   cloud/settings  opciones del menú                 (lo escribe el teléfono)
   wallet "coins"  dinero (billetera de Nakama, con historial de movimientos)
@@ -90,6 +95,7 @@ local house_rules = require("neighborhood_house")
 local couple = require("neighborhood_couple")
 local business = require("neighborhood_business")
 local parcel = require("neighborhood_parcel")
+local goals = require("neighborhood_goals")
 
 local STARTING_MONEY = 3000
 local GAME = "game"
@@ -140,6 +146,9 @@ nk.logger_info(string.format("Restaurante: servicio de %d s, tope diario $%d",
 -- Pulido 2C: la parcela y sus obstáculos (data/parcel.json, el mismo del juego).
 local parcel_cfg = read_game_data("parcel.json")
 local parcel_cache = {}
+-- Fase 8D: la meta del barrio (data/neighborhood.json, sección "goal").
+local goal_cfg = goals.new_config(read_game_data("neighborhood.json"))
+nk.logger_info(string.format("Meta del barrio: %s (%d), tope diario %d", goal_cfg.name, goal_cfg.target, goal_cfg.daily_cap))
 nk.logger_info(string.format("Parcela: %d x %d celdas, %d tipos de obstáculo", parcel_cfg.lot or 0, parcel_cfg.lot or 0,
   #(parcel_cfg.order or {})))
 
@@ -311,7 +320,7 @@ end
 
 local OWN_KEYS = {
   { GAME, "house" }, { GAME, "home" }, { GAME, "progress" }, { GAME, "work" }, { GAME, "history" },
-  { GAME, "relation" }, { GAME, "business" },
+  { GAME, "relation" }, { GAME, "business" }, { GAME, "goal" },
 }
 local HOME_KEYS = { { GAME, "house" }, { GAME, "home" } }
 
@@ -355,6 +364,7 @@ local function load_state(user_id)
     discovered = {},
     work = rules.normalize_work(value_of(objects, "game/work")),
     business = business.normalize_record(value_of(objects, "game/business")),
+    goal = goals.normalize_record(value_of(objects, "game/goal"), goal_cfg),
     history = { undo = history.undo or {}, redo = history.redo or {} },
     imported_unix = progress and progress.imported_unix or 0,
     check_support = true,
@@ -410,6 +420,9 @@ local function save_state(state, changed, reason)
   end
   if changed.business then
     table.insert(writes, versioned_write(state.objects, state.user_id, GAME, "business", state.business))
+  end
+  if changed.goal then
+    table.insert(writes, versioned_write(state.objects, state.user_id, GAME, "goal", state.goal))
   end
   if changed.history then
     table.insert(writes, versioned_write(state.objects, state.user_id, GAME, "history",
@@ -1342,6 +1355,38 @@ end
 
 -- --- Parcela y servicios (Pulido 2C) ---
 
+-- --- Fase 8D: meta del barrio ---
+
+-- Pone al día el aporte del jugador con lo que hay en SU casa (si vive en la
+-- casa de su pareja, esas plantas no son suyas y no cuentan). Devuelve lo acreditado.
+local function goal_refresh(state, now)
+  local counted = state.goal.credited
+  if not state.shared or state.owner_id == state.user_id then
+    counted = goals.count_items(goal_cfg, state.house, data.items, now)
+  end
+  local gained, dirty = goals.update(goal_cfg, state.goal, now, counted)
+  return gained, dirty
+end
+
+-- Ver la meta: el servidor cuenta lo que hay en la casa y acredita (con tope diario).
+local function goal_load(state, _input, now)
+  local gained, dirty = goal_refresh(state, now)
+  return { changed = { goal = dirty }, result = { goal = goals.summary(goal_cfg, state.goal, now), gained = gained } }
+end
+
+-- Retirar la recompensa (opcional, una vez).
+local function goal_claim(state, _input, now)
+  local _, dirty = goal_refresh(state, now)
+  local reward, why = goals.claim(goal_cfg, state.goal, now)
+  if reward == nil then
+    rules.refuse(why)
+  end
+  state.money = state.money + reward.money
+  state.xp = state.xp + reward.xp
+  return { changed = { goal = true, progress = true },
+    result = { goal = goals.summary(goal_cfg, state.goal, now), reward = reward, money_change = reward.money } }
+end
+
 local function parcel_summary(state, now)
   local p = parcel_state(state)
   local _, seed = parcel_obstacles(state.owner_id)
@@ -1472,6 +1517,8 @@ nk.register_rpc(game_rpc("restaurant_load", restaurant_load), "restaurant_load")
 nk.register_rpc(game_rpc("restaurant_open", restaurant_switch("open")), "restaurant_open")
 nk.register_rpc(game_rpc("restaurant_close", restaurant_switch("close")), "restaurant_close")
 nk.register_rpc(game_rpc("restaurant_collect", restaurant_collect), "restaurant_collect")
+nk.register_rpc(game_rpc("goal_load", goal_load), "goal_load")
+nk.register_rpc(game_rpc("goal_claim", goal_claim), "goal_claim")
 nk.register_rpc(game_rpc("parcel_load", parcel_load), "parcel_load")
 nk.register_rpc(game_rpc("parcel_clear_start", parcel_clear_start), "parcel_clear_start")
 nk.register_rpc(game_rpc("parcel_clear_finish", parcel_clear_finish), "parcel_clear_finish")

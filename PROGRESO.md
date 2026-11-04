@@ -46,6 +46,67 @@ Los `.uid` de los scripts nuevos no están en el repo: Godot los crea al importa
 - Techos con modelo y ropa deformable sobre esqueleto real: no hay (ver `docs/estilo.md`, sección 12).
 - Un `.glb` crudo (sin importar) solo se lee en la PC; en el APK viaja el importado (abrir el proyecto en el editor antes de exportar).
 
+## ▶ Fase 8 — Barrio (versión 0.11.0) — en la nube, rama `fase-8` (sale de `pulido-3`)
+
+**No se mergea a `main`, no se exporta APK.** Otra sesión hace la Fase 7 (arte) en `fase-7`: acá no se tocó el
+catálogo ni el cargador de modelos; todo lo nuevo está en `scripts/neighborhood/`, `data/neighborhood.json`,
+`ui/neighborhood_panel.*`, `tests/*neighborhood*` y (8D) un módulo Lua nuevo.
+
+**ATENCIÓN — nada de esto se pudo correr:** el entorno de la nube de esta sesión NO tiene Godot ni Lua y el
+brief prohíbe descargar binarios. Todo el código de la Fase 8 está escrito **sin ejecutarlo**: puede tener errores
+de sintaxis o de lógica. Lo primero que hay que hacer en la PC es correr las pruebas (lista abajo) y arreglar lo que salga.
+
+- **8A barrio y calles: escrito (sin correr)** — `data/neighborhood.json` (24 lotes: tu parcela, 10 casas en tu fila,
+  12 enfrente y una plazoleta), casas de vecinos deterministas con piezas del catálogo, acera de enfrente, farolas,
+  árboles de acera. La casa detrás de la valla ES la del lote vecino del mapa (reemplaza la «casa al azar» del Pulido 3A).
+- **8B vista aérea y visitas: escrito (sin correr)** — menú ☰ → «Barrio»: vista aérea (misma cámara; pellizcar y
+  girar), lista «¿Qué casa querés visitar?» (solo ver, por dentro), botón «Volver a mi casa», interruptor
+  «Mi casa se puede visitar» (apagado por defecto, se guarda en `GameState.settings["house_visitable"]`).
+- **8C vida: escrito (sin correr)** — `NeighborhoodLife`: hasta 10 vecinos con la figura chibi que salen de su casa,
+  caminan por las aceras, cruzan por los pasos (los autos frenan), se saludan (`wave`), van al parque o a casa de
+  otro vecino y a veces entran; 4 autos de cajas que siguen al de adelante sin tocarse. Ganchos de animación por
+  nombre (`idle`, `walk`, `wave`) y de sonido por evento (`EventBus.neighborhood_sound`; archivos futuros en
+  `data/sounds/`, ver `LEEME.txt`). LOD por distancia y menos vecinos si los FPS bajan de 24.
+- **8D metas del barrio: escrito (sin correr)** — meta «Plantar 50 plantas entre todos» (`data/neighborhood.json`,
+  `goal`): módulo Lua `server/nakama/modules/neighborhood_goals.lua` + RPC `goal_load` / `goal_claim` registrados en
+  `neighborhood.lua` (el servidor cuenta las plantas terminadas de tu casa, tope 10 por día, vecinos simulados
+  deterministas con tope del 60 %, premio chico y opcional $150 + 30 XP, sin fecha límite). Copia local para partidas
+  sin cuenta en `neighborhood_goal.gd` (mismos números). Panel «Barrio»: barra de la meta, tu aporte y «Retirar».
+
+**Resumen (fase 8 completa en código, 0 líneas ejecutadas):** barrio de 24 lotes con calle, aceras, farolas, árboles y
+plazoleta; 23 casas de vecinos generadas (apellido y diseño con piezas del catálogo, siempre iguales); la casa de detrás
+de la valla es la del lote vecino; vista aérea con la misma cámara; visitar casas por dentro en modo solo ver y volver;
+interruptor de privacidad; vecinos animados que caminan, se saludan y entran a sus casas; autos sin choques; LOD y
+límite de personajes; ganchos de sonido; meta del barrio con módulo Lua. Versión 0.11.0 (`project.godot`, `export_presets.cfg`).
+
+**Cómo probarlo en la PC / el teléfono (cuando se pueda correr):**
+1. `godot --headless --path . res://tests/test_neighborhood.tscn` y `lua5.1 server/tests/test_goals.lua` → «0 fallaron».
+   Después las pruebas viejas (`test_house`, `test_parcel`, `test_economy`, `test_server`, `test_couple`, `test_business`,
+   `test_character` y `lua5.1 server/tests/test_rules.lua`): no deberían cambiar (solo se tocaron `main.gd`, `world_builder.gd`,
+   `camera_rig.gd`, `event_bus.gd`, `hud.*` y `neighborhood.lua` con cambios chicos).
+2. `docker compose restart nakama` en `server/` (módulo Lua nuevo + `neighborhood.json`).
+3. Abrí el juego: mirá la valla de un costado (la casa de atrás ahora es del barrio) y la calle con farolas y vecinos.
+4. ☰ → **Barrio**: «Vista aérea del barrio» (arrastrá, pellizcá, girá con dos dedos); elegí una casa de la lista:
+   se ve por dentro (solo ver); **← Volver a mi casa**. Probá también con Esc en la PC.
+5. En Barrio → **Privacidad**: «Mi casa se puede visitar» (apagado). **Meta del barrio**: poné plantas en tu casa (Tienda →
+   Plantas), esperá que terminen la obra, abrí Barrio: sube tu aporte (máx. 10 por día).
+6. Menú Info → Mostrar FPS: con la calle a la vista y los vecinos, medí los **30 FPS** en el teléfono (si baja, hay menos vecinos).
+7. `tests/neighborhood_demo.tscn` con ventana (o `SHOT_DIR=docs/capturas xvfb-run ...`): saca `n8a_*`, `n8b_*`, `n8c_*`, `n8d_*`.
+
+### Pendientes / errores conocidos de la Fase 8
+- **TODO EL CÓDIGO ESTÁ SIN EJECUTAR** (sin Godot ni Lua en la nube): esperá errores de sintaxis o de tipos al primer arranque.
+  No hay capturas en `docs/capturas/` (las genera la demo).
+- Una sola calle; sin calle transversal ni giros de autos. Los vecinos no tocan tu parcela (caminan por aceras y lotes).
+- «Entrar a casa» es desaparecer unos segundos: sin HouseNav dentro de las casas vecinas ni vecinos visibles al visitar.
+- No se puede tocar una casa del mapa para visitarla (solo la lista). Los carteles de familia usan `Label3D` simples.
+- La meta cuenta solo plantas (categoría `plants`); «usar servicios» y adornos quedan para sumar en `goal.categories`.
+  La pareja no suma a la misma meta todavía (cada uno tiene la suya). Un solo barrio, una sola meta, sin ciclo nuevo.
+- Sonidos: solo las señales; no hay archivos en `data/sounds/`.
+- Si se quiere el interruptor de privacidad en el servidor (que la pareja o familia lo vea), falta una RPC.
+
+**Próximo paso:** (1) en la PC: `godot --headless --path . res://tests/test_neighborhood.tscn` y arreglar errores;
+(2) correr `tests/neighborhood_demo.tscn` con ventana y mirar las capturas `docs/capturas/n8*.png`.
+
 ## ▶ Pulido 3 (versión 0.10.0) — en la nube, rama `pulido-3` (sale de `pulido-2`)
 
 Brief completo en `docs/pulido-3.md`. Tres sub-fases, un push a `pulido-3` al terminar cada una.

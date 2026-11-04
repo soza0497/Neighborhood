@@ -202,3 +202,19 @@ signal restaurant_service_finished(result: Dictionary)
 
 ## Fase 7: se prendió o apagó «Usar modelos» (Info). Hay que rearmar casa y personaje.
 signal models_toggled(enabled: bool)
+
+
+# --- Barrio (Fase 8) ---
+## La interfaz pide abrir el panel «Barrio» (menú hamburguesa).
+signal neighborhood_panel_requested
+## Visitar la casa de un lote del barrio (solo ver), ir a la vista aérea o volver.
+signal neighborhood_visit_requested(lot_id: String)
+signal neighborhood_aerial_requested
+signal neighborhood_return_requested
+## El estado de la vista del barrio cambió: "" (en mi casa), "aerial" o "visit".
+signal neighborhood_state_changed(state: String, lot_id: String)
+## Fase 8D: cambió la meta del barrio (leer NeighborhoodGoal.summary).
+signal neighborhood_goal_changed
+## Fase 8C: ganchos de sonido por evento. `event` es un nombre fijo (ver
+## data/neighborhood.json, "sounds"); todavía no hay archivos de audio.
+signal neighborhood_sound(event: String, position: Vector3)

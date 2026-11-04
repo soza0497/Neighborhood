@@ -122,6 +122,68 @@ func set_state(state: Dictionary) -> void:
 	_clamp_position()
 
 
+# --- Vista del barrio (Fase 8B) ---
+# Misma cámara y mismos gestos (arrastrar, pellizcar, dos dedos para girar); solo
+# se amplían los límites para poder ver todo el barrio desde arriba.
+
+## Límites de antes de entrar al barrio ({} = no se está en el barrio).
+var _home_limits: Dictionary = {}
+var _fly_tween: Tween
+## Cuánto se abre la cámara en el barrio.
+const NEIGHBORHOOD_BOUNDS := 190.0
+const NEIGHBORHOOD_MAX_DISTANCE := 170.0
+const NEIGHBORHOOD_FAR := 800.0
+
+
+func in_neighborhood_view() -> bool:
+	return not _home_limits.is_empty()
+
+
+## Abre los límites (zoom, borde y alcance de la vista) para mirar el barrio.
+func enter_neighborhood_view() -> void:
+	if not _home_limits.is_empty():
+		return
+	_home_limits = {"bounds": bounds_half_size, "max": max_distance, "far": _camera.far, "floor": floor_height}
+	bounds_half_size = NEIGHBORHOOD_BOUNDS
+	max_distance = NEIGHBORHOOD_MAX_DISTANCE
+	_camera.far = NEIGHBORHOOD_FAR
+	floor_height = 0.0
+	single_finger_pan = true
+
+
+## Vuelve a los límites de siempre.
+func exit_neighborhood_view() -> void:
+	if _home_limits.is_empty():
+		return
+	if _fly_tween != null and _fly_tween.is_valid():
+		_fly_tween.kill()
+	bounds_half_size = _home_limits["bounds"]
+	max_distance = _home_limits["max"]
+	_camera.far = _home_limits["far"]
+	floor_height = _home_limits["floor"]
+	_home_limits = {}
+	_set_distance(_distance)
+	_clamp_position()
+
+
+## Viaja suavemente a un punto del suelo con cierto zoom.
+func fly_to(point: Vector3, distance: float, duration := 0.8) -> void:
+	if _fly_tween != null and _fly_tween.is_valid():
+		_fly_tween.kill()
+	if duration <= 0.0 or not is_inside_tree():
+		position = Vector3(point.x, floor_height, point.z)
+		_set_distance(distance)
+		_clamp_position()
+		return
+	_fly_tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_fly_tween.tween_property(self, "position", Vector3(point.x, floor_height, point.z), duration)
+	_fly_tween.tween_method(_set_distance, _distance, distance, duration)
+
+
+func current_distance() -> float:
+	return _distance
+
+
 # Se usa _unhandled_input para que los botones de la interfaz reciban
 # los toques primero y la cámara solo los que nadie más usó.
 func _unhandled_input(event: InputEvent) -> void:
