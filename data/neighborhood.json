@@ -200,7 +200,21 @@
 	"goal": {
 	 "id": "plants_together",
 	 "name": "Plantar 50 plantas entre todos",
-	 "target": 50
+	 "target": 50,
+	 "categories": [
+	  "plants"
+	 ],
+	 "daily_cap": 10,
+	 "neighbors": {
+	  "share": 0.6,
+	  "per_day_min": 1,
+	  "per_day_max": 3,
+	  "salt": 5
+	 },
+	 "reward": {
+	  "money": 150,
+	  "xp": 30
+	 }
 	},
 	"lots": [
 	 {
@@ -516,5 +530,6 @@
 	  "row": "south",
 	  "slot": 0
 	 }
-	]
+	],
+	"_ayuda_goal": "Meta del barrio (Fase 8D), medida por PARTICIPACIÓN, no por dinero: avanza con las piezas terminadas de tu casa cuyas categorías del catálogo están en 'categories' (acá: plantas). El servidor cuenta lo que hay en tu casa, te acredita hasta 'daily_cap' por día (lo que sobra cuenta al día siguiente) y nunca resta. Los vecinos simulados aportan un valor que depende solo de los días desde que empezaste (1 a 3 por día, y como mucho 'share' de la meta): así hace falta tu parte. Sin fecha límite ni castigo: si no jugás, la meta espera. Recompensa chica y opcional ('reward'). Lo leen el juego y el servidor (reiniciá Nakama si lo cambiás)."
 }

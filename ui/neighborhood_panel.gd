@@ -14,19 +14,56 @@ func _ready() -> void:
 	visible = false
 	_close_button.pressed.connect(hide)
 	EventBus.neighborhood_panel_requested.connect(open)
+	EventBus.neighborhood_goal_changed.connect(_on_goal_changed)
 
 
 func open() -> void:
 	_rebuild()
 	show()
+	NeighborhoodGoal.refresh()  # Cuenta las plantas de la casa y vuelve a dibujar.
+
+
+func _on_goal_changed() -> void:
+	if visible:
+		_rebuild()
 
 
 func _rebuild() -> void:
 	PanelRows.clear(_content)
 	_title.text = "Barrio"
 	_status_label.text = "Las casas de los vecinos se ven por dentro, solo para mirar."
+	_build_goal()
 	_build_privacy()
 	_build_visits()
+
+
+## Meta del barrio (Fase 8D): barra de todos y aporte propio.
+func _build_goal() -> void:
+	var goal := NeighborhoodGoal.summary()
+	_content.add_child(PanelRows.title("Meta del barrio"))
+	_content.add_child(PanelRows.label(str(goal["name"]), 18))
+	var bar := ProgressBar.new()
+	bar.min_value = 0
+	bar.max_value = maxi(1, int(goal["target"]))
+	bar.value = mini(int(goal["total"]), int(goal["target"]))
+	bar.custom_minimum_size = Vector2(380, 26)
+	bar.show_percentage = false
+	_content.add_child(bar)
+	_content.add_child(PanelRows.label("%d de %d · entre todos" % [goal["total"], goal["target"]], 16, Color(0.8, 0.9, 1)))
+	_content.add_child(PanelRows.label("Tu aporte: %d (hoy %d de %d posibles) · Vecinos: %d" % [
+		goal["mine"], goal["today"], goal["daily_cap"], goal["neighbors"]], 16, Color(0.8, 0.9, 1)))
+	var reward: Dictionary = goal["reward"]
+	if goal["completed"]:
+		if goal["claimed"]:
+			_content.add_child(PanelRows.label("¡Meta cumplida! Ya retiraste tu recompensa.", 17, Color(1, 0.88, 0.6)))
+		elif int(goal["mine"]) > 0:
+			_content.add_child(PanelRows.label("¡Meta cumplida! Tenés una recompensa chica para retirar (opcional).", 17, Color(1, 0.88, 0.6)))
+			_content.add_child(PanelRows.button("Retirar $%d y %d XP" % [reward["money"], reward["xp"]], _on_claim, false, 240))
+		else:
+			_content.add_child(PanelRows.label("¡Meta cumplida por los vecinos! Para la próxima, sumá tu parte.", 17, Color(1, 0.88, 0.6)))
+	else:
+		_content.add_child(PanelRows.label("Sumás con las plantas de tu casa (terminadas). Sin apuro ni castigo: si un día no jugás, la meta espera. Premio chico al cumplirse: $%d y %d XP." % [
+			reward["money"], reward["xp"]], 15, Color(0.8, 0.8, 0.85)))
 
 
 ## Privacidad: la casa propia solo se puede visitar si el jugador lo permite.
@@ -57,3 +94,7 @@ func _on_aerial() -> void:
 func _on_visit(target_id: String) -> void:
 	hide()
 	EventBus.neighborhood_visit_requested.emit(target_id)
+
+
+func _on_claim() -> void:
+	NeighborhoodGoal.claim_reward()

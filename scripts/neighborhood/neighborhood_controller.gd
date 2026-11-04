@@ -56,6 +56,7 @@ func setup(main_node) -> void:
 	panel = load("res://ui/neighborhood_panel.tscn").instantiate()
 	panel_layer.add_child(panel)
 	_build_bar()
+	NeighborhoodGoal.house_provider = func() -> HouseData: return main.house
 	EventBus.neighborhood_visit_requested.connect(visit)
 	EventBus.neighborhood_aerial_requested.connect(enter_aerial)
 	EventBus.neighborhood_return_requested.connect(return_home)

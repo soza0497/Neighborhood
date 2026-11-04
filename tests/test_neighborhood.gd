@@ -15,6 +15,7 @@ func _ready() -> void:
 	_test_side_neighbors()
 	_test_designs()
 	_test_privacy()
+	_test_goal()
 	await _test_scene()
 	await _test_life()
 	print("\nPRUEBAS: %d pasaron, %d fallaron" % [_passed, _failed])
@@ -242,3 +243,51 @@ func _test_life() -> void:
 			shown += 1
 	_check(shown <= 3, "con límite de 3 activos se ven como mucho 3 vecinos (%d)" % shown)
 	holder.queue_free()
+
+
+## La copia de la meta en el teléfono da LOS MISMOS números que server/tests/test_goals.lua.
+func _test_goal() -> void:
+	var cfg := NeighborhoodGoal.config()
+	var day := 86400
+	var t0 := 1800000000 - (1800000000 % day)
+	_check(cfg["id"] == "plants_together" and cfg["target"] == 50 and cfg["daily_cap"] == 10, "meta: 50 plantas, tope diario 10")
+	var expected := [0, 1, 3, 6, 7, 9, 12, 13, 15, 18, 19]
+	var ok := true
+	for days in expected.size():
+		if NeighborhoodGoal.neighbors_progress(cfg, days) != expected[days]:
+			ok = false
+	_check(ok, "vecinos simulados 0, 1, 3, 6, 7, 9... (igual que el servidor)")
+	_check(NeighborhoodGoal.neighbors_progress(cfg, 100000) == 30, "los vecinos nunca pasan de 30")
+	# Contar plantas terminadas en una casa de verdad.
+	var house := HouseData.new()
+	house.apply([
+		HouseData.write(0, "objects", "o1", {"item": "plant_pot", "cell": [1, 1], "rot": 0}),
+		HouseData.write(0, "objects", "o2", {"item": "plant_tall", "cell": [3, 1], "rot": 0, "ready_at": t0 + 1000}),
+		HouseData.write(0, "objects", "o3", {"item": "sofa_basic", "cell": [1, 5], "rot": 0})])
+	_check(NeighborhoodGoal.count_items(cfg, house, t0) == 1, "cuenta las plantas terminadas (no el sofá ni la que está en obra)")
+	_check(NeighborhoodGoal.count_items(cfg, house, t0 + 2000) == 2, "terminada la obra, cuenta")
+	# Aporte con tope diario, igual que en Lua.
+	var record := NeighborhoodGoal.new_record(cfg)
+	var gained: Array = []
+	for step in [[t0, 0], [t0 + 10, 4], [t0 + 20, 4], [t0 + 30, 20], [t0 + 40, 20], [t0 + day + 5, 20], [t0 + day + 6, 5], [t0 + 2 * day, 20], [t0 + 2 * day + 1, 23]]:
+		gained.append(NeighborhoodGoal.update(cfg, record, step[0], step[1]))
+	_check(gained == [0, 4, 0, 6, 0, 10, 0, 0, 3], "aportes con tope diario: %s" % str(gained))
+	var s := NeighborhoodGoal.make_summary(cfg, record, t0 + 2 * day + 2)
+	_check(s["mine"] == 23 and s["neighbors"] == 3 and s["total"] == 26 and not s["completed"], "al día 2: 3 + 23 = 26 de 50")
+	_check(s["today"] == 3, "hoy llevo 3 de 10")
+	# Flujo local completo: cumplir y retirar la recompensa una sola vez.
+	Economy.server_mode = false
+	GameState.settings.erase("neighborhood_goal")
+	var local := NeighborhoodGoal.summary()
+	_check(local["mine"] == 0 and not local["completed"], "partida nueva: sin aporte")
+	var saved := NeighborhoodGoal._local_record(cfg)
+	saved["started_day"] = NeighborhoodGoal.day_of(Economy.now()) - 30
+	saved["mine"] = 20
+	saved["credited"] = 20
+	_check(NeighborhoodGoal.summary()["completed"], "con 20 mías y 30 de los vecinos se cumple")
+	var money_before := Economy.money
+	NeighborhoodGoal.claim_reward()
+	_check(Economy.money == money_before + 150 and NeighborhoodGoal.summary()["claimed"], "retira $150 una vez")
+	NeighborhoodGoal.claim_reward()
+	_check(Economy.money == money_before + 150, "no se cobra dos veces")
+	GameState.settings.erase("neighborhood_goal")

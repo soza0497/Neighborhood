@@ -36,6 +36,7 @@ func _run() -> void:
 	await _test_8a()
 	await _test_8b()
 	await _test_8c()
+	await _test_8d()
 	await _test_privacy_saved()
 	print("\nDEMO BARRIO: %d pasaron, %d fallaron · capturas: %s" % [_passed, _failed, ", ".join(_shots)])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -125,8 +126,28 @@ func _test_8c() -> void:
 	await _frames(5)
 
 
+func _test_8d() -> void:
+	print("\n4) 8D: meta del barrio por participación")
+	GameState.settings.erase("neighborhood_goal")
+	var writes: Array = []
+	for i in 4:
+		writes.append(HouseData.write(0, "objects", "plant%d" % i, {"item": "plant_pot", "cell": [40 + i * 2, 70], "rot": 0}))
+	_main.house.apply(writes)
+	_ctrl.panel.open()
+	await _frames(10)
+	var s := NeighborhoodGoal.summary()
+	_check(s["mine"] == 4 and s["today"] == 4, "las 4 plantas de la casa suman a la meta (aporte %d)" % s["mine"])
+	_check(s["total"] == s["mine"] + s["neighbors"] and not s["completed"], "total = vecinos simulados + yo; todavía no se cumple")
+	await _shot("n8d_meta_panel.png")
+	_ctrl.panel.hide()
+	_main.house.apply([HouseData.write(0, "objects", "plant0", null)])
+	NeighborhoodGoal.refresh()
+	_check(NeighborhoodGoal.summary()["mine"] == 4, "sacar una planta no resta lo acreditado")
+	GameState.settings.erase("neighborhood_goal")
+
+
 func _test_privacy_saved() -> void:
-	print("\n4) Privacidad: «Mi casa se puede visitar»")
+	print("\n5) Privacidad: «Mi casa se puede visitar»")
 	_check(not NeighborhoodMap.is_my_house_visitable(), "empieza apagado")
 	NeighborhoodMap.set_my_house_visitable(true)
 	var saved := GameState.to_dict()
