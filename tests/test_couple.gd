@@ -178,7 +178,10 @@ func _test_partner_character() -> void:
 	partner.follow_intention(true, {"state": "working", "action": "", "key": ""})
 	_check(partner.state == Character.State.WORKING, "si trabaja, se va de la casa")
 	partner.follow_intention(true, {"state": "idle", "action": "", "key": ""})
-	_check(partner.state == Character.State.IDLE and partner.cell == Character.WORK_CELL, "vuelve del trabajo por la acera")
+	# Pulido 2B: vuelve de la calle caminando (con saco y maleta) hasta la casa.
+	_check(partner.state == Character.State.WALKING and partner.cell == Character.WORK_CELL and partner._returning,
+		"vuelve del trabajo por la acera, caminando")
+	partner._arrive_home()
 	partner.follow_intention(true, {"state": "acting", "action": "cook", "key": "o99"})
 	_check(partner.state == Character.State.IDLE, "un mueble que no está en mi casa: pasea")
 	partner.follow_intention(false, {})

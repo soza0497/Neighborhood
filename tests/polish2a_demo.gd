@@ -251,7 +251,7 @@ func _test_plan_and_invoice() -> void:
 	for i in 40:
 		await get_tree().process_frame
 		for mat in view._planned_materials:
-			peak = maxf(peak, mat.emission_energy_multiplier)
+			peak = maxf(peak, float(mat.get_shader_parameter("glow")))
 		if peak > 0.2:
 			break
 	await get_tree().create_timer(0.6).timeout
@@ -259,7 +259,7 @@ func _test_plan_and_invoice() -> void:
 	for i in 120:
 		await get_tree().process_frame
 		for mat in view._planned_materials:
-			if mat.emission_energy_multiplier > 0.5:
+			if float(mat.get_shader_parameter("glow")) > 0.3:
 				glowing = true
 		if glowing:
 			break

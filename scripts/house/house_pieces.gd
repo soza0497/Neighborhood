@@ -25,15 +25,10 @@ static var _quad_mesh: QuadMesh = QuadMesh.new()
 static var _materials: Dictionary = {}
 
 
-## Material de color plano (uno por color, compartido).
-static func material(color: Color) -> StandardMaterial3D:
-	var key := color.to_html()
-	if not _materials.has(key):
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = color
-		mat.roughness = 0.9
-		_materials[key] = mat
-	return _materials[key]
+## Material de una pieza: toon con contorno (uno por color, compartido).
+## Todo el arte pasa por acá y por Style: ver data/style.json.
+static func material(color: Color) -> Material:
+	return Style.toon_material(color)
 
 
 ## Material transparente (vidrios y "fantasmas" de vista previa).
@@ -91,24 +86,36 @@ static func make_ghost(node: Node, valid: bool) -> void:
 	_apply_override(node, transparent_material(color))
 
 
-## Pulido 2: deja una pieza "prevista": igual que la real pero un poco
-## transparente y con brillo que la vista prende y apaga. Devuelve los
-## materiales (copias propias de esta pieza) para animarles el brillo.
+## Pulido 2: deja una pieza "prevista": igual que la real pero con el color
+## aclarado y un brillo que la vista prende y apaga. Devuelve los materiales
+## (copias propias de esta pieza) para animarles el brillo ("glow").
 static func make_planned(node: Node) -> Array:
 	var result: Array = []
-	if node is MeshInstance3D and node.material_override is StandardMaterial3D:
-		var mat: StandardMaterial3D = node.material_override.duplicate()
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		mat.albedo_color.a = 0.68
-		mat.emission_enabled = true
-		mat.emission = Color(0.75, 0.95, 1.0)
-		mat.emission_energy_multiplier = 0.0
-		node.material_override = mat
-		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		result.append(mat)
+	if node is MeshInstance3D:
+		var mesh_instance: MeshInstance3D = node
+		if mesh_instance.material_override is ShaderMaterial:
+			var copy := _planned_copy(mesh_instance.material_override)
+			mesh_instance.material_override = copy
+			result.append(copy)
+		elif mesh_instance.mesh != null:
+			for surface in mesh_instance.mesh.get_surface_count():
+				var source: Material = mesh_instance.mesh.surface_get_material(surface)
+				if source is ShaderMaterial:
+					var copy := _planned_copy(source)
+					mesh_instance.set_surface_override_material(surface, copy)
+					result.append(copy)
+		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	for child in node.get_children():
 		result.append_array(make_planned(child))
 	return result
+
+
+static func _planned_copy(source: ShaderMaterial) -> ShaderMaterial:
+	var copy: ShaderMaterial = source.duplicate()
+	var base: Color = source.get_shader_parameter("albedo")
+	copy.set_shader_parameter("albedo", base.lerp(Color(0.72, 0.95, 1.0), 0.4))
+	copy.set_shader_parameter("glow", 0.0)
+	return copy
 
 
 static func _apply_override(node: Node, mat: Material) -> void:
@@ -128,6 +135,38 @@ static func add_box(parent: Node3D, center: Vector3, size: Vector3, mat: Materia
 	box.material_override = mat
 	parent.add_child(box)
 	return box
+
+
+# --- Modelos del catálogo (.glb) con respaldo a las figuras simples ---
+
+## Instancia el modelo de una pieza del catálogo (campo "model": ruta a un
+## .glb o a una escena) con su escala, desplazamiento y giro. Devuelve null si
+## no hay campo o el archivo no existe: entonces se usan las figuras de siempre.
+## Ver docs/estilo.md (convenciones de importación).
+static func load_model(item: Dictionary) -> Node3D:
+	var path: String = str(item.get("model", ""))
+	if path == "" or not ResourceLoader.exists(path):
+		return null
+	var scene: Variant = load(path)
+	if not scene is PackedScene:
+		return null
+	var instance: Variant = (scene as PackedScene).instantiate()
+	if not instance is Node3D:
+		return null
+	var holder := Node3D.new()
+	holder.name = "Model"
+	holder.add_child(instance)
+	var model_scale: Variant = item.get("model_scale", 1.0)
+	if model_scale is Array:
+		holder.scale = Vector3(model_scale[0], model_scale[1], model_scale[2])
+	else:
+		holder.scale = Vector3.ONE * float(model_scale)
+	var offset: Array = item.get("model_offset", [0, 0, 0])
+	holder.position = Vector3(offset[0], offset[1], offset[2])
+	holder.rotation.y = deg_to_rad(float(item.get("model_rotation", 0)))
+	if not item.get("model_keep_materials", false):
+		Style.toonify(holder)
+	return holder
 
 
 # --- Piezas ---
@@ -278,6 +317,14 @@ static func build_object(value: Dictionary, ground_drop := 0.0) -> Node3D:
 	var node := Node3D.new()
 	node.position = Vector3(anchor.x + size.x / 2.0, -ground_drop, anchor.y + size.y / 2.0)
 	node.rotation.y = -deg_to_rad(HouseGrid.object_angle(rot, value.get("diag", false)))
+
+	# Pulido 2B: si el catálogo trae un modelo (.glb o escena) que existe, se
+	# usa; si no, las figuras simples de abajo (el arte se cambia sin tocar código).
+	if item.get("kind", "") != "stairs":
+		var model := load_model(item)
+		if model != null:
+			node.add_child(model)
+			return node
 
 	var w := float(footprint.x)
 	var d := float(footprint.y)

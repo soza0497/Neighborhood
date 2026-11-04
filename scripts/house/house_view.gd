@@ -222,7 +222,7 @@ func _process(delta: float) -> void:
 		glow = sin(_glow_clock / PLAN_GLOW_SECONDS * PI)
 	for mat in _planned_materials:
 		if is_instance_valid(mat):
-			mat.emission_energy_multiplier = glow * 1.6
+			mat.set_shader_parameter("glow", glow * 0.9)
 
 
 func _refresh_by_id(id: String) -> void:

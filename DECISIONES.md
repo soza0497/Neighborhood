@@ -867,3 +867,99 @@ Decisiones menores tomadas por el desarrollador (el dueño no las pidió una por
 - Íconos nuevos en `assets/icons/` (build_tools, move, add_floor, invoice,
   camera_angle, truck, sound). Señales nuevas en `EventBus`.
 - Versión **0.9.0** (`project.godot` y `export_presets.cfg`, código 9).
+
+
+## Pulido 2B — estilo y vida (2026-11-04, nube, rama `pulido-2`)
+
+### Estilo toon con contorno (`data/style.json`, autoload `Style`)
+- **Contorno por geometría invertida** (`assets/shaders/outline.gdshader`): la
+  malla se dibuja otra vez, con las caras al revés y empujada hacia afuera, como
+  segunda pasada (`next_pass`) de cada material. **El grosor es en píxeles**
+  (2,2 px) y la dirección mezcla la normal con la dirección desde el centro de
+  la malla, así las cajas (casi todo el juego) no se abren en las esquinas. Se
+  aleja 4 cm de la cámara para no «pelear» con la cara de adelante.
+- **Sombras duras en 3 tonos** (`toon.gdshader`, función `light()`): tonos
+  0,5 / 0,78 / 1,0 y cortes en 0,28 y 0,7. **Luz alegre**: sol cálido
+  (`#fff4dc`, energía 0,45 del toon + ambiente 0,3: con el shader toon la luz se
+  suma distinto que en el material normal; los números de `style.json` ya están
+  calibrados).
+- **Todo pasa por `Style.toon_material(color)`** (un material por color, compartido):
+  casa, muebles, personaje (`CharacterLook` ya usaba `HousePieces.material`),
+  vecinos, bosque, autos. **El suelo, la calle y la acera van sin contorno** (planos
+  grandes). Fantasmas, rojo de problemas, obra naranja y vidrios siguen con
+  materiales transparentes simples (son estados temporales).
+- **Parámetros editables**: `data/style.json` (contorno, tonos, luz, niebla,
+  paleta) y los dos `.gdshader`. Una paleta fija con nombre (`Style.color("ground")`).
+- **Apagar el contorno** (calidad): Menú → Info → «Contorno (calidad)»; se guarda en
+  `settings.outline_enabled`. Apagarlo saca la pasada de todos los materiales.
+- **`docs/estilo.md`** empezada: idea, dónde se cambia cada cosa, paleta y
+  convenciones de importación de modelos.
+- El selector de pisos (holograma azul) y la interfaz no usan el shader toon.
+
+### Preparar el cambio de arte (modelos `.glb` intercambiables)
+- Una pieza del catálogo puede tener `model` (ruta a un `.glb` o escena),
+  `model_scale`, `model_offset`, `model_rotation` y `model_keep_materials`.
+  Si el archivo **no existe, se usan las figuras de siempre** (nunca se rompe).
+  El modelo se pasa solo al estilo toon (`Style.toonify`) conservando color y
+  textura. Aplica a todo lo que se coloca como objeto (muebles, plantas,
+  adornos); las **escaleras** siguen con figuras porque su forma define por dónde
+  se camina. Paredes, puertas, ventanas y techos: en la Fase 7.
+- Probado con una escena generada (`polish2b_demo`, sección 3).
+
+### Entorno (`data/world.json`, `scripts/world/world_builder.gd`)
+- Sale de `main.tscn` el terreno, la parcela clara, la calle y los 6 árboles
+  puestos a mano: ahora un nodo **World** los arma por código desde la
+  **medida de la parcela** (cuando 2C la agrande, el mundo la sigue).
+- **Un solo color de suelo** (la parcela ya no se ve más clara; la grilla del
+  constructor marca el lote).
+- **Niebla de profundidad** (70 → 190 m) del **mismo color que el cielo**: los
+  bordes del mapa, el final de la calle y los costados «azules» se disuelven.
+  La cámara ve hasta 320 m.
+- **Bosque** atrás y a los costados con **MultiMesh** (≈580 árboles en 3 llamadas
+  de dibujo; sin sombras) y **7 casas de vecinos** estáticas atrás (cajas con el
+  techo a dos aguas de las casas del juego).
+- Todo es decoración local: no toca el servidor ni la casa.
+
+### Vida
+- **Autos (3) y gente (3)** en la calle y la acera: solo local, sin servidor,
+  figuras simples con el mismo estilo; cantidad y velocidad en `world.json`.
+- **Reposo del personaje**: respira, se balancea y de vez en cuando mira
+  alrededor (animación «idle»); nuevas «arrive» (saltito al llegar) y «wave».
+- **Partículas** (CPUParticles3D, andan en cualquier teléfono): hojitas que caen
+  sobre la parcela y un soplido de humo blanco (`Fx.puff`) cuando alguien
+  desaparece o aparece en la calle. El humo se reusa en 2C (cajas).
+- **Ganchos de sonido** (autoload `Sound`): se pide por nombre (`Sound.play("build")`);
+  si hay un archivo en `assets/audio/<nombre>.ogg|wav|mp3` suena, si no, no pasa
+  nada. Volúmenes general / efectos / música en Info (se guardan). **No se
+  bajaron sonidos**: no hay una fuente CC0 a la que se pueda llegar desde la
+  nube con una dirección verificable (Kenney publica en su página, sin enlace
+  directo estable). Queda como pendiente del dueño (ver PROGRESO): bajar un
+  paquete CC0, ponerlo en `assets/audio/` con esos nombres y anotar la licencia
+  en `docs/`. Nombres que ya se piden: `build, cancel, coin, level_up`.
+
+### Trabajo como título
+- Al empezar el turno el personaje **sale por la puerta con saco y maleta**
+  (utilería: una cápsula y una caja, colores de la paleta), camina a la acera,
+  **se despide con una nubecita de humo y desaparece del lote**. Mientras tanto no
+  está en la casa. Al terminar el turno **aparece en la acera con saco y maleta,
+  camina hasta la puerta y hace un saltito de llegada** («¡Ya volví!»).
+- **La pareja se ve igual usando su intención**: «yendo a trabajar» → sale con
+  saco y maleta; «trabajando» → no está en el lote; al volver o desconectarse se
+  ve regresar de la calle. No se agregó nada al protocolo.
+- Sin minijuego. El sueldo y el turno son los de la Fase 3 (servidor).
+
+### Restaurante: ingresos automáticos
+- La caja del restaurante abierto **se cobra sola**: el servidor la calcula por
+  tiempo ($20/h, tope $160, sin cambios) y la acredita (a) al entrar
+  (`work_settle`: «Tu restaurante trabajó solo: $X») y (b) cuando el teléfono
+  avisa que sigue jugando (`game_heartbeat`) y (c) el teléfono lo pide cada
+  90 s si ya juntó $5 o más (`Restaurant._auto_collect`). En casa compartida va a
+  la caja de la casa. El botón pasa a «Cobrar ya» (solo para apurarla).
+- **El minijuego «Servicio» queda como «Reto» opcional con premio extra**: mismo
+  juego, mismo tope diario ($600) y misma validación (el servidor repite el
+  servicio). No cambió ningún número.
+- **Trabajar en un restaurante no exige tener uno propio**: dos empleos nuevos en
+  `data/jobs.json` (**Mesero** nivel 2, $40/h, y **Cocinero** nivel 3, $60/h),
+  con el mismo mecanismo de turnos de la Fase 3.
+- **No se hizo** contratar personal ni sueldos: el diseño quedó en `VISION.md`
+  («Restaurante: personal y sueldos»).

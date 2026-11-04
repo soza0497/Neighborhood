@@ -28,6 +28,63 @@ a `pulido-2`. Estado de cada una abajo.
 - Pruebas: ver "Verificación" más abajo. Demo nueva `polish2a_demo` con capturas
   (`docs/capturas/p2a_*.png`).
 
+### Pulido 2B — estilo y vida: HECHO (2026-11-04)
+- **Shader toon con contorno** (geometría invertida, grosor en píxeles, sombras
+  duras en 3 tonos, luz cálida) en casa, muebles, personaje, vecinos, bosque y
+  autos; suelo y calle sin contorno. **Todo editable en `data/style.json`** y los
+  dos `.gdshader`. Menú → Info → **Contorno (calidad)** lo apaga. Primer
+  `docs/estilo.md` con la paleta.
+- **Cambio de arte sin tocar código**: una pieza del catálogo puede traer
+  `model` (`.glb`) con respaldo a las figuras de ahora si no existe.
+- **Entorno**: suelo de un solo color, **niebla** en los bordes (mismo color que
+  el cielo), **bosque** atrás y a los costados (≈580 árboles en 3 llamadas de
+  dibujo) y **7 casas de vecinos** atrás.
+- **Trabajo como título**: sale por la puerta con **saco y maleta**, se despide con
+  una nubecita y desaparece del lote; vuelve por la calle con otra animación
+  (saltito). La pareja se ve igual por su intención.
+- **Restaurante automático**: la caja se cobra sola (el servidor calcula por
+  tiempo, al entrar y cada rato); el minijuego es un **Reto opcional** con
+  premio extra; **Mesero** y **Cocinero** como empleos sin tener restaurante.
+  Contratar personal/sueldos: solo diseño en `VISION.md`.
+- **Vida**: autos y gente en la calle (solo local), reposo del personaje
+  (respira, mira alrededor), hojitas que caen, humo blanco, ganchos de sonido con
+  volúmenes en Info.
+- Demo nueva `polish2b_demo` (43 comprobaciones, capturas `docs/capturas/p2b_*.png`)
+  y 6 pruebas Lua nuevas (cobro automático).
+
+### Pulido 2B — verificación (nube)
+Sin red: casa 127, personaje 34, economía 66, servidor 78, pareja 46, negocio 46
+= **397**. Lua **281** (275 + 6 nuevas del cobro automático y los empleos de
+restaurante). Demos: `server_demo` 24, `login_demo` 17, `couple_demo` 78,
+`couple_live_demo` 12, `ui_demo` 40, `restaurant_demo` 32, `polish2a_demo` 46 y
+**`polish2b_demo` 43** (nueva). `economy_server_demo` 35/39 igual que en `main`
+(ver 2A). Nakama reiniciado con los módulos nuevos, sin errores.
+
+### Pulido 2B — cómo probarlo en el teléfono (para el dueño)
+1. [Claude] Con la rama unida: reiniciar Nakama (`docker compose restart nakama`
+   en `server/`: toma el cobro automático y los empleos nuevos) y exportar el APK.
+2. [Dueño] Instalar el APK. Al abrir, el mundo se ve **dibujado**: contorno
+   oscuro fino, sombras en 3 tonos.
+3. Mirá el borde del mapa (alejá la cámara y bajala con el botón del ángulo):
+   **no se ve dónde termina** la calle ni hay costados azules: hay niebla y
+   **bosque**; atrás, **casas de vecinos**.
+4. Por la calle pasan **autos y gente**; caen hojitas en el jardín.
+5. **Menú → Info → Contorno (calidad)**: apagalo y fijate si sube el FPS (meta
+   30+ con una casa de dos pisos amueblada). Ahí también están los **volúmenes**.
+6. **Menú → Empleos**: probá **Mesero** o **Cocinero** (nivel 2 y 3). Cuando
+   empiece el turno el personaje sale **con saco y maleta**, se despide con una
+   nubecita y no está en la casa; al terminar vuelve caminando desde la calle.
+7. **Menú → Restaurante** (con restaurante abierto): ahora dice «Ingreso
+   automático» y se cobra solo («El restaurante te dio $X»); «Reto: Servicio»
+   es el minijuego opcional con premio extra.
+8. Con tu pareja: cuando uno sale a trabajar, el otro lo ve salir con saco y
+   maleta y desaparecer.
+9. **Pendiente tuyo (sonidos)**: si querés sonidos, bajá un paquete CC0 (por
+   ejemplo Kenney «Interface Sounds» / «Impact Sounds»), copiá los `.ogg` a
+   `assets/audio/` con los nombres `build`, `cancel`, `coin`, `level_up`,
+   `error`, `door`, `step`, `truck`, `box_open`, `cough`, `siren`, `car_pass`, y
+   anotá la licencia en `docs/`. No hay que tocar código.
+
 ### Pulido 2A — verificación (nube, Godot 4.7.2, Nakama 3.41.0 + PostgreSQL 16 de prueba)
 Sin red: casa **127** (99 + 28 nuevas), personaje 34, economía 66, servidor 78,
 pareja 46, negocio 46 = **397**. Lua **275** (273 + 2). Demos: `server_demo` 24,

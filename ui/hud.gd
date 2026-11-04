@@ -158,6 +158,7 @@ func _ready() -> void:
 	_fps_check.button_pressed = GameState.settings.get("show_fps_overlay", false)
 	_hints_check.button_pressed = GameState.settings.get("show_hints", true)
 	_fps_check.toggled.connect(_on_setting_toggled.bind("show_fps_overlay"))
+	_build_info_extras()
 	_hints_check.toggled.connect(_on_setting_toggled.bind("show_hints"))
 	_menu_close_button.pressed.connect(_action_menu.hide)
 	_logout_button.pressed.connect(_open_from_menu.bind(EventBus.logout_requested))
@@ -226,6 +227,43 @@ func _build_floor_selector() -> void:
 	column.add_child(turn)
 	panel.add_child(column)
 	_floor_map.owner = self  # Para que %FloorMap siga encontrándose.
+
+
+## Pulido 2B: en Info, el contorno (calidad) y los volúmenes de sonido.
+func _build_info_extras() -> void:
+	var rows: VBoxContainer = _info_panel.get_node("Rows")
+	var anchor := _fps_check.get_index() + 1
+	var outline := CheckButton.new()
+	outline.text = "Contorno (calidad)"
+	outline.add_theme_font_size_override("font_size", 20)
+	outline.focus_mode = Control.FOCUS_NONE
+	outline.button_pressed = Style.outline_enabled
+	outline.toggled.connect(func(on: bool) -> void:
+		GameState.settings["outline_enabled"] = on
+		Style.set_outline(on))
+	rows.add_child(outline)
+	rows.move_child(outline, anchor)
+	anchor += 1
+	for entry in [["master", "Volumen"], ["sfx", "Efectos"], ["music", "Música"]]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var label := Label.new()
+		label.text = entry[1]
+		label.custom_minimum_size = Vector2(110, 0)
+		label.add_theme_font_size_override("font_size", 18)
+		row.add_child(label)
+		var slider := HSlider.new()
+		slider.min_value = 0.0
+		slider.max_value = 1.0
+		slider.step = 0.05
+		slider.value = Sound.volume(entry[0])
+		slider.custom_minimum_size = Vector2(200, 36)
+		slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		slider.value_changed.connect(func(v: float) -> void: Sound.set_volume(entry[0], v))
+		row.add_child(slider)
+		rows.add_child(row)
+		rows.move_child(row, anchor)
+		anchor += 1
 
 
 ## Botón del ángulo vertical de la cámara (de frente … desde arriba).

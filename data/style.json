@@ -1,0 +1,33 @@
+{
+	"_ayuda": "Estilo visual del juego (Pulido 2B). TODO se puede cambiar acá sin tocar código: el contorno, los tonos de las sombras, los colores del mundo y la luz. 'tones' = cuánta luz recibe la sombra, el tono medio y la luz (de 0 a 1). 'thresholds' = dónde cambia de tono. 'outline.width_px' = grosor del contorno en píxeles. Los colores van como #rrggbb. El contorno también se puede apagar en Menú → Info (calidad).",
+	"outline": { "enabled": true, "width_px": 2.2, "color": "#2b2233" },
+	"toon": { "tones": [0.5, 0.78, 1.0], "thresholds": [0.28, 0.7] },
+	"light": {
+		"sun_color": "#fff4dc", "sun_energy": 0.45, "ambient_color": "#e4ecff", "ambient_energy": 0.3,
+		"shadow_opacity": 0.55
+	},
+	"palette": {
+		"ground": "#7fcf6c",
+		"road": "#5d6470",
+		"road_line": "#f7e38a",
+		"sidewalk": "#d7d4c8",
+		"trunk": "#946142",
+		"leaf": "#58b85a",
+		"leaf_dark": "#3f9a4d",
+		"rock": "#9aa0a8",
+		"water": "#5fb8e8",
+		"stump": "#a9794f",
+		"bush": "#4aa65b",
+		"sky": "#bfe6ff",
+		"fog": "#bfe6ff",
+		"neighbor_wall": "#f2e3c6",
+		"neighbor_roof": "#d97a6c",
+		"suit": "#33384a",
+		"suitcase": "#8a5a3a",
+		"truck": "#e8b04a",
+		"van": "#f4f4f4",
+		"ambulance": "#f6f6f6",
+		"cross": "#e04b4b"
+	},
+	"fog": { "enabled": true, "begin": 70.0, "end": 190.0 }
+}

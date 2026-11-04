@@ -579,6 +579,8 @@ func request_settle(away_minutes: float) -> void:
 		EventBus.toast.emit("Cobraste el turno que quedó a medias: $%d%s" % [int(data["pending_pay"]), where])
 	if int(data.get("offline_shifts", 0)) > 0:
 		EventBus.toast.emit("Mientras no estabas, trabajaste %d turno(s): $%d%s" % [int(data["offline_shifts"]), int(data["offline_pay"]), where])
+	if int(data.get("restaurant_pay", 0)) > 0:
+		EventBus.toast.emit("Tu restaurante trabajó solo: $%d%s" % [int(data["restaurant_pay"]), where])
 	if data.has("pending_seconds_left"):
 		_pay_retry_at = now() + int(data["pending_seconds_left"])
 

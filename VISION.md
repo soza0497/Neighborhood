@@ -193,3 +193,35 @@ lista que son marca de la casa de The Sims y conviene **no** hacer así:
 - ¿Van a jugar menores de edad en la familia? (decide si el modo familiar va
   desde el principio)
 - Nombre definitivo del juego.
+
+
+## Restaurante: personal y sueldos (diseño, anotado en el Pulido 2B — NO se implementó)
+
+Hoy el restaurante gana **solo** (ingreso automático calculado por el servidor
+por tiempo) y el minijuego "Servicio" es un reto opcional con premio extra.
+**Contratar personal y pagar sueldos se deja para una fase propia.** Diseño:
+
+- **Administrador**: un rol que el dueño puede nombrar (un jugador o un NPC).
+  El administrador reparte turnos y, si está, el restaurante **no depende de
+  que el dueño entre a jugar** (hoy tampoco depende).
+- **Empleados**: pueden ser **NPC** (personajes con IA, de los que ya tiene el
+  juego) o **jugadores** (la pareja, familiares del barrio). Cada uno ocupa un
+  puesto (mesero, cocinero, cajero) y cada puesto sube lo que gana el
+  restaurante por hora y cuántas mesas atiende.
+- **Sueldos**: salen de la **caja del restaurante** (no de la nada). Un sueldo
+  es una cuenta por hora/turno que el **servidor** calcula y paga; si la caja
+  no alcanza, el empleado se **va a casa sin cobrar ese turno** (nunca se deja
+  la deuda: nada castiga por desconectarse, y no hay números negativos).
+- **Cuidado con los ciclos de dinero infinito** (regla de diseño):
+  1. El dinero que paga un negocio tiene que **salir de algo real** (clientes
+     de paso con tope por hora) y el sueldo **siempre es menor** que lo que
+     aporta el puesto, pero nunca crea dinero.
+  2. Un jugador que es empleado de **su propio** restaurante no cobra sueldo
+     *y* ganancia por el mismo turno (una sola vez).
+  3. Dos jugadores que se contratan **entre sí** no pueden sacar más de lo que
+     entra: los sueldos cuentan para un tope diario por jugador (como el tope
+     del minijuego, hoy $600).
+  4. Todo se calcula en el servidor y deja **historial** (quién pagó a quién y
+     por qué turno) para poder auditarlo.
+- **Trabajar en un restaurante ajeno** ya existe como empleo común (Mesero,
+  Cocinero en `data/jobs.json`): no hace falta tener uno propio.

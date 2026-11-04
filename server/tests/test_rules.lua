@@ -939,5 +939,21 @@ local roofhouse = rules.normalize_house({ levels = { {}, {}, {}, { roofs = { o9 
 check(hr.check_batch(data, roofhouse, { { level = 3, layer = "roofs", key = "o9", value = nil } }),
   "se puede quitar un techo suelto del piso 3")
 
+-- Pulido 2B: la caja del restaurante se cobra SOLA, por tiempo.
+local auto = restaurant_state(100)
+put(auto, "o1", "counter_restaurant")
+put(auto, "o2", "stove_restaurant")
+put(auto, "o3", "table_restaurant")
+check(business.auto_collect(rcfg, data.items, auto, NOW) == nil, "cobro automático: cerrado, no hay nada")
+business.open(rcfg, data.items, auto, NOW)
+check(business.auto_collect(rcfg, data.items, auto, NOW + 60) == nil, "cobro automático: a los 60 s todavía no junta $1")
+local auto_paid = business.auto_collect(rcfg, data.items, auto, NOW + 7200)
+check(auto_paid ~= nil and auto_paid.coins == 2 * rcfg.passive_per_hour and auto.money == 100 + 2 * rcfg.passive_per_hour,
+  "cobro automático: 2 h juntan 2 × lo de la hora y van a la billetera")
+check(business.auto_collect(rcfg, data.items, auto, NOW + 7200) == nil, "cobro automático: lo ya cobrado no se cobra dos veces")
+local auto_offline = business.auto_collect(rcfg, data.items, auto, NOW + 7200 + 10 * 3600)
+check(auto_offline ~= nil and auto_offline.coins == rcfg.passive_cap, "cobro automático: sin entrar 10 h, como mucho el tope ($" .. rcfg.passive_cap .. ")")
+check(data.jobs.waiter ~= nil and data.jobs.restaurant_cook ~= nil, "hay empleos de restaurante sin tener uno propio")
+
 print(string.format("\nPRUEBAS LUA: %d pasaron, %d fallaron", passed, failed))
 os.exit(failed > 0 and 1 or 0)

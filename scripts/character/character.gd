@@ -64,6 +64,10 @@ var _last_emotion := ""
 var _rng := RandomNumberGenerator.new()
 
 var _body: Node3D
+## Saco y maleta (solo mientras va o vuelve del trabajo).
+var _work_props: Node3D
+## Vuelve del trabajo: camina de la acera a la casa y al llegar "salta".
+var _returning := false
 var _animator: CharacterAnimator
 var _bubble: Label3D
 
@@ -121,6 +125,7 @@ func setup(new_data: CharacterData, new_house: HouseData, new_nav: HouseNav, new
 func refresh_look() -> void:
 	if _body != null:
 		_body.queue_free()
+	_work_props = null
 	_body = CharacterLook.build(data.appearance)
 	add_child(_body)
 	_animator.body = _body
@@ -319,8 +324,12 @@ func _walk(distance: float) -> void:
 func _arrive() -> void:
 	level = _plan.get("level", level)
 	cell = _plan.get("spot", cell)
-	if _plan.has("work"):
+	if _plan.has("work") and is_partner:
+		_partner_arrive_at_work()
+	elif _plan.has("work"):
 		_start_work()
+	elif _plan.has("return"):
+		_arrive_home()
 	elif _plan.has("action"):
 		_start_action()
 	else:
@@ -397,6 +406,7 @@ func _set_idle() -> void:
 func _go_to_work() -> void:
 	_stop_action()
 	_order = {}
+	_show_work_props(true)
 	var path := nav.find_path(level, cell, 0, WORK_CELL)
 	_go({"level": 0, "spot": WORK_CELL, "path": path, "work": true})
 
@@ -405,6 +415,10 @@ func _go_to_work() -> void:
 ## Con servidor, el turno lo anota el servidor; si no responde, vuelve.
 func _start_work() -> void:
 	place_at(0, WORK_CELL)
+	# Se despide y desaparece del lote en una nubecita (utilería de mentira).
+	if get_parent() != null:
+		Fx.puff(get_parent(), position + Vector3(0, 0.6, 0), 10)
+	_show_work_props(false)
 	if not Economy.server_mode:
 		Economy.start_shift()
 	state = State.WORKING
@@ -430,16 +444,85 @@ func _work(minutes: float) -> void:
 			return
 		if Economy.server_mode:
 			Economy.working_now = false
-			place_at(0, WORK_CELL)
-			_set_idle()
+			_return_from_work()
 			_collect_pay()
 			return
 		var pay := Economy.complete_shift()
 		data.add_journal("Terminó el turno y cobró $%d" % pay)
 		EventBus.toast.emit("%s cobró $%d del trabajo." % [data.name, pay])
 	Economy.working_now = false
+	_return_from_work()
+
+
+## Vuelve a la casa: aparece en la acera con saco y maleta, camina hasta el
+## pasto del frente y ahí "llega" (saltito y se le guardan las cosas).
+func _return_from_work() -> void:
 	place_at(0, WORK_CELL)
+	_show_work_props(true)
+	var target := _front_door_cell()
+	var path := nav.find_path(0, WORK_CELL, 0, target)
+	if path.is_empty():
+		_arrive_home()
+		return
+	_returning = true
+	_go({"level": 0, "spot": target, "path": path, "return": true})
+
+
+## La pareja sale al trabajo (se ve por su intención): mismo saco y maleta.
+func _partner_go_to_work() -> void:
+	_stop_action()
+	_show_work_props(true)
+	var path := nav.find_path(level, cell, 0, WORK_CELL)
+	_go({"level": 0, "spot": WORK_CELL, "path": path, "work": true})
+
+
+func _partner_arrive_at_work() -> void:
+	place_at(0, WORK_CELL)
+	if get_parent() != null:
+		Fx.puff(get_parent(), position + Vector3(0, 0.6, 0), 10)
+	_show_work_props(false)
+	state = State.WORKING
+	_animator.play("idle")
+
+
+## Dónde "llega" de vuelta del trabajo: la celda de afuera junto a la puerta
+## de la planta baja más cercana a la calle (o, si no hay puerta, el frente).
+func _front_door_cell() -> Vector2i:
+	var best := SPAWN_CELL
+	var best_distance := 1 << 30
+	for key in house.get_layer(0, "walls"):
+		var wall: Dictionary = house.get_piece(0, "walls", key)
+		if Catalog.get_item(wall.get("opening", "")).get("kind", "") != "door":
+			continue
+		for side in HouseGrid.edge_cells(key):
+			if house.has_piece(0, "floors", HouseGrid.cell_key(side)):
+				continue  # Es el lado de adentro.
+			var distance := absi(side.x - WORK_CELL.x) + absi(side.y - WORK_CELL.y)
+			if nav.is_walkable(0, side) and distance < best_distance:
+				best_distance = distance
+				best = side
+	return best
+
+
+func _arrive_home() -> void:
+	_returning = false
+	_show_work_props(false)
 	_set_idle()
+	_animator.play("arrive")
+	_bubble.text = "¡Ya volví!"
+	_bubble.modulate = Color.WHITE
+	await get_tree().create_timer(1.6).timeout
+	if state == State.IDLE and _animator.current == "arrive":
+		_animator.play("idle")
+		_bubble.text = ""
+
+
+func _show_work_props(on: bool) -> void:
+	if on and _work_props == null and _body != null:
+		_work_props = CharacterLook.build_work_props()
+		_body.add_child(_work_props)
+	if _work_props != null:
+		_work_props.visible = on
 
 
 ## Con servidor: pide el sueldo del turno (lo decide el servidor).
@@ -549,17 +632,20 @@ func follow_intention(online: bool, intention: Dictionary) -> void:
 	if not remote_driven:
 		# Fuera de línea: sigue con su IA (lo que se ve es creíble, no exacto).
 		if was_working:
-			place_at(0, WORK_CELL)
-			_set_idle()
+			_return_from_work()
 		return
 	if intention.get("state", "") == "working":
 		_stop_action()
+		_show_work_props(false)
 		state = State.WORKING
 		_animator.play("idle")
 		return
+	if str(intention.get("verb", "")) == "yendo a trabajar":
+		if not _plan.has("work"):
+			_partner_go_to_work()
+		return
 	if was_working:
-		place_at(0, WORK_CELL)
-		_set_idle()
+		_return_from_work()
 	var key: String = intention.get("key", "")
 	var object_level := int(intention.get("object_level", 0))
 	var action: Dictionary = Catalog.actions.get(intention.get("action", ""), {})

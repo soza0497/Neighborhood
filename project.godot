@@ -20,6 +20,8 @@ config/icon="res://icon.svg"
 
 EventBus="*res://scripts/autoload/event_bus.gd"
 Catalog="*res://scripts/autoload/catalog.gd"
+Style="*res://scripts/autoload/style.gd"
+Sound="*res://scripts/autoload/sound.gd"
 GameState="*res://scripts/autoload/game_state.gd"
 SaveSystem="*res://scripts/autoload/save_system.gd"
 GameClock="*res://scripts/autoload/game_clock.gd"

@@ -247,6 +247,15 @@ y el constructor nuevos con clics de verdad y saca capturas `ui_*.png`;
 `tests/restaurant_demo.tscn` (Fase 6, con capturas `restaurante_*.png`) prueban contra el
 servidor de verdad: ver `docs/servidor.md`.)
 
+**Pulido 2** (versión 0.9.0): `tests/polish2a_demo.tscn` (errores y claridad: menú,
+techo trabado, basurero, Agregar piso, selector de frente, plan con factura;
+capturas `p2a_*.png`) y `tests/polish2b_demo.tscn` (estilo toon, entorno, modelos
+`.glb`, trabajo con saco y maleta, sonido; capturas `p2b_*.png`). Se corren con
+ventana (`godot --path . res://tests/polish2a_demo.tscn`) o, sin pantalla, con
+`xvfb-run`. Para cambiar el **estilo** (contorno, tonos, colores, niebla) editá
+`data/style.json`; el **mundo** (bosque, vecinos, calle, autos) está en
+`data/world.json`; cómo meter un **modelo `.glb`** nuevo: `docs/estilo.md`.
+
 Y las reglas del servidor (opcional, necesita Lua 5.1, ver `docs/servidor.md`):
 
 ```bash

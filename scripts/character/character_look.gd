@@ -28,6 +28,39 @@ static func build(appearance: Dictionary) -> Node3D:
 	return body
 
 
+## Utilería del trabajo (Pulido 2B): un saco encima del cuerpo y una maleta en
+## la mano. Es de mentira: solo se ve mientras va o vuelve del trabajo. Los
+## colores salen de la paleta (data/style.json).
+static func build_work_props() -> Node3D:
+	var props := Node3D.new()
+	props.name = "WorkProps"
+	var jacket := CapsuleMesh.new()
+	jacket.radius = 0.225
+	jacket.height = 0.5
+	jacket.radial_segments = 12
+	jacket.rings = 4
+	var jacket_node := MeshInstance3D.new()
+	jacket_node.mesh = jacket
+	jacket_node.position = Vector3(0, 0.52, 0)
+	jacket_node.material_override = HousePieces.material(Style.color("suit", Color("#33384a")))
+	props.add_child(jacket_node)
+	var case_node := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.1, 0.22, 0.3)
+	case_node.mesh = box
+	case_node.position = Vector3(0.3, 0.22, 0.05)
+	case_node.material_override = HousePieces.material(Style.color("suitcase", Color("#8a5a3a")))
+	props.add_child(case_node)
+	var handle := MeshInstance3D.new()
+	var handle_mesh := BoxMesh.new()
+	handle_mesh.size = Vector3(0.04, 0.05, 0.12)
+	handle.mesh = handle_mesh
+	handle.position = Vector3(0.3, 0.36, 0.05)
+	handle.material_override = HousePieces.material(Color("#3a2a20"))
+	props.add_child(handle)
+	return props
+
+
 static func _color(appearance: Dictionary, part: String, fallback: String) -> Color:
 	return Color.from_string(appearance.get(part, fallback), Color.from_string(fallback, Color.WHITE))
 

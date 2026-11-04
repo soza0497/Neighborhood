@@ -1195,15 +1195,34 @@ local function shift_complete(state, _input, now)
   return { changed = { work = true, progress = result.xp_gained > 0 }, result = result }
 end
 
+-- Pulido 2B: la caja del restaurante se cobra SOLA (cálculo por tiempo del
+-- servidor, como los turnos). Devuelve true si cobró algo.
+local function restaurant_auto(state, result, now)
+  local auto = business.auto_collect(restaurant, data.items, state, now)
+  if auto == nil then
+    return false
+  end
+  result.restaurant_pay = auto.coins
+  result.to_fund = result.to_fund or auto.to_fund
+  if auto.to_fund then
+    log_and_notify(state, { kind = "fund", text = string.format("el restaurante juntó $%d para la caja", auto.coins) })
+  end
+  return true
+end
+
 local function work_settle(state, _input, now)
   local result = rules.settle(data, state, now)
   note_income(state, result, result.pending_pay + result.offline_pay, "sus sueldos ($%d) fueron a la caja")
-  return { changed = { work = true, progress = result.xp_gained > 0 }, result = result }
+  local paid = restaurant_auto(state, result, now)
+  return { changed = { work = true, home = paid, progress = result.xp_gained > 0 }, result = result }
 end
 
+-- "Sigo jugando": además de anotar la hora, cobra lo que juntó el restaurante.
 local function game_heartbeat(state, _input, now)
   state.work.last_seen_unix = now
-  return { changed = { work = true } }
+  local result = {}
+  local paid = restaurant_auto(state, result, now)
+  return { changed = { work = true, home = paid }, result = result }
 end
 
 
