@@ -101,6 +101,7 @@ func _ready() -> void:
 	EventBus.build_erase_multi_toggled.connect(_builder.set_erase_multi)
 	EventBus.build_copy_outline_requested.connect(_builder.copy_outline)
 	EventBus.build_add_floor_requested.connect(_builder.add_floor)
+	EventBus.build_add_basement_requested.connect(_builder.add_basement)
 	EventBus.plan_confirm_requested.connect(_builder.confirm_plan)
 	EventBus.plan_discard_requested.connect(_builder.discard_draft)
 	EventBus.camera_pitch_requested.connect(_camera_rig.set_pitch)
@@ -283,6 +284,12 @@ func _on_level_change_requested(delta: int) -> void:
 func _set_level(level: int) -> void:
 	var new_level := _builder.set_level(level)
 	_house_view.set_top_visible_level(new_level)
+	# Pulido 2C: en un sótano se esconde el terreno (se ve la casa "cortada").
+	var world := get_node_or_null("World")
+	if world != null:
+		world.visible = new_level >= 0
+	if _parcel_view != null:
+		_parcel_view.visible = new_level >= 0
 	# La cámara mira a la altura de ese piso (la planta baja queda igual).
 	_camera_rig.set_floor_height(new_level * HouseGrid.WALL_HEIGHT)
 	EventBus.build_level_changed.emit(new_level)

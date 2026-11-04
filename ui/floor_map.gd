@@ -52,6 +52,9 @@ var _dirty := true
 var _blink := 0.0
 var _center := Vector3.ZERO
 var _total := 1
+## Pulido 2C: el piso más alto y el más bajo (sótano) que se dibujan.
+var _top := 0
+var _bottom := 0
 
 
 func _ready() -> void:
@@ -110,9 +113,9 @@ func set_angle(index: int) -> void:
 	angle_changed.emit(angle_index)
 
 
-## Cuántos pisos se dibujan (los de la casa).
+## Cuántos pisos se dibujan (los de la casa, con sus sótanos).
 func shown_levels() -> int:
-	return _total
+	return _top - _bottom + 1
 
 
 func _process(delta: float) -> void:
@@ -179,9 +182,11 @@ static func view_direction(index: int) -> Vector2:
 
 func _rebuild() -> void:
 	_total = house.floors_total()
+	_top = _total - 1
+	_bottom = house.lowest_level()
 	var lo := Vector2(INF, INF)
 	var hi := Vector2(-INF, -INF)
-	for level in _total:
+	for level in range(_bottom, _top + 1):
 		for key in house.get_layer(level, "floors"):
 			var cell := Vector2(HouseGrid.key_to_cell(key))
 			lo = lo.min(cell)
@@ -200,18 +205,22 @@ func _rebuild() -> void:
 	var dir := view_direction(angle_index)
 	var pitch := deg_to_rad(PITCH_DEGREES)
 	var view_dir := Vector3(-dir.x * cos(pitch), -sin(pitch), -dir.y * cos(pitch)).normalized()
-	var line_width := maxf(maxf(hi.x - lo.x, hi.y - lo.y), _total * 3.0) * LINE_WIDTH * 1.3
+	var line_width := maxf(maxf(hi.x - lo.x, hi.y - lo.y), (_top - _bottom + 1) * 3.0) * LINE_WIDTH * 1.3
 
 	var fill := SurfaceTool.new()
 	fill.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for level in _total:
+	for level in range(_bottom, _top + 1):
 		_draw_level(fill, level, lo, hi, dir, view_dir, line_width)
+	# El suelo: una franja verde entre el sótano y la planta baja.
+	if _bottom < 0:
+		_quad(fill, Vector3(lo.x - 1, _level_y(0), hi.y + 1), Vector3(hi.x + 1, _level_y(0), hi.y + 1),
+			Vector3(hi.x + 1, _level_y(0) - 0.15, hi.y + 1), Vector3(lo.x - 1, _level_y(0) - 0.15, hi.y + 1), Color(0.45, 0.9, 0.5, 0.45))
 	_mesh.mesh = fill.commit()
 	_frame(lo, hi, dir, pitch)
 
 
 func _draw_level(st: SurfaceTool, level: int, lo: Vector2, hi: Vector2, dir: Vector2, view_dir: Vector3, width: float) -> void:
-	var base: Color = LEVEL_COLORS[level % LEVEL_COLORS.size()]
+	var base: Color = LEVEL_COLORS[posmod(level, LEVEL_COLORS.size())]
 	var current := level == current_level
 	var fill_color := Color(base, FILL_ALPHA_CURRENT if current else FILL_ALPHA)
 	var line_color := Color(base, LINE_ALPHA_CURRENT if current else LINE_ALPHA)
@@ -309,8 +318,9 @@ func _draw_roof(st: SurfaceTool, rect: Rect2i, y: float, flat: bool, color: Colo
 ## Pone la cámara de frente (con el ángulo elegido) encuadrando toda la casa.
 func _frame(lo: Vector2, hi: Vector2, dir: Vector2, pitch: float) -> void:
 	var size := hi - lo
-	var height := _level_y(_total - 1) + FLOOR_HEIGHT + 1.6
-	_center = Vector3((lo.x + hi.x) / 2.0, height / 2.0, (lo.y + hi.y) / 2.0)
+	var bottom_y := _level_y(_bottom)
+	var height := _level_y(_top) + FLOOR_HEIGHT + 1.6 - bottom_y
+	_center = Vector3((lo.x + hi.x) / 2.0, bottom_y + height / 2.0, (lo.y + hi.y) / 2.0)
 	var wide := absf(size.x * dir.y) + absf(size.y * dir.x)
 	var tall := height * cos(pitch) + (absf(size.x * dir.x) + absf(size.y * dir.y)) * sin(pitch)
 	var aspect := self.size.x / maxf(self.size.y, 1.0)
@@ -373,7 +383,7 @@ func level_at(local_pos: Vector2) -> int:
 	var point := local_pos * scale_factor
 	var best := -1
 	var best_dist := INF
-	for level in _total:
+	for level in range(_bottom, _top + 1):
 		var screen := _camera.unproject_position(Vector3(_center.x, _level_y(level) + FLOOR_HEIGHT / 2.0, _center.z))
 		var dist := absf(screen.y - point.y)
 		if dist < best_dist:

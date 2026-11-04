@@ -58,7 +58,7 @@ func _run() -> void:
 		await _build_with_server(main)
 
 	print("2) Abrir otra vez: entra solo")
-	var built: Dictionary = main.house.to_dict()["levels"][0]["foundation"] if main != null else {}
+	var built: Dictionary = main.house.to_dict()["levels"][3]["foundation"] if main != null else {}
 	GameState.house = {}  # Como si el teléfono hubiera perdido la casa.
 	login = await _open_login()
 	await _frames(2)

@@ -20,7 +20,7 @@ extends Node
 ## los vuelve a calcular con el mismo catalog.json y es el que decide.
 
 ## Piezas que tienen tiempo de construcción.
-const TIMED_LAYERS := ["objects", "roofs"]
+const TIMED_LAYERS := ["objects", "roofs", "excavation"]
 ## Máximo de días del juego sin conectarse que se pagan de trabajo.
 const MAX_OFFLINE_SHIFTS := 3
 ## Avisos del modo servidor.

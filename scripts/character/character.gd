@@ -280,7 +280,7 @@ func _think() -> void:
 ## Todas las acciones que anuncian los objetos de la casa, con su camino.
 func _gather_options() -> Array:
 	var options: Array = []
-	for object_level in HouseGrid.MAX_LEVELS:
+	for object_level in HouseGrid.level_range():
 		for key in house.get_layer(object_level, "objects"):
 			var piece: Dictionary = house.get_piece(object_level, "objects", key)
 			if HouseData.is_under_construction(piece):

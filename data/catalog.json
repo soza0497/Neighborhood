@@ -16,6 +16,7 @@
 	],
 	"items": [
 		{ "id": "foundation_basic", "name": "Cimientos", "category": "structure", "kind": "foundation", "price": 5, "build_seconds": 0, "color": "#b8a58c" },
+		{ "id": "excavation_basic", "name": "Excavación (sótano)", "category": "structure", "kind": "excavation", "price": 30, "unlock_level": 4, "build_seconds": 90, "color": "#7a5a3c" },
 		{ "id": "room_basic", "name": "Cuarto", "category": "structure", "kind": "room", "price": 0, "build_seconds": 0, "wall_item": "wall_basic", "floor_item": "floor_basic", "color": "#fff4dc" },
 		{ "id": "wall_basic", "name": "Pared lisa", "category": "structure", "kind": "wall", "price": 20, "build_seconds": 0, "color": "#fff4dc" },
 		{ "id": "wall_brick", "name": "Pared de ladrillo", "category": "structure", "kind": "wall", "price": 30, "unlock_level": 3, "build_seconds": 0, "color": "#d9805f" },

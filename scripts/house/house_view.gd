@@ -43,10 +43,10 @@ var _last_pending_count := -1
 
 
 func _ready() -> void:
-	for i in HouseGrid.MAX_LEVELS:
+	for level in HouseGrid.level_range():
 		var container := Node3D.new()
-		container.name = "Level%d" % i
-		container.position.y = HouseGrid.level_y(i)
+		container.name = "Level%d" % level
+		container.position.y = HouseGrid.level_y(level)
 		add_child(container)
 		_levels.append(container)
 	# Cada segundo se revisa si alguna obra terminó.
@@ -80,7 +80,7 @@ func set_view(roofs: bool, low: bool) -> void:
 
 func set_top_visible_level(level: int) -> void:
 	for i in _levels.size():
-		_levels[i].visible = i <= level
+		_levels[i].visible = HouseGrid.MIN_LEVEL + i <= level
 	if level != top_visible_level:
 		top_visible_level = level
 		rebuild_all()  # Cambian las alturas de paredes y qué techos se ven.
@@ -252,7 +252,7 @@ func _refresh_by_id(id: String) -> void:
 
 ## Contenedor de un nivel (para poner cosas a la altura de ese piso).
 func get_level_container(level: int) -> Node3D:
-	return _levels[level]
+	return _levels[HouseGrid.level_index(level)]
 
 
 ## Borra todo y vuelve a dibujar la casa entera.
@@ -266,7 +266,7 @@ func rebuild_all() -> void:
 	_pending.clear()
 	if house == null:
 		return
-	for level in HouseGrid.MAX_LEVELS:
+	for level in HouseGrid.level_range():
 		for layer in HouseData.LAYERS:
 			for key in house.get_layer(level, layer):
 				_refresh_piece(level, layer, key)
@@ -281,6 +281,8 @@ func make_piece(level: int, layer: String, key: String, value: Dictionary, previ
 	match layer:
 		"foundation":
 			return HousePieces.build_foundation(HouseGrid.key_to_cell(key), value)
+		"excavation":
+			return HousePieces.build_excavation(HouseGrid.key_to_cell(key), value)
 		"floors":
 			return HousePieces.build_floor(HouseGrid.key_to_cell(key), value)
 		"walls":
@@ -334,7 +336,7 @@ func _refresh_piece(level: int, layer: String, key: String) -> void:
 		elif HouseData.is_under_construction(value):
 			HousePieces.make_construction(node)
 			_pending[id] = [level, layer, key]
-		_levels[level].add_child(node)
+		_levels[HouseGrid.level_index(level)].add_child(node)
 		_nodes[id] = node
 
 
@@ -353,7 +355,7 @@ func _refresh_post(level: int, vertex: Vector2i) -> void:
 	var first: Dictionary = house.get_piece(level, "walls", walls[0])
 	var post := HousePieces.build_post(vertex, HousePieces.wall_face_color(first, "b"), wall_height(level),
 		_merged_window(level, vertex))
-	_levels[level].add_child(post)
+	_levels[HouseGrid.level_index(level)].add_child(post)
 	_posts[id] = post
 
 

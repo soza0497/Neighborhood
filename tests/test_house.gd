@@ -23,6 +23,7 @@ func _ready() -> void:
 	_test_pulido_migration()
 	_test_pulido2_roofs_and_floors()
 	_test_pulido2_erase_everything()
+	_test_pulido2_basements()
 	print("\nPRUEBAS: %d pasaron, %d fallaron" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -175,8 +176,8 @@ func _test_save_round_trip() -> void:
 	# Una casa guardada con el lote viejo de 12x12 se centra en la parcela.
 	var old := house.to_dict()
 	old.erase("lot_size")
-	old["levels"][0]["walls"] = {"h:1,2": {"item": "wall_basic"}}
-	old["levels"][0]["roofs"] = {"o9": {"item": "roof_basic", "rect": [0, 0, 2, 2]}}
+	old["levels"][3]["walls"] = {"h:1,2": {"item": "wall_basic"}}
+	old["levels"][3]["roofs"] = {"o9": {"item": "roof_basic", "rect": [0, 0, 2, 2]}}
 	var migrated := HouseData.new()
 	migrated.from_dict(JSON.parse_string(JSON.stringify(old)))
 	var offset := (HouseGrid.LOT_SIZE - Vector2i(12, 12)) / 2
@@ -348,7 +349,7 @@ func _test_pulido_migration() -> void:
 	_check(house.to_dict()["format"] == HouseData.FORMAT, "la casa se guarda con formato 3")
 	var again := HouseData.new()
 	var dict := house.to_dict()
-	dict["levels"][0]["walls"]["h:1,1"].erase("join_end")  # El jugador las separó.
+	dict["levels"][3]["walls"]["h:1,1"].erase("join_end")  # El jugador las separó.
 	again.from_dict(dict)
 	_check(not again.get_piece(0, "walls", "h:1,1").has("join_end"), "una casa nueva no se vuelve a migrar")
 	var save := SaveMigrations.migrate({"format_version": 2, "state": {"house": old.duplicate(true), "economy": {}}}, 3)
@@ -374,7 +375,7 @@ func _test_pulido2_roofs_and_floors() -> void:
 
 	# Techos rotos se sacan al cargar.
 	var broken := _box_house().to_dict()
-	broken["levels"][0]["roofs"] = {
+	broken["levels"][3]["roofs"] = {
 		"o1": {"item": "roof_basic", "rect": [30, 30, 9, 9]},
 		"o2": {"item": "roof_basic", "rect": [1, 1, 0, 3]},
 		"o3": {"item": "roof_basic"},
@@ -440,3 +441,56 @@ func _test_pulido2_erase_everything() -> void:
 	var wall_closure := HouseRules.removal_closure(upper, HouseData.write(0, "walls", "h:2,0", null))
 	_check(wall_closure.size() >= 2 and wall_closure.any(func(w): return w["layer"] == "floors" and w["level"] == 1),
 		"borrar la pared que sostiene el piso de arriba borra también ese piso")
+
+
+## Pulido 2C: sótanos (niveles -1 a -3), excavación y migración de casas de 5 niveles.
+func _test_pulido2_basements() -> void:
+	_check(HouseGrid.level_range() == [-3, -2, -1, 0, 1, 2, 3, 4], "niveles de -3 a 4 (3 sótanos y 5 pisos)")
+	_check(HouseGrid.level_index(-3) == 0 and HouseGrid.level_index(0) == 3 and HouseGrid.LEVEL_COUNT == 8, "el sótano -3 es la posición 0")
+	_check(HouseGrid.level_name(-2) == "Sótano 2" and HouseGrid.level_name(0) == "Planta baja" and HouseGrid.level_name(2) == "Piso 2", "nombres de los niveles")
+	var house := _box_house()
+	var item := {"item": "excavation_basic"}
+	_check(HouseRules.is_supported(house, -1, "excavation", "2,2", item), "se puede excavar el primer sótano")
+	_check(not HouseRules.is_supported(house, -2, "excavation", "2,2", item), "el segundo sótano necesita el primero excavado")
+	_check(not HouseRules.is_supported(house, 0, "excavation", "2,2", item) and not HouseRules.is_supported(house, 1, "excavation", "2,2", item), "no se excava en la planta baja ni arriba")
+	_check(not HouseRules.is_supported(house, -4, "excavation", "2,2", item), "más abajo del tercer sótano, no")
+	var foundation := {"item": "foundation_basic"}
+	_check(not HouseRules.is_supported(house, -1, "foundation", "2,2", foundation), "antes de los cimientos de un sótano hay que excavar")
+	house.apply([HouseData.write(-1, "excavation", "2,2", item), HouseData.write(-2, "excavation", "2,2", item)])
+	_check(HouseRules.is_supported(house, -1, "foundation", "2,2", foundation) and HouseRules.is_supported(house, -2, "excavation", "2,2", item), "excavado: ya van cimientos (y se sigue bajando)")
+	house.apply([HouseData.write(-1, "foundation", "2,2", foundation)])
+	_check(HouseRules.is_supported(house, -1, "floors", "2,2", {"item": "floor_basic"}), "el piso del sótano va sobre sus cimientos")
+	house.apply([HouseData.write(-1, "floors", "2,2", {"item": "floor_basic"})])
+	_check(HouseRules.is_supported(house, -1, "walls", "h:2,2", {"item": "wall_basic"}) and not HouseRules.is_supported(house, -1, "walls", "h:20,20", {"item": "wall_basic"}), "paredes del sótano junto a los cimientos")
+	_check(not HouseRules.is_supported(house, -1, "roofs", "o1", {"item": "roof_basic", "rect": [2, 2, 1, 1]}), "un sótano no lleva techo")
+	_check(HouseRules.is_supported(house, 0, "floors", "2,2", {"item": "floor_basic"}), "el piso de la planta baja sigue apoyado en sus cimientos")
+	# Quitar la excavación se lleva todo lo de adentro y la de más abajo.
+	var closure := HouseRules.removal_closure(house, HouseData.write(-1, "excavation", "2,2", null))
+	var ids := closure.map(func(w): return "%d:%s" % [w["level"], w["layer"]])
+	_check("-1:foundation" in ids and "-1:floors" in ids and "-2:excavation" in ids, "borrar la excavación se lleva los cimientos, el piso y la de abajo (%s)" % str(ids))
+	# Acceso: a un sótano se baja por una escalera que está EN el sótano.
+	var home := _box_house()
+	home.apply([HouseData.write(-1, "excavation", "1,1", item), HouseData.write(-1, "foundation", "1,1", foundation), HouseData.write(-1, "floors", "1,1", {"item": "floor_basic"}),
+		HouseData.write(-1, "excavation", "1,2", item), HouseData.write(-1, "foundation", "1,2", foundation), HouseData.write(-1, "floors", "1,2", {"item": "floor_basic"})])
+	_check(not HouseRules.has_access(home, -1), "sin escalera, al sótano no se llega")
+	_check(HouseRules.problems(home).any(func(p): return p["text"].contains("Sótano 1: sin acceso")), "avisa que le falta una escalera")
+	home.apply([HouseData.write(-1, "objects", "o5", {"item": "stairs_basic", "cell": [1, 1], "rot": 2})])
+	_check(HouseRules.has_access(home, -1), "con una escalera en el sótano, se llega")
+	# Agregar sótano.
+	var base := _box_house()
+	_check(HouseRules.add_basement_problem(base) == "", "con cimientos en la planta baja, se puede agregar el primer sótano")
+	base.basement_count = 1
+	_check(base.lowest_level() == -1 and HouseRules.add_basement_problem(base).begins_with("Primero construí"), "no se agrega otro sin construir en el de arriba")
+	base.basement_count = 3
+	_check(base.lowest_level() == -3 and HouseRules.add_basement_problem(base).begins_with("Ya tenés"), "tope de 3 sótanos")
+	# Casas de antes (5 niveles) y guardado.
+	var legacy := {"levels": [{"foundation": {"1,1": {"item": "foundation_basic"}}}, {}, {}, {}, {}], "next_id": 2, "lot_size": [32, 32], "format": 3}
+	var old := HouseData.new()
+	old.from_dict(legacy)
+	_check(old.levels.size() == 8 and old.has_piece(0, "foundation", "1,1") and old.get_layer(-1, "foundation").is_empty(), "una casa de 5 niveles pasa a 8 (los sótanos, vacíos)")
+	var saved := HouseData.new()
+	saved.from_dict({"levels": [{}, {}, {"excavation": {"3,3": item}}, {"foundation": {"3,3": foundation}}, {}, {}, {}, {}], "next_id": 2, "lot_size": [32, 32], "format": 4})
+	_check(saved.has_piece(-1, "excavation", "3,3") and saved.has_piece(0, "foundation", "3,3") and saved.lowest_level() == -1, "una casa de 8 niveles se lee tal cual")
+	var again := HouseData.new()
+	again.from_dict(saved.to_dict())
+	_check(again.has_piece(-1, "excavation", "3,3") and again.levels.size() == 8, "ida y vuelta del guardado con sótano")

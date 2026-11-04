@@ -32,15 +32,19 @@ func _on_piece_changed(_level: int, _layer: String, _key: String) -> void:
 
 ## Número único de cada celda de cada nivel (el lote mide menos de 100).
 static func point_id(level: int, cell: Vector2i) -> int:
-	return level * 10000 + cell.y * 100 + cell.x
+	return HouseGrid.level_index(level) * 10000 + cell.y * 100 + cell.x
 
 
 static func id_to_level(id: int) -> int:
-	return id / 10000
+	return (id % 100000) / 10000 + HouseGrid.MIN_LEVEL
 
 
 static func id_to_cell(id: int) -> Vector2i:
 	return Vector2i(id % 100, (id / 100) % 100)
+
+
+## Los escalones usan otro rango de ids (las celdas llegan hasta 9595).
+const STEP_ID_BASE := 100000
 
 
 ## Altura del suelo de una celda (sobre cimientos o sobre el pasto).
@@ -58,6 +62,8 @@ func is_walkable(level: int, cell: Vector2i) -> bool:
 		return false
 	if level == 0 and HouseRules.is_blocked(cell):
 		return false  # Un árbol, una roca o el laguito (Pulido 2C).
+	if level < 0 and not _house.has_piece(level, "floors", HouseGrid.cell_key(cell)):
+		return false  # En un sótano solo se camina sobre piso.
 	return _house.object_at(level, cell) == ""
 
 
@@ -123,7 +129,7 @@ const AREA_MARGIN := 8
 func nav_area() -> Rect2i:
 	var home := HouseGrid.home_origin()
 	var area := Rect2i(home, Vector2i(HouseGrid.HOME_ZONE, HouseGrid.HOME_ZONE)).grow(AREA_MARGIN)
-	for level in HouseGrid.MAX_LEVELS:
+	for level in HouseGrid.level_range():
 		for layer in ["foundation", "floors"]:
 			for key in _house.get_layer(level, layer):
 				area = area.expand(HouseGrid.key_to_cell(key)).expand(HouseGrid.key_to_cell(key) + Vector2i.ONE)
@@ -138,7 +144,7 @@ func rebuild() -> void:
 	_dirty = false
 	_astar.clear()
 	var area := nav_area()
-	for level in HouseGrid.MAX_LEVELS:
+	for level in HouseGrid.level_range():
 		for x in range(area.position.x, area.end.x):
 			for z in range(area.position.y, area.end.y):
 				var cell := Vector2i(x, z)
@@ -146,7 +152,7 @@ func rebuild() -> void:
 					var pos := HouseGrid.cell_center(cell) + Vector3(0, ground_y(level, cell), 0)
 					_astar.add_point(point_id(level, cell), pos)
 
-	for level in HouseGrid.MAX_LEVELS:
+	for level in HouseGrid.level_range():
 		for x in range(area.position.x, area.end.x):
 			for z in range(area.position.y, area.end.y):
 				var cell := Vector2i(x, z)
@@ -159,7 +165,7 @@ func rebuild() -> void:
 					_connect_diagonal(level, Vector2i(x, z), step)
 
 	# Escaleras de todos los pisos (cada una une su piso con el de arriba).
-	for level in HouseGrid.MAX_LEVELS - 1:
+	for level in range(HouseGrid.MIN_LEVEL, HouseGrid.MAX_LEVELS - 1):
 		for key in _house.get_layer(level, "objects"):
 			_add_stairs(level, key)
 
@@ -205,7 +211,7 @@ func _add_stairs(level: int, key: String) -> void:
 
 	var previous := entry_id
 	for i in steps.size():
-		var id := point_id(level, steps[i]) + 5000  # Ids aparte para los escalones.
+		var id := STEP_ID_BASE + point_id(level, steps[i])  # Ids aparte para los escalones.
 		var height := HouseGrid.level_y(level) + (i + 0.5) / steps.size() * HouseGrid.WALL_HEIGHT
 		_astar.add_point(id, HouseGrid.cell_center(steps[i]) + Vector3(0, height, 0))
 		_astar.connect_points(previous, id)

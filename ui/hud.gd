@@ -619,7 +619,7 @@ func _on_game_mode_changed(mode: String) -> void:
 
 
 func _on_level_changed(level: int) -> void:
-	_level_label.text = LEVEL_NAMES[level] if level < LEVEL_NAMES.size() else "Piso %d" % level
+	_level_label.text = HouseGrid.level_name(level)
 	_floor_map.set_level(level)
 
 

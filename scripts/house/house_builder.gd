@@ -28,11 +28,12 @@ extends Node3D
 ## se arma una PROPUESTA con todos los cambios (se ven en la casa), y se manda
 ## entera a la pareja, que la previsualiza y la aprueba o la rechaza.
 
-enum Tool { NONE, FOUNDATION, FLOOR, WALL, ROOM, ROOF, OPENING, OBJECT, PAINT, MODIFY, ERASE }
+enum Tool { NONE, FOUNDATION, FLOOR, WALL, ROOM, ROOF, OPENING, OBJECT, PAINT, MODIFY, ERASE, EXCAVATE }
 
 ## Qué herramienta usa cada tipo ("kind") de objeto del catálogo.
 const KIND_TO_TOOL := {
 	"foundation": Tool.FOUNDATION,
+	"excavation": Tool.EXCAVATE,
 	"floor": Tool.FLOOR,
 	"wall": Tool.WALL,
 	"room": Tool.ROOM,
@@ -64,6 +65,7 @@ const HINTS := {
 	Tool.NONE: "Elegí Tienda u Obra (Construir, Modificar o Borrar).",
 	Tool.FOUNDATION: "Arrastrá para marcar el terreno de la casa (cimientos).",
 	Tool.FLOOR: "Arrastrá sobre los cimientos para poner piso.",
+	Tool.EXCAVATE: "Arrastrá en un sótano para excavar (un servicio con costo y espera). Después van los cimientos.",
 	Tool.WALL: "Arrastrá de esquina a esquina para levantar una pared.",
 	Tool.ROOM: "Arrastrá un rectángulo: pone piso y paredes de una vez.",
 	Tool.ROOF: "Arrastrá un rectángulo sobre la casa para techarla.",
@@ -77,7 +79,7 @@ const HINTS := {
 ## Herramientas de arrastre (rectángulo o línea). Al soltar NO se aplican:
 ## queda una selección con dos manijas (círculos) que se pueden mover, y se
 ## aplica con el botón Confirmar. Así el dedo no tapa lo que se construye.
-const HANDLE_TOOLS := [Tool.FOUNDATION, Tool.FLOOR, Tool.WALL, Tool.ROOM, Tool.ROOF]
+const HANDLE_TOOLS := [Tool.FOUNDATION, Tool.EXCAVATE, Tool.FLOOR, Tool.WALL, Tool.ROOM, Tool.ROOF]
 ## Herramientas de "tocar o mantener" (arrastrar sin mantener = cámara).
 const PRESS_TOOLS := [Tool.PAINT, Tool.MODIFY, Tool.ERASE]
 ## A cuántos píxeles de una manija cuenta como tocarla.
@@ -275,7 +277,7 @@ func set_erase_mode(value: bool) -> void:
 ## Cambia de nivel (piso). Devuelve el nivel que quedó.
 func set_level(new_level: int) -> int:
 	# Solo se puede ir a pisos que existen (los construidos o los agregados).
-	level = clampi(new_level, 0, house.floors_total() - 1)
+	level = clampi(new_level, house.lowest_level(), house.floors_total() - 1)
 	_erase_items.clear()
 	_cancel_gesture()
 	select_object("")
@@ -299,6 +301,20 @@ func add_floor() -> bool:
 	EventBus.floors_changed.emit(house.floors_total())
 	EventBus.build_level_set_requested.emit(house.floors_total() - 1)
 	EventBus.build_hint.emit("Piso agregado. Construí ahí arriba.")
+	return true
+
+
+## «Agregar sótano» (Obra): suma un sótano abajo (hasta 3) y va a él.
+func add_basement() -> bool:
+	var problem := HouseRules.add_basement_problem(house)
+	if problem != "":
+		EventBus.build_hint.emit(problem)
+		EventBus.toast.emit(problem)
+		return false
+	house.basement_count = -house.lowest_level() + 1
+	EventBus.floors_changed.emit(house.floors_total())
+	EventBus.build_level_set_requested.emit(house.lowest_level())
+	EventBus.build_hint.emit("Sótano agregado. Excavá (Construir › Excavación) y después poné cimientos.")
 	return true
 
 
@@ -652,7 +668,7 @@ func review_request() -> Dictionary:
 func _should_plan(writes: Array) -> bool:
 	if not plan_enabled or _plan_bypass or not (_draft_mode == "" or _draft_mode == "plan"):
 		return false
-	if not tool in [Tool.FOUNDATION, Tool.FLOOR, Tool.WALL, Tool.ROOM, Tool.ROOF, Tool.OPENING, Tool.OBJECT]:
+	if not tool in [Tool.FOUNDATION, Tool.EXCAVATE, Tool.FLOOR, Tool.WALL, Tool.ROOM, Tool.ROOF, Tool.OPENING, Tool.OBJECT]:
 		return false
 	for w in writes:
 		if w["value"] == null:
@@ -1412,8 +1428,12 @@ func _place_writes(screen_pos: Vector2) -> Array:
 	var cell := _end_cell
 	match tool:
 		Tool.FOUNDATION:
+			# Cimientos: en la planta baja o en un sótano (ya excavado).
 			for c in HouseGrid.cells_in_rect(_start_cell, cell):
-				_add_if_new(writes, 0, "foundation", HouseGrid.cell_key(c), {"item": item["id"]})
+				_add_if_new(writes, mini(level, 0), "foundation", HouseGrid.cell_key(c), {"item": item["id"]})
+		Tool.EXCAVATE:
+			for c in HouseGrid.cells_in_rect(_start_cell, cell):
+				_add_if_new(writes, level, "excavation", HouseGrid.cell_key(c), {"item": item["id"]})
 		Tool.FLOOR:
 			for c in HouseGrid.cells_in_rect(_start_cell, cell):
 				_add_if_new(writes, level, "floors", HouseGrid.cell_key(c), {"item": item["id"]})
@@ -1935,8 +1955,12 @@ func _blocked_hint() -> String:
 				return "Ahí hay un obstáculo (árbol, roca, laguito...): tocalo y llamá al servicio para limpiarlo."
 	var upstairs := level > 0
 	match tool:
+		Tool.EXCAVATE:
+			return "Solo se excava en un sótano (Agregar sótano), de arriba hacia abajo, y no donde hay obstáculos."
 		Tool.FOUNDATION:
-			return "Los cimientos van solo en la planta baja."
+			if level < 0:
+				return "En un sótano, los cimientos van sobre un lugar ya excavado."
+			return "Los cimientos van solo en la planta baja o en un sótano."
 		Tool.FLOOR:
 			if upstairs:
 				return "Arriba, el piso necesita piso, una pared o un pilar cerca debajo (y no encima de un techo)."

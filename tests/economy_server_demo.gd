@@ -52,7 +52,7 @@ func _run() -> void:
 	var result: Dictionary = await GameServer.register(user, PASSWORD)
 	_check(result["ok"], "crear la cuenta")
 	var local := {
-		"house": {"levels": [{"foundation": _foundation(2, 2, 6, 6)}], "next_id": 1},
+		"house": {"levels": [{"foundation": _foundation(34, 34, 6, 6)}], "next_id": 1},
 		"economy": {"money": 99999, "xp": 0, "discovered": ["foundation_basic"]},
 	}
 	result = await GameServer.load_game(local)
@@ -68,12 +68,12 @@ func _run() -> void:
 
 	print("\n2) Construir: cobra el servidor")
 	var writes := [
-		HouseData.write(0, "floors", "2,2", {"item": "floor_basic"}),
-		HouseData.write(0, "floors", "3,2", {"item": "floor_basic"}),
-		HouseData.write(0, "floors", "4,2", {"item": "floor_basic"}),
-		HouseData.write(0, "walls", "h:2,2", {"item": "wall_basic", "opening": "door_basic"}),
+		HouseData.write(0, "floors", "34,34", {"item": "floor_basic"}),
+		HouseData.write(0, "floors", "35,34", {"item": "floor_basic"}),
+		HouseData.write(0, "floors", "36,34", {"item": "floor_basic"}),
+		HouseData.write(0, "walls", "h:34,34", {"item": "wall_basic", "opening": "door_basic"}),
 		# Fase 5: el servidor revisa el apoyo; la cama (girada) va sobre los dos pisos.
-		HouseData.write(0, "objects", house.new_id(), {"item": "bed_basic", "cell": [2, 2], "rot": 1, "ready_at": 0}),
+		HouseData.write(0, "objects", house.new_id(), {"item": "bed_basic", "cell": [34, 34], "rot": 1, "ready_at": 0}),
 	]
 	var quote := Economy.quote(house, writes)
 	result = await _build(writes)
@@ -90,7 +90,7 @@ func _run() -> void:
 	_check(history.can_undo() and not history.can_redo(), "el servidor guardó el paso de deshacer")
 
 	var money := Economy.money
-	result = await _build([HouseData.write(0, "objects", house.new_id(), {"item": "stairs_basic", "cell": [6, 2], "rot": 0})])
+	result = await _build([HouseData.write(0, "objects", house.new_id(), {"item": "stairs_basic", "cell": [38, 34], "rot": 0})])
 	_check(not result["ok"] and result["error"].contains("nivel 2") and Economy.money == money, "escalera bloqueada: \"%s\"" % result["error"])
 	var expensive: Array = []
 	for i in 10:
@@ -100,15 +100,15 @@ func _run() -> void:
 
 	print("\n3) Deshacer y rehacer (el servidor devuelve lo exacto)")
 	await history.undo()
-	_check(Economy.money == 3000 and not house.has_piece(0, "objects", "o1") and not house.has_piece(0, "floors", "2,2"),
+	_check(Economy.money == 3000 and not house.has_piece(0, "objects", "o1") and not house.has_piece(0, "floors", "34,34"),
 		"deshacer devolvió todo: $%d" % Economy.money)
 	_check(history.can_redo(), "se puede rehacer")
 	await history.redo()
 	_check(Economy.money == money and house.has_piece(0, "objects", "o1"), "rehacer volvió a cobrar: $%d" % Economy.money)
-	result = await _build([HouseData.write(0, "floors", "4,2", null)])
+	result = await _build([HouseData.write(0, "floors", "36,34", null)])
 	_check(result["ok"] and int(result["data"]["money_change"]) == 5, "borrar un piso devuelve el 50 % ($5)")
 	await history.undo()
-	_check(Economy.money == money and house.has_piece(0, "floors", "4,2"), "deshacer el borrado cobra los $5")
+	_check(Economy.money == money and house.has_piece(0, "floors", "36,34"), "deshacer el borrado cobra los $5")
 
 	print("\n4) Acelerar las obras")
 	var left := int(house.get_piece(0, "objects", "o1")["ready_at"]) - Economy.now()
@@ -165,8 +165,8 @@ func _run() -> void:
 	var answers: Array = []
 	var send := func(key: String) -> void:
 		answers.append(await _build([HouseData.write(0, "floors", key, {"item": "floor_basic"})]))
-	send.call("4,2")
-	send.call("5,2")
+	send.call("36,34")
+	send.call("37,34")
 	await _wait_until(func() -> bool: return answers.size() == 2)
 	_check(answers.filter(func(a: Dictionary) -> bool: return a.get("busy", false)).size() == 1,
 		"dos toques seguidos: el segundo no sale mientras se espera")
@@ -174,7 +174,7 @@ func _run() -> void:
 	var raw: Array = []
 	var send_raw := func(key: String) -> void:
 		raw.append(await GameServer.call_rpc("build_apply", {"writes": [HouseData.write(0, "floors", key, {"item": "floor_basic"})]}))
-	for key in ["6,2", "7,2", "6,3"]:
+	for key in ["38,34", "39,34", "38,35"]:
 		send_raw.call(key)
 	await _wait_until(func() -> bool: return raw.size() == 3)
 	for answer in raw:
@@ -188,9 +188,9 @@ func _run() -> void:
 		"collection": "game", "key": "house", "value": JSON.stringify({"json": "{}"}),
 	}]}, GameServer._bearer_auth())
 	_check(not result["ok"], "escribir la casa directo: no se puede")
-	result = await Economy.request("build_apply", {"writes": [HouseData.write(0, "floors", "1,1", {"item": "oro_infinito"})]})
+	result = await Economy.request("build_apply", {"writes": [HouseData.write(0, "floors", "33,33", {"item": "oro_infinito"})]})
 	_check(not result["ok"] and result["error"].contains("no existe"), "pieza inventada: \"%s\"" % result["error"])
-	result = await Economy.request("build_apply", {"writes": [HouseData.write(0, "floors", "99,1", {"item": "floor_basic"})]})
+	result = await Economy.request("build_apply", {"writes": [HouseData.write(0, "floors", "131,33", {"item": "floor_basic"})]})
 	_check(not result["ok"], "fuera de la parcela: \"%s\"" % result["error"])
 	money = Economy.money
 	result = await Economy.request("build_apply", {"writes": [HouseData.write(0, "objects", "o90", null)]})

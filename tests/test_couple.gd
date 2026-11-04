@@ -91,9 +91,9 @@ func _test_diff() -> void:
 	# Lo que manda el servidor: los números como decimales (JSON).
 	var server: Dictionary = JSON.parse_string(JSON.stringify(local.to_dict()))
 	_check(CoupleState.diff_writes(local.to_dict(), server).is_empty(), "casa igual (con decimales): nada que cambiar")
-	server["levels"][0]["objects"]["o1"]["cell"] = [5.0, 5.0]
-	server["levels"][0]["objects"].erase("o2")
-	server["levels"][0]["walls"]["h:1,1"] = {"item": "wall_basic"}
+	server["levels"][3]["objects"]["o1"]["cell"] = [5.0, 5.0]
+	server["levels"][3]["objects"].erase("o2")
+	server["levels"][3]["walls"]["h:1,1"] = {"item": "wall_basic"}
 	var writes := CoupleState.diff_writes(local.to_dict(), server)
 	_check(writes.size() == 3, "tres cambios: mover, quitar y poner (%d)" % writes.size())
 	local.apply(writes)

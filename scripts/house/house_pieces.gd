@@ -193,6 +193,13 @@ static func build_foundation(cell: Vector2i, value: Dictionary) -> Node3D:
 	return node
 
 
+## Pulido 2C: una celda excavada (un pozo de tierra) en un sótano.
+static func build_excavation(cell: Vector2i, value: Dictionary) -> Node3D:
+	var node := Node3D.new()
+	add_box(node, HouseGrid.cell_center(cell) + Vector3(0, -0.12, 0), Vector3(1, 0.1, 1), material(piece_color(value)))
+	return node
+
+
 static func build_floor(cell: Vector2i, value: Dictionary) -> Node3D:
 	var node := Node3D.new()
 	# La baldosa queda un poquito por encima del nivel (para no "pelearse"

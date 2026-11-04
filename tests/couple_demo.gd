@@ -253,7 +253,7 @@ func _test_structural_changes() -> void:
 		and _main.house.get_piece(0, "walls", "v:32,32") != null, "A arma una propuesta de 2 cambios (se ven en su casa)")
 	_check(Couple.home["requests"].is_empty(), "todavía no se mandó nada")
 	_main._on_game_saving()
-	_check(not GameState.house["levels"][0]["walls"].has("v:32,32"), "la propuesta no se guarda como si estuviera construida")
+	_check(not GameState.house["levels"][3]["walls"].has("v:32,32"), "la propuesta no se guarda como si estuviera construida")
 	_check(await builder.send_draft(), "A manda la propuesta")
 	await _wait_until(func() -> bool: return not Economy.busy)
 	await Couple.refresh()

@@ -256,6 +256,12 @@ ventana (`godot --path . res://tests/polish2a_demo.tscn`) o, sin pantalla, con
 `data/style.json`; el **mundo** (bosque, vecinos, calle, autos) está en
 `data/world.json`; cómo meter un **modelo `.glb`** nuevo: `docs/estilo.md`.
 
+**2C — parcela de 96 × 96, servicios y sótanos:** `godot --headless --path . res://tests/test_parcel.tscn`
+(reglas de la parcela, sin pantalla ni red), `tests/polish2c_demo.tscn` (con ventana: limpiar
+obstáculos con jardinero / tractor, entrega con camión y cajas, ambulancia y sótanos; capturas
+`p2c_*.png`) y `tests/parcel_server_demo.tscn` (contra el servidor de verdad). Los obstáculos, sus
+precios y esperas están en `data/parcel.json` (**reiniciá Nakama si lo cambiás**).
+
 Y las reglas del servidor (opcional, necesita Lua 5.1, ver `docs/servidor.md`):
 
 ```bash

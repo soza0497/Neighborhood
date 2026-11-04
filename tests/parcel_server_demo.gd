@@ -50,7 +50,7 @@ func _run() -> void:
 	}
 	result = await GameServer.load_game(local)
 	var house: Dictionary = JSON.parse_string(result["data"]["house"])
-	_check(house["levels"][0]["foundation"].has("33,33") and not house["levels"][0]["foundation"].has("1,1") and house["levels"][0]["walls"].has("h:34,35"),
+	_check(house["levels"][3]["foundation"].has("33,33") and not house["levels"][3]["foundation"].has("1,1") and house["levels"][3]["walls"].has("h:34,35"),
 		"cimientos y paredes se movieron 32 celdas")
 	_check(house["lot_size"] == [96.0, 96.0] or house["lot_size"] == [96, 96], "la casa ahora dice que la parcela mide 96")
 	_check(int(result["data"]["money"]) == 3000, "dinero inicial $3000")

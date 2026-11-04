@@ -91,6 +91,7 @@ signal house_problems_changed(problems: Array)
 signal proposal_changed(mode: String, summary: Dictionary)
 ## Pulido 2: se agregó un piso (o cambió cuántos hay) y pedidos del plan.
 signal floors_changed(total: int)
+signal build_add_basement_requested
 signal build_add_floor_requested
 signal plan_confirm_requested
 signal plan_discard_requested

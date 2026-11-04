@@ -38,6 +38,7 @@ var _builder: Node
 var _character: Node3D
 var _action_row: HBoxContainer
 var _add_floor_button: Button
+var _add_basement_button: Button
 var _tool_buttons: Dictionary = {}
 var _mode_buttons: Dictionary = {}
 var _tool_group := ButtonGroup.new()
@@ -89,6 +90,9 @@ func _ready() -> void:
 	_add_floor_button = Icons.make_button("add_floor", "Agregar piso", 56)
 	_add_floor_button.pressed.connect(EventBus.build_add_floor_requested.emit)
 	_sub_modes.add_child(_add_floor_button)
+	_add_basement_button = Icons.make_button("add_basement", "Agregar sótano", 56)
+	_add_basement_button.pressed.connect(EventBus.build_add_basement_requested.emit)
+	_sub_modes.add_child(_add_basement_button)
 	Icons.setup(_cancel_button, "close", "Cancelar", 56)
 	_confirm_button.pressed.connect(EventBus.build_confirm_requested.emit)
 	_cancel_button.pressed.connect(EventBus.build_cancel_requested.emit)
@@ -177,6 +181,7 @@ func _update_actions() -> void:
 	_actions["multi"].visible = erasing
 	if _add_floor_button != null:
 		_add_floor_button.visible = tool == "build"
+		_add_basement_button.visible = tool == "build"
 	if not erasing and _actions["multi"].button_pressed:
 		_actions["multi"].button_pressed = false
 

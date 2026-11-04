@@ -3,7 +3,7 @@
 ## Fase actual: Pulido 2 (versión 0.9.0) — en la nube, rama `pulido-2`
 
 Orden (lo pidió el dueño): **2A errores y claridad → 2B estilo y vida → 2C parcela,
-servicios y entregas** (2A y 2B listas; 2C lista salvo los sótanos). Cada sub-fase termina con pruebas en verde, commit y push
+servicios y entregas** (las tres listas). Cada sub-fase termina con pruebas en verde, commit y push
 a `pulido-2`. Estado de cada una abajo.
 
 ### Pulido 2A — errores y claridad: HECHO (2026-11-04)
@@ -28,7 +28,7 @@ a `pulido-2`. Estado de cada una abajo.
 - Pruebas: ver "Verificación" más abajo. Demo nueva `polish2a_demo` con capturas
   (`docs/capturas/p2a_*.png`).
 
-### Pulido 2C — parcela, servicios y entregas: HECHO (2026-11-04) (sin los sótanos: ver «Sótanos» abajo)
+### Pulido 2C — parcela, servicios y entregas: HECHO (2026-11-04) (más los sótanos, abajo)
 - **Parcela de 96 × 96** (el doble hacia cada lado; la casa de antes queda en el centro y se
   migra sola, también en el servidor). Llena de **árboles, rocas, un laguito, tocones y
   maleza** (≈540, desde una semilla: teléfono y servidor generan **los mismos**) que
@@ -45,8 +45,16 @@ a `pulido-2`. Estado de cada una abajo.
 - Guardado **v4** (migración probada). Rendimiento: obstáculos en MultiMesh, red de caminos
   solo en la zona útil (≈100 ms para armarla).
 - Pruebas nuevas: `test_parcel` (**40**), `polish2c_demo` y `parcel_server_demo` (**22**), y
-  Lua **300** (los mismos obstáculos que el teléfono, caminos, costos, bloqueo al
+  Lua **312** (los mismos obstáculos que el teléfono, caminos, costos, bloqueo al
   construir y migración de la parcela).
+
+### Pulido 2C — verificación (nube: Godot 4.7.2, Nakama 3.41.0 + PostgreSQL 16 de prueba)
+Sin red **460**: casa 150 (127 + 23 de sótanos), personaje 34, economía 66, servidor 78, pareja 46,
+negocio 46 y parcela 40. Lua **312**. Demos: `server_demo` 24, `economy_server_demo` 39, `login_demo` 17,
+`couple_demo` 78, `couple_live_demo` 12, `ui_demo` 40, `restaurant_demo` 32, `polish2a_demo` 46,
+`polish2b_demo` 43, **`polish2c_demo` 49** y **`parcel_server_demo` 22**. Nakama reiniciado con los
+módulos nuevos, sin errores. (Las demos que construyen en el servidor se adaptaron a la parcela de 96:
+sus coordenadas pasaron a la zona del centro; si no, un obstáculo al azar podía bloquear una pieza.)
 
 ### Pulido 2C — cómo probarlo en el teléfono (para el dueño)
 1. [Claude] Unir `pulido-2` a `main`, **reiniciar Nakama** (`docker compose restart nakama`
@@ -83,12 +91,18 @@ a `pulido-2`. Estado de cada una abajo.
 - La ambulancia no se llama desde ningún lado más (no hay lesiones reales todavía).
 - No se bajaron sonidos (ver 2B).
 
-### Pulido 2C — sótanos
-**Pendiente** (anotado, no se dejó nada a medias): hasta **3 niveles hacia abajo** con
-**excavación** antes de los cimientos (servicio con costo y tiempo), niveles negativos en
-`HouseGrid`/`HouseData`, reglas de soporte en el juego y el servidor y migración. El diseño y los
-cambios están decididos (ver DECISIONES → «Sótanos») y los números ya están en `data/` (la
-excavación va como una pieza del catálogo con precio y espera). Se hará como siguiente paso.
+### Pulido 2C — sótanos: HECHO
+- **Hasta 3 sótanos** (niveles −1 a −3; 5 pisos arriba). **Excavar antes de los cimientos**: pieza
+  «Excavación (sótano)», $30 por celda y 90 s de espera; después cimientos, piso y paredes del
+  sótano; escalera propia del sótano para llegar. **Obra → Agregar sótano**; el selector de frente
+  y las flechas bajan hasta el sótano y el terreno se esconde bajo tierra.
+- Niveles negativos en `HouseGrid`/`HouseData`, reglas de soporte en el juego **y en el servidor** (Lua),
+  migración de las casas de 5 niveles. Pruebas: 23 nuevas en `test_house`, 12 Lua y la sección 7 de
+  `polish2c_demo`.
+- Cómo probarlo: Construir → **Obra** → **Agregar sótano** → ir al sótano (flecha ↓) → **Construir →
+  Estructura → Excavación** (arrastrar) → confirmar → esperar 90 s (o acelerar) → **Cimientos** →
+  piso y paredes. Para bajar: una **escalera** en el sótano.
+- Pendiente: la retroexcavadora no se ve trabajando en la excavación (solo la espera de obra).
 
 ### Pulido 2B — estilo y vida: HECHO (2026-11-04)
 - **Shader toon con contorno** (geometría invertida, grosor en píxeles, sombras
@@ -194,8 +208,7 @@ entrega, servicios, parcela más grande, sótanos, niebla, cámara). **Orden:**
 Fase 6 (en la nube, rama `fase-6`) → el dueño prueba su APK y manda feedback
 → Pulido 2 = esta lista + ese feedback.
 
-**Próximo paso:** el dueño prueba el APK 0.8.0 en el teléfono (checklist de la
-Fase 6 de abajo) y manda su feedback. Después: **Pulido 2** (`docs/pulido-2.md`
+**Próximo paso (después del Pulido 2):** el dueño prueba el APK 0.9.0 en el teléfono (checklists de 2A, 2B y 2C) y manda su feedback. Después: **Pulido 2** (`docs/pulido-2.md`
 + ese feedback). Siguen pendientes las pruebas de la Fase 5 y del Pulido 1 en
 los teléfonos.
 

@@ -179,9 +179,10 @@ static func diff_writes(local: Dictionary, server: Dictionary) -> Array:
 	var writes: Array = []
 	var local_levels: Array = local.get("levels", [])
 	var server_levels: Array = server.get("levels", []) if server.get("levels") is Array else []
-	for level in HouseGrid.MAX_LEVELS:
-		var lv: Dictionary = local_levels[level] if level < local_levels.size() and local_levels[level] is Dictionary else {}
-		var sv: Dictionary = server_levels[level] if level < server_levels.size() and server_levels[level] is Dictionary else {}
+	for index in HouseGrid.LEVEL_COUNT:
+		var level := index + HouseGrid.MIN_LEVEL  # Pulido 2C: la lista empieza en el sótano -3.
+		var lv: Dictionary = local_levels[index] if index < local_levels.size() and local_levels[index] is Dictionary else {}
+		var sv: Dictionary = server_levels[index] if index < server_levels.size() and server_levels[index] is Dictionary else {}
 		for layer in HouseData.LAYERS:
 			var a: Dictionary = lv.get(layer, {}) if lv.get(layer) is Dictionary else {}
 			var b: Dictionary = sv.get(layer, {}) if sv.get(layer) is Dictionary else {}

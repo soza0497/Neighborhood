@@ -24,6 +24,11 @@ const HOME_ZONE := 32
 ## Cantidad de pisos (niveles) que se pueden construir: planta baja + 4.
 ## (También en el servidor: neighborhood_house.lua y neighborhood_rules.lua.)
 const MAX_LEVELS := 5
+## Pulido 2C: hasta 3 sótanos hacia abajo (niveles -1, -2 y -3). Los niveles
+## van de MIN_LEVEL a MAX_LEVELS - 1; HouseData los guarda con level_index().
+const MAX_BASEMENTS := 3
+const MIN_LEVEL := -MAX_BASEMENTS
+const LEVEL_COUNT := MAX_LEVELS + MAX_BASEMENTS
 
 ## Alto de los cimientos: la planta baja queda a esta altura del pasto.
 const FOUNDATION_HEIGHT := 0.3
@@ -40,6 +45,27 @@ const CUT_WALL_HEIGHT := 0.5
 static func use_test_lot() -> void:
 	LOT_SIZE = Vector2i(32, 32)
 	HouseData.blocked_cells = {}
+
+
+## Todos los niveles posibles, de abajo (-3) hacia arriba (4).
+static func level_range() -> Array:
+	return range(MIN_LEVEL, MAX_LEVELS)
+
+
+## Posición de un nivel en la lista de HouseData.levels (el -3 es la 0).
+static func level_index(level: int) -> int:
+	return level - MIN_LEVEL
+
+
+static func is_valid_level(level: int) -> bool:
+	return level >= MIN_LEVEL and level < MAX_LEVELS
+
+
+## Nombre de un nivel para la interfaz.
+static func level_name(level: int) -> String:
+	if level < 0:
+		return "Sótano %d" % -level
+	return "Planta baja" if level == 0 else "Piso %d" % level
 
 
 ## Esquina de la zona de la casa original dentro de la parcela.

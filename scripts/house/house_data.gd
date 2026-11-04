@@ -14,6 +14,8 @@ extends RefCounted
 ##   objects:    "o7" → {item, cell: [x, z], rot, diag?, color?}   (muebles,
 ##               escaleras, pilares; diag = 45° más, ver HouseGrid)
 ##   roofs:      "o8" → {item, rect: [x, z, ancho, fondo], color?}
+##   excavation: "x,z" → {item}   (solo sótanos, niveles -1 a -3: la celda que se
+##               excavó; hace falta antes de los cimientos de ese sótano)
 ##
 ## TODO cambio pasa por apply(), con una lista de "escrituras":
 ##   {level, layer, key, value}   (value = null significa "quitar")
@@ -28,7 +30,7 @@ signal piece_changed(level: int, layer: String, key: String)
 ## Se reemplazó toda la casa (por ejemplo, al cargar).
 signal reloaded
 
-const LAYERS := ["foundation", "floors", "walls", "objects", "roofs"]
+const LAYERS := ["foundation", "floors", "walls", "objects", "roofs", "excavation"]
 ## Versión del formato de la casa. 3 = Pulido 1 (pintura por cara de pared y
 ## unión de ventanas en la juntura). Las casas sin número son de antes.
 const FORMAT := 4
@@ -52,6 +54,8 @@ var migrated_offset := Vector2i.ZERO
 ## Pulido 2: cuántos pisos tiene la casa porque el jugador los agregó con
 ## "Agregar piso" (mínimo 1). Nunca hay un piso "de regalo": ver floors_total.
 var floor_count := 1
+## Pulido 2C: cuántos sótanos agregó el jugador con «Agregar sótano» (0 a 3).
+var basement_count := 0
 ## Cuántas piezas rotas se sacaron al cargar (ver repair).
 var repaired_count := 0
 
@@ -63,23 +67,38 @@ func _init() -> void:
 ## Deja la casa vacía.
 func clear() -> void:
 	levels = []
-	for i in HouseGrid.MAX_LEVELS:
+	for i in HouseGrid.LEVEL_COUNT:
 		var level := {}
 		for layer in LAYERS:
 			level[layer] = {}
 		levels.append(level)
 	next_id = 1
 	floor_count = 1
+	basement_count = 0
 
 
 ## Piso más alto con algo construido (cualquier capa: techos y muebles
 ## también cuentan). 0 si la casa está vacía.
 func used_top_level() -> int:
-	for level in range(levels.size() - 1, -1, -1):
+	for level in range(HouseGrid.MAX_LEVELS - 1, -1, -1):
 		for layer in LAYERS:
-			if not levels[level][layer].is_empty():
+			if not levels[HouseGrid.level_index(level)][layer].is_empty():
 				return level
 	return 0
+
+
+## Sótano más bajo con algo construido (0 si no hay ninguno).
+func used_bottom_level() -> int:
+	for level in range(HouseGrid.MIN_LEVEL, 0):
+		for layer in LAYERS:
+			if not levels[HouseGrid.level_index(level)][layer].is_empty():
+				return level
+	return 0
+
+
+## El nivel más bajo al que se puede ir: los sótanos agregados o con algo.
+func lowest_level() -> int:
+	return -clampi(maxi(basement_count, -used_bottom_level()), 0, HouseGrid.MAX_BASEMENTS)
 
 
 ## Cuántos pisos hay: los que agregó el jugador o los que tienen algo
@@ -91,9 +110,9 @@ func floors_total() -> int:
 
 ## Devuelve la pieza (un diccionario) o null si no hay nada.
 func get_piece(level: int, layer: String, key: String) -> Variant:
-	if level < 0 or level >= levels.size():
+	if not HouseGrid.is_valid_level(level):
 		return null
-	return levels[level][layer].get(key)
+	return levels[HouseGrid.level_index(level)][layer].get(key)
 
 
 func has_piece(level: int, layer: String, key: String) -> bool:
@@ -102,9 +121,9 @@ func has_piece(level: int, layer: String, key: String) -> bool:
 
 ## Todas las piezas de una capa: clave → valor. No modificar lo que devuelve.
 func get_layer(level: int, layer: String) -> Dictionary:
-	if level < 0 or level >= levels.size():
+	if not HouseGrid.is_valid_level(level):
 		return {}
-	return levels[level][layer]
+	return levels[HouseGrid.level_index(level)][layer]
 
 
 ## Nombre nuevo para un objeto o techo.
@@ -128,10 +147,10 @@ func apply(writes: Array) -> Array:
 		var previous: Variant = get_piece(level, layer, key)
 		inverse.push_front(write(level, layer, key, previous))
 		if w["value"] == null:
-			levels[level][layer].erase(key)
+			levels[HouseGrid.level_index(level)][layer].erase(key)
 		else:
 			# Se guarda una copia para que nadie cambie los datos "por la espalda".
-			levels[level][layer][key] = (w["value"] as Dictionary).duplicate(true)
+			levels[HouseGrid.level_index(level)][layer][key] = (w["value"] as Dictionary).duplicate(true)
 		piece_changed.emit(level, layer, key)
 	return inverse
 
@@ -145,10 +164,10 @@ static func is_under_construction(value: Variant) -> bool:
 func pending_construction() -> Array:
 	var result: Array = []
 	var now := Economy.now()
-	for level in HouseGrid.MAX_LEVELS:
+	for level in HouseGrid.level_range():
 		for layer in Economy.TIMED_LAYERS:
-			for key in levels[level][layer]:
-				var ready_at := int(levels[level][layer][key].get("ready_at", 0))
+			for key in levels[HouseGrid.level_index(level)][layer]:
+				var ready_at := int(levels[HouseGrid.level_index(level)][layer][key].get("ready_at", 0))
 				if ready_at > now:
 					result.append([level, layer, key, ready_at])
 	return result
@@ -210,6 +229,7 @@ func to_dict() -> Dictionary:
 		"lot_size": [HouseGrid.LOT_SIZE.x, HouseGrid.LOT_SIZE.y],
 		"format": FORMAT,
 		"floor_count": floor_count,
+		"basement_count": basement_count,
 	}
 
 
@@ -217,8 +237,17 @@ func to_dict() -> Dictionary:
 func from_dict(data: Dictionary) -> void:
 	# El servidor no guarda "floor_count": si falta, se conserva lo que había.
 	var kept_floors := floor_count
+	var kept_basements := basement_count
 	clear()
 	var saved_levels: Array = data.get("levels", [])
+	# Pulido 2C: las casas de antes tienen 5 niveles (0 a 4): los 3 sótanos
+	# (vacíos) van al principio de la lista.
+	if saved_levels.size() <= HouseGrid.MAX_LEVELS:
+		var padded: Array = []
+		for i in HouseGrid.MAX_BASEMENTS:
+			padded.append({})
+		padded.append_array(saved_levels)
+		saved_levels = padded
 	for i in mini(saved_levels.size(), levels.size()):
 		for layer in LAYERS:
 			levels[i][layer] = (saved_levels[i] as Dictionary).get(layer, {}).duplicate(true)
@@ -233,6 +262,7 @@ func from_dict(data: Dictionary) -> void:
 	if migrated_offset != Vector2i.ZERO:
 		_shift(migrated_offset)
 	floor_count = clampi(int(data.get("floor_count", kept_floors)), 1, HouseGrid.MAX_LEVELS)
+	basement_count = clampi(int(data.get("basement_count", kept_basements)), 0, HouseGrid.MAX_BASEMENTS)
 	repaired_count = repair()
 	reloaded.emit()
 

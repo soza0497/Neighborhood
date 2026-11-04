@@ -9,6 +9,7 @@ var _main: Node3D
 var _hud: CanvasLayer
 var _house: HouseData
 var _character: Character
+var _builder: HouseBuilder
 var _services: Services
 var _delivery: Delivery
 var _shot_dir := ""
@@ -33,6 +34,8 @@ func _ready() -> void:
 	_hud = _main.get_node("HUD")
 	_house = _main.house
 	_character = _main.get_node("House/Character")
+	_builder = _main.get_node("House/Builder")
+	_builder.plan_enabled = false
 	_services = _main.get_node("House/Services")
 	_delivery = _main.get_node("House/Delivery")
 	_services.speed_scale = 6.0
@@ -52,6 +55,7 @@ func _run() -> void:
 		await _test_blocked_vehicle()
 	await _test_delivery()
 	await _test_ambulance()
+	await _test_basement()
 	print("\nDEMO PULIDO 2C: %d pasaron, %d fallaron · capturas: %s" % [_passed, _failed, ", ".join(_shots)])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -342,6 +346,63 @@ func _test_ambulance() -> void:
 	_check(saw_ambulance, "llegó la ambulancia")
 	_check(not _character.hurt and _character.state != Character.State.HURT, "lo revisaron y lo curaron (%.0f s)" % waited)
 	_check(not (_character.data.journal.is_empty()), "queda anotado en el diario")
+
+
+func _test_basement() -> void:
+	print("\n7) Sótanos: hasta 3 hacia abajo, con excavación antes de los cimientos")
+	_character.hurt = false
+	_character.place_at(0, HouseGrid.home_origin() + Vector2i(11, 11))
+	_character._set_idle()
+	_main.set_mode("build")
+	_main._set_level(0)
+	await _frames(3)
+	var o := HouseGrid.home_origin() + Vector2i(9, 9)
+	_check(_builder.add_basement() and _house.basement_count == 1, "«Agregar sótano» suma el sótano 1")
+	await _frames(4)
+	_check(_builder.level == -1 and _hud.get_node("%LevelLabel").text == "Sótano 1", "y se va a él (%s)" % _hud.get_node("%LevelLabel").text)
+	var map: FloorMap = _hud.get_node("%FloorMap")
+	_check(map.shown_levels() == _house.floors_total() + 1, "el selector de pisos muestra el sótano debajo de la planta baja")
+	var world := _main.get_node("World")
+	_check(not world.visible and not _main.get_node("House/ParcelView").visible, "bajo tierra se esconde el terreno (la casa se ve «cortada»)")
+	var dig := HouseData.write(-1, "excavation", HouseGrid.cell_key(o), {"item": "excavation_basic"})
+	var foundation := HouseData.write(-1, "foundation", HouseGrid.cell_key(o), {"item": "foundation_basic"})
+	_check(not _builder._check([foundation])["blocked"].is_empty(), "antes de excavar, los cimientos del sótano se rechazan")
+	var money := Economy.money
+	_check(_builder._check([dig])["blocked"].is_empty(), "excavar sí se puede")
+	await _builder._apply([dig])
+	_check(Economy.money == money - 30, "excavar cuesta $30 por celda (cobró $%d)" % (money - Economy.money))
+	var piece: Dictionary = _house.get_piece(-1, "excavation", HouseGrid.cell_key(o))
+	_check(HouseData.is_under_construction(piece), "y tiene espera (como una obra)")
+	await _shot("p2c_10_excavando.png")
+	# Pasa la espera y ya van los cimientos, el piso y las paredes del sótano.
+	piece["ready_at"] = Economy.now() - 1
+	_house.apply([HouseData.write(-1, "excavation", HouseGrid.cell_key(o), piece)])
+	var build_writes: Array = [foundation, HouseData.write(-1, "floors", HouseGrid.cell_key(o), {"item": "floor_basic"})]
+	for edge in HouseGrid.cell_edges(o):
+		build_writes.append(HouseData.write(-1, "walls", edge, {"item": "wall_basic"}))
+	var check: Dictionary = _builder._check(build_writes)
+	_check(check["blocked"].is_empty(), "ya excavado: cimientos, piso y paredes del sótano entran")
+	_house.apply(check["ok"])
+	await _frames(4)
+	_check(_house.has_piece(-1, "walls", HouseGrid.cell_edges(o)[0]) and _house.lowest_level() == -1, "el sótano quedó armado")
+	_check(HouseRules.problems(_house).any(func(p): return str(p["text"]).contains("Sótano 1: sin acceso")), "avisa que falta una escalera para llegar")
+	var rig: CameraRig = _main.get_node("CameraRig")
+	rig.set_state({"x": o.x - 48.0 + 2.0, "z": o.y - 48.0 + 2.0, "yaw": 20.0, "distance": 12.0, "pitch": -50.0})
+	await _frames(4)
+	await _shot("p2c_11_sotano.png")
+	# Un sótano más abajo necesita excavar primero el de arriba (y cimientos en el de arriba).
+	_house.basement_count = 2
+	var deeper: Dictionary = _builder._check([HouseData.write(-2, "excavation", HouseGrid.cell_key(o), {"item": "excavation_basic"})])
+	_check(deeper["blocked"].is_empty(), "el segundo sótano se excava debajo del primero")
+	var skipped: Dictionary = _builder._check([HouseData.write(-2, "excavation", HouseGrid.cell_key(o + Vector2i(5, 0)), {"item": "excavation_basic"})])
+	_check(not skipped["blocked"].is_empty(), "donde el primero no está excavado, no")
+	_main._set_level(0)
+	await _frames(3)
+	_check(world.visible and _main.get_node("House/ParcelView").visible, "al volver a la planta baja reaparece el terreno")
+	# Borrar la excavación se lleva todo lo de adentro.
+	var closure := HouseRules.removal_closure(_house, HouseData.write(-1, "excavation", HouseGrid.cell_key(o), null))
+	_check(closure.size() >= 3, "borrar la excavación borra también el piso y los cimientos de adentro (%d piezas)" % closure.size())
+	_main.set_mode("live")
 
 
 # --- Ayudantes ---

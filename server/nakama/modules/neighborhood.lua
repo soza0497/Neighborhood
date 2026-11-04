@@ -892,7 +892,7 @@ local function imported_house(text)
     return ""
   end
   house = rules.normalize_house(house)
-  for level = 1, rules.MAX_LEVELS do
+  for level = 1, rules.LEVEL_COUNT do
     for _, layer in ipairs(rules.LAYERS) do
       for key, value in pairs(house.levels[level][layer]) do
         if type(value) ~= "table" or data.items[value.item] == nil then
@@ -1352,7 +1352,7 @@ local function parcel_access(state, obstacles, target, def)
     end
   end
   local house_cells = {}
-  for key in pairs(state.house.levels[1].foundation) do
+  for key in pairs(house_rules.level_table(state.house, 0).foundation) do
     house_cells[key] = true
   end
   return parcel.can_reach(parcel_cfg, blocked, house_cells, target, def.vehicle ~= "")

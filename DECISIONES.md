@@ -1042,3 +1042,27 @@ Decisiones menores tomadas por el desarrollador (el dueño no las pidió una por
   muerte ni pérdida de progreso**, la experiencia no cambia). Llega la **ambulancia** (sirena,
   cruz roja), un **paramédico camina hasta él, lo revisa y lo cura**. Es gratis. Queda anotado
   en el diario. `Character.fall_to(celda)` lo dispara directo (lo usa la demo).
+
+### Sótanos (hasta 3 niveles hacia abajo; 5 arriba, 8 en total)
+- **Niveles de −3 a 4.** `HouseGrid.MIN_LEVEL = -3`, `LEVEL_COUNT = 8`, `level_range()` y
+  `level_index()` (el nivel −3 es la posición 0 de la lista de la casa). **Migración**: una
+  casa con la lista de 5 niveles (la de antes) recibe 3 sótanos vacíos al principio, en el teléfono
+  (`HouseData.from_dict`) y en el servidor (`rules.normalize_house`: la planta baja pasa a ser
+  `levels[4]`). Todo el código del servidor usa `house_rules.level_table(house, nivel)`.
+- **Excavar antes de los cimientos** (pedido del dueño): capa nueva **`excavation`** (una celda
+  excavada por sótano), pieza del catálogo **«Excavación (sótano)»**: **$30 por celda y 90 s de espera**
+  (como una obra: se ve naranja hasta que termina; nivel 4). Reglas (teléfono y servidor, con
+  pruebas): solo en sótanos; el primero se excava desde la superficie y cada uno de abajo **sobre el
+  de arriba**; no donde hay un obstáculo. **Cimientos** de un sótano solo sobre una celda excavada;
+  el **piso** y las **paredes** del sótano se apoyan en esos cimientos (igual que la planta baja);
+  **sin techos** en un sótano. Quitar una excavación se lleva todo lo de adentro y la de abajo.
+- **Acceso**: a un sótano se baja por una **escalera que está en ese sótano** (une el sótano con el
+  nivel de arriba); sin escalera, «Lo que falta» avisa «Sótano 1: sin acceso». El piso de la planta
+  baja no puede taparle el hueco a la escalera del sótano.
+- **Interfaz**: Obra tiene **«Agregar sótano»** (al lado de «Agregar piso»; pide algo construido en
+  el nivel de arriba); la flecha de abajo y el selector de frente bajan hasta el sótano; el nivel
+  se llama «Sótano 1/2/3». Con un sótano a la vista **se esconde el terreno** (se ve la casa «cortada»).
+- **El servicio de excavación es la espera de la obra** (con su costo); **no se dibujó una
+  retroexcavadora trabajando en la excavación** (los servicios genéricos ya existen: queda como mejora).
+- El servidor sigue sin guardar cuántos sótanos «agregó» el jugador (como los pisos): un sótano agregado
+  y todavía vacío se pierde al recargar desde el servidor; uno con algo construido, no.
