@@ -284,7 +284,13 @@ end
 
 -- Versión del formato de la casa (HouseData.FORMAT): 3 = Pulido 1, 4 = Pulido 2C
 -- (parcela de 96: las casas de 32 quedan en el centro).
-rules.HOUSE_FORMAT = 4
+-- 5 = Pulido 3A (la casa pasa de estar centrada a estar CERCA de la calle:
+-- se corre rules.HOME_SHIFT_Z celdas hacia la calle).
+rules.HOUSE_FORMAT = 5
+-- Cuánto se corre hacia la calle una casa de formato < 5: es
+-- (lot - home_zone - home_street_gap) - (lot - home_zone) / 2 de data/parcel.json
+-- (96 - 32 - 6 - 32 = 26). Lo verifica test_rules.lua con el archivo real.
+rules.HOME_SHIFT_Z = 26
 
 function rules.empty_house()
   local levels = {}
@@ -436,6 +442,7 @@ function rules.normalize_house(house)
   house.next_id = math.floor(num(house.next_id) or 1)
   house.lot_size = type(house.lot_size) == "table" and house.lot_size or { rules.LOT_SIZE, rules.LOT_SIZE }
   rules.repair_house(house)
+  local old_format = num(house.format) or 1
   -- Pulido 2C: si la parcela era más chica, la casa se centra en la nueva.
   local saved = num(house.lot_size[1]) or rules.LOT_SIZE
   if saved ~= rules.LOT_SIZE then
@@ -443,8 +450,12 @@ function rules.normalize_house(house)
     rules.shift_house(house, offset, offset)
     house.lot_size = { rules.LOT_SIZE, rules.LOT_SIZE }
   end
-  if (num(house.format) or 1) < 3 then
+  if old_format < 3 then
     rules.upgrade_legacy(rules.data, house)
+  end
+  -- Pulido 3A: la casa se acerca a la calle (después de centrarla).
+  if old_format < 5 then
+    rules.shift_house(house, 0, rules.HOME_SHIFT_Z)
   end
   house.format = rules.HOUSE_FORMAT
   return house

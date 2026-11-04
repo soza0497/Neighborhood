@@ -256,6 +256,12 @@ ventana (`godot --path . res://tests/polish2a_demo.tscn`) o, sin pantalla, con
 `data/style.json`; el **mundo** (bosque, vecinos, calle, autos) está en
 `data/world.json`; cómo meter un **modelo `.glb`** nuevo: `docs/estilo.md`.
 
+**Pulido 3** (versión 0.10.0; brief en `docs/pulido-3.md`): **3A** — la zona disponible empieza en 64 × 64
+pegada a la calle (con niveles se abre hasta 96 × 96), con vallas de madera y vecinos a los costados; la casa
+va cerca de la calle y el personaje esquiva árboles y rocas. Pruebas: `test_parcel.tscn` (sin pantalla),
+`lua5.1 server/tests/test_rules.lua` y `tests/polish3a_demo.tscn` (con ventana; capturas `p3a_*.png`).
+Los datos (zona, desbloqueos, casa) están en `data/parcel.json`; las vallas y vecinos, en `data/world.json`.
+
 **2C — parcela de 96 × 96, servicios y sótanos:** `godot --headless --path . res://tests/test_parcel.tscn`
 (reglas de la parcela, sin pantalla ni red), `tests/polish2c_demo.tscn` (con ventana: limpiar
 obstáculos con jardinero / tractor, entrega con camión y cajas, ambulancia y sótanos; capturas

@@ -714,13 +714,13 @@ local legacy = rules.normalize_house({ levels = { { walls = {
   ["h:6,1"] = { item = "wall_basic", opening = "window_basic", separate = true },
 } } }, next_id = 3 })
 local lw = legacy.levels[4].walls
-check(lw["h:1,1"].color_a == "#ffd966" and lw["h:1,1"].color_b == "#ffd966" and lw["h:1,1"].color == nil,
+check(lw["h:1,27"].color_a == "#ffd966" and lw["h:1,27"].color_b == "#ffd966" and lw["h:1,27"].color == nil,
   "migración: la pintura pasa a las dos caras")
-check(lw["h:1,1"].join_end == true and lw["h:5,1"].join_end == nil and lw["h:6,1"].separate == nil,
+check(lw["h:1,27"].join_end == true and lw["h:5,27"].join_end == nil and lw["h:6,27"].separate == nil,
   "migración: unidas en la juntura, separadas siguen separadas")
-check(legacy.format == 4, "migración: formato 4 (la casa de antes pasa a la parcela de 96)")
-lw["h:1,1"].join_end = nil
-check(rules.normalize_house(legacy).levels[4].walls["h:1,1"].join_end == nil, "una casa nueva no se vuelve a migrar")
+check(legacy.format == 5, "migración: formato 5 (la casa de antes pasa a la parcela de 96 y se acerca a la calle)")
+lw["h:1,27"].join_end = nil
+check(rules.normalize_house(legacy).levels[4].walls["h:1,27"].join_end == nil, "una casa nueva no se vuelve a migrar")
 
 -- Hasta 5 pisos: una escalera en el piso 3 sí, en el 4 (el último) no.
 local tall = rules.empty_house()
@@ -967,19 +967,39 @@ for i, o in ipairs(obstacles) do
   kinds[o.kind] = (kinds[o.kind] or 0) + 1
   checksum = (checksum + (o.x * 131 + o.z * 17 + i)) % 1000003
 end
-check(#obstacles == 543 and kinds.tree == 244 and kinds.bush == 169 and kinds.stump == 68 and kinds.rock == 60 and kinds.lake == 2,
+check(#obstacles == 546 and kinds.tree == 244 and kinds.bush == 175 and kinds.stump == 65 and kinds.rock == 60 and kinds.lake == 2,
   "parcela: misma cantidad de obstáculos que en el teléfono (" .. #obstacles .. ")")
-check(checksum == 988107 and obstacles[1].id == "l:2,88" and obstacles[2].id == "l:34,81" and obstacles[#obstacles].id == "b:44,95",
+check(checksum == 961556 and obstacles[1].id == "l:49,31" and obstacles[2].id == "l:2,88" and obstacles[#obstacles].id == "b:71,94",
   "parcela: los obstáculos están en los mismos lugares que en el teléfono")
 local blocked_all = parcel.blocked_cells(obstacles, {})
-local lo = (pcfg.lot - pcfg.home_zone) / 2
+-- Pulido 3A: la casa va CERCA de la calle y la franja hasta la calle queda libre.
+local hx, hz = parcel.home_origin(pcfg)
+check(hx == 32 and hz == 58, "parcela: la casa va centrada y a 6 celdas de la calle (" .. hx .. "," .. hz .. ")")
+check(rules.HOME_SHIFT_Z == hz - (pcfg.lot - pcfg.home_zone) / 2, "migración: el corrimiento hacia la calle es el del archivo")
 local in_zone = false
-for x = lo, lo + pcfg.home_zone - 1 do
-  for z = lo, lo + pcfg.home_zone - 1 do
+for x = hx - 1, hx + pcfg.home_zone do
+  for z = hz - 1, pcfg.lot - 1 do
     if blocked_all[x .. "," .. z] then in_zone = true end
   end
 end
-check(not in_zone, "parcela: la zona de la casa de antes queda libre")
+check(not in_zone, "parcela: la casa y la franja hasta la calle quedan libres de obstáculos")
+-- Zona usable: el doble al principio, el triple con todos los desbloqueos.
+local function count_cells(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
+check(count_cells(parcel.locked_cells(pcfg, 1)) == 96 * 96 - 64 * 64, "zona: al principio solo se usa 64 x 64")
+check(count_cells(parcel.locked_cells(pcfg, 4)) == 96 * 96 - 64 * 96, "zona: al nivel 4 se abre el terreno de atrás")
+check(count_cells(parcel.locked_cells(pcfg, 6)) == 0, "zona: al nivel 6 es toda la parcela (el triple)")
+local zone1 = parcel.zone_rects(pcfg, 1)
+check(parcel.in_zone(zone1, 16, 32) and parcel.in_zone(zone1, 79, 95) and not parcel.in_zone(zone1, 15, 60) and not parcel.in_zone(zone1, 40, 31),
+  "zona: los bordes de la zona inicial")
+check(parcel.in_zone(zone1, hx, hz, 32, 32), "zona: la casa entra entera en la zona inicial")
+local locked1 = parcel.locked_cells(pcfg, 1)
+local with_zone = parcel.blocked_cells(obstacles, {}, locked1)
+check(with_zone["0,0"] == "zone" and with_zone["40,94"] == nil, "zona: las celdas cerradas figuran como zona")
+local zone_house = rules.empty_house()
+hr.blocked_cells = with_zone
+check(not hr.check_batch(data, zone_house, { w(0, "foundation", "5,5", { item = "foundation_basic" }) }), "zona: no se construye en la zona cerrada")
+check(hr.check_batch(data, zone_house, { w(0, "foundation", "40,90", { item = "foundation_basic" }) }), "zona: en la zona abierta sí")
+hr.blocked_cells = nil
 local cleared_one = parcel.blocked_cells(obstacles, { [obstacles[1].id] = true })
 local count_all, count_one = 0, 0
 for _ in pairs(blocked_all) do count_all = count_all + 1 end
@@ -1014,12 +1034,12 @@ check(hr.check_batch(data, lot_house, { w(0, "foundation", "5,5", { item = "foun
 local old_house = rules.normalize_house({ levels = { { foundation = { ["0,0"] = { item = "foundation_basic" } },
   walls = { ["h:1,2"] = { item = "wall_basic" } }, objects = { o1 = { item = "chair_basic", cell = { 3, 4 }, rot = 0 } },
   roofs = { o2 = { item = "roof_basic", rect = { 1, 1, 2, 2 } } } } }, next_id = 3, lot_size = { 32, 32 }, format = 3 })
-check(old_house.levels[4].foundation["32,32"] ~= nil and old_house.levels[4].walls["h:33,34"] ~= nil
-  and old_house.levels[4].objects.o1.cell[1] == 35 and old_house.levels[4].roofs.o2.rect[1] == 33,
+check(old_house.levels[4].foundation["32,58"] ~= nil and old_house.levels[4].walls["h:33,60"] ~= nil
+  and old_house.levels[4].objects.o1.cell[1] == 35 and old_house.levels[4].objects.o1.cell[2] == 62 and old_house.levels[4].roofs.o2.rect[1] == 33 and old_house.levels[4].roofs.o2.rect[2] == 59,
   "migración: la casa de 32 queda en el centro (cimientos, paredes, muebles y techos)")
-check(old_house.lot_size[1] == 96 and old_house.format == 4, "migración: pasa a parcela de 96 y formato 4")
+check(old_house.lot_size[1] == 96 and old_house.format == 5, "migración: pasa a parcela de 96 y formato 5")
 local again = rules.normalize_house(old_house)
-check(again.levels[4].foundation["32,32"] ~= nil and again.levels[4].foundation["64,64"] == nil, "migración: una casa ya migrada no se mueve otra vez")
+check(again.levels[4].foundation["32,58"] ~= nil and again.levels[4].foundation["64,90"] == nil, "migración: una casa ya migrada no se mueve otra vez")
 
 -- Pulido 2C: sótanos (niveles -1 a -3) y excavación.
 local bh = rules.normalize_house(rules.empty_house())
@@ -1041,7 +1061,7 @@ check(refusal_of(rules.build, data, new_state(3000, 99999), { w(0, "excavation",
 check(refusal_of(rules.build, data, new_state(3000, 99999), { w(-4, "excavation", "50,50", DIG) }, NOW) ~= nil, "servidor: más abajo del tercer sótano, no")
 check(refusal_of(rules.build, data, new_state(3000, 99999), { w(1, "foundation", "50,50", { item = "foundation_basic" }) }, NOW) ~= nil, "servidor: cimientos arriba, no")
 local five = rules.normalize_house({ levels = { { foundation = { ["1,1"] = { item = "foundation_basic" } } }, {}, {}, {}, {} }, next_id = 2, lot_size = { 96, 96 }, format = 3 })
-check(#five.levels == 8 and five.levels[4].foundation["1,1"] ~= nil, "servidor: una casa de 5 niveles pasa a 8 (la planta baja queda en el lugar 4)")
+check(#five.levels == 8 and five.levels[4].foundation["1,27"] ~= nil, "servidor: una casa de 5 niveles pasa a 8 (la planta baja queda en el lugar 4)")
 
 print(string.format("\nPRUEBAS LUA: %d pasaron, %d fallaron", passed, failed))
 os.exit(failed > 0 and 1 or 0)

@@ -19,6 +19,8 @@ func _init(house: HouseData) -> void:
 	_house = house
 	_house.piece_changed.connect(_on_piece_changed)
 	_house.reloaded.connect(mark_dirty)
+	# Pulido 3A: al limpiar un obstáculo (o abrirse un terreno) el camino se regenera.
+	Parcel.changed.connect(mark_dirty)
 
 
 ## La casa cambió: el camino se vuelve a armar cuando se pida.
@@ -152,6 +154,15 @@ func rebuild() -> void:
 					var pos := HouseGrid.cell_center(cell) + Vector3(0, ground_y(level, cell), 0)
 					_astar.add_point(point_id(level, cell), pos)
 
+	# Pulido 3A: pegado a un árbol o una roca el camino "cuesta más", así el
+	# personaje los rodea con un poco de aire (las copas son más anchas que la celda).
+	if not HouseData.blocked_cells.is_empty():
+		for x in range(area.position.x, area.end.x):
+			for z in range(area.position.y, area.end.y):
+				var cell := Vector2i(x, z)
+				if _astar.has_point(point_id(0, cell)) and _touches_obstacle(cell):
+					_astar.set_point_weight_scale(point_id(0, cell), NEAR_OBSTACLE_COST)
+
 	for level in HouseGrid.level_range():
 		for x in range(area.position.x, area.end.x):
 			for z in range(area.position.y, area.end.y):
@@ -168,6 +179,19 @@ func rebuild() -> void:
 	for level in range(HouseGrid.MIN_LEVEL, HouseGrid.MAX_LEVELS - 1):
 		for key in _house.get_layer(level, "objects"):
 			_add_stairs(level, key)
+
+
+## Cuánto más "cuesta" caminar pegado a un obstáculo (1 = igual que en campo abierto).
+const NEAR_OBSTACLE_COST := 3.0
+
+
+## ¿Alguna de las 8 celdas de alrededor es un obstáculo?
+func _touches_obstacle(cell: Vector2i) -> bool:
+	for dx in range(-1, 2):
+		for dz in range(-1, 2):
+			if (dx != 0 or dz != 0) and Parcel.obstacle_at(cell + Vector2i(dx, dz)) != "":
+				return true
+	return false
 
 
 func _connect_if_open(level: int, a: Vector2i, b: Vector2i) -> void:

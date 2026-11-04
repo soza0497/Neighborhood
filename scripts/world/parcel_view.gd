@@ -28,8 +28,12 @@ func rebuild() -> void:
 		node.queue_free()
 	_nodes.clear()
 	var by_kind := {}
+	var bounds := Parcel.zone_bounds()
 	for o in Parcel.obstacles:
 		if Parcel.cleared.has(o["id"]):
+			continue
+		# Pulido 3A: pasada la valla de los costados ya es el terreno del vecino.
+		if o["x"] + o["w"] <= bounds.position.x or o["x"] >= bounds.end.x:
 			continue
 		if not by_kind.has(o["kind"]):
 			by_kind[o["kind"]] = []

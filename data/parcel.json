@@ -1,8 +1,15 @@
 {
-	"_ayuda": "Parcela y servicios (Pulido 2C). Lo lee el juego Y el servidor (reiniciá Nakama si lo cambiás). La parcela mide 'lot' celdas por lado y la casa original queda en el centro ('home_zone' celdas). Lo demás está lleno de obstáculos que bloquean construir hasta que se limpian con un servicio. density = qué parte de las celdas libres ocupa cada obstáculo (0.035 = 3,5 %); count = cantidad fija. size = ancho y fondo en celdas. service = quién viene: gardener (jardinero), lumberjack (leñador) o crew (cuadrilla con vehículo pesado). vehicle = si hace falta que el vehículo llegue hasta el lugar (tractor, excavator); sin camino libre avisa que no puede entrar. base_cost = precio base; el precio sube con lo ya limpiado: costo × (1 + growth × limpiados), hasta max_multiplier. seconds = espera REAL hasta que llega el servicio y termina. OJO: el juego y el servidor tienen que tener EL MISMO archivo (los dos generan los mismos obstáculos desde la misma semilla).",
+	"_ayuda": "Parcela y servicios (Pulido 2C). Lo lee el juego Y el servidor (reiniciá Nakama si lo cambiás). La parcela mide 'lot' celdas por lado. La casa ('home_zone' celdas) queda centrada de izquierda a derecha y CERCA de la calle: 'home_street_gap' celdas libres entre ella y la calle. Pulido 3A: al principio solo se puede usar la 'start_zone' (celdas por lado, pegada a la calle y centrada: el doble de la parcela original de 32); 'unlocks' son rectángulos [x, z, ancho, fondo] que se abren al llegar al nivel indicado (con todos, el triple = toda la parcela). Lo demás se ve pero no se puede pisar. La franja entre la casa y la calle queda siempre libre de obstáculos. Lo demás está lleno de obstáculos que bloquean construir hasta que se limpian con un servicio. density = qué parte de las celdas libres ocupa cada obstáculo (0.035 = 3,5 %); count = cantidad fija. size = ancho y fondo en celdas. service = quién viene: gardener (jardinero), lumberjack (leñador) o crew (cuadrilla con vehículo pesado). vehicle = si hace falta que el vehículo llegue hasta el lugar (tractor, excavator); sin camino libre avisa que no puede entrar. base_cost = precio base; el precio sube con lo ya limpiado: costo × (1 + growth × limpiados), hasta max_multiplier. seconds = espera REAL hasta que llega el servicio y termina. OJO: el juego y el servidor tienen que tener EL MISMO archivo (los dos generan los mismos obstáculos desde la misma semilla).",
 	"format_version": 1,
 	"lot": 96,
 	"home_zone": 32,
+	"home_street_gap": 6,
+	"start_zone": 64,
+	"unlocks": [
+		{ "level": 4, "name": "Terreno de atrás",    "rect": [16, 0, 64, 32] },
+		{ "level": 6, "name": "Terreno de la izquierda", "rect": [0, 0, 16, 96] },
+		{ "level": 6, "name": "Terreno de la derecha",   "rect": [80, 0, 16, 96] }
+	],
 	"growth": 0.02,
 	"max_multiplier": 3.0,
 	"clear_margin": 1,

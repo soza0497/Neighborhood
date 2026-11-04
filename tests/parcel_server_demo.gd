@@ -63,7 +63,7 @@ func _run() -> void:
 	_check(obstacles.size() > 400 and int(data["parcel"]["count"]) == 0 and data["parcel"]["cleared"].is_empty(), "%d obstáculos, ninguno limpio" % obstacles.size())
 	var bush := {}
 	var tree := {}
-	var center := Vector2(48, 56)
+	var center := Vector2(48, 74)
 	for o in obstacles:
 		if o["kind"] == "bush" and (bush.is_empty() or Vector2(o["x"], o["z"]).distance_to(center) < Vector2(bush["x"], bush["z"]).distance_to(center)):
 			bush = o

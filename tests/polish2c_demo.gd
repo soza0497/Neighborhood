@@ -82,7 +82,7 @@ func _build_test_house() -> void:
 
 
 func _nearest(kind: String) -> Dictionary:
-	var center := Vector2(48, 56)
+	var center := Vector2(48, 74)
 	var best: Dictionary = {}
 	var best_distance := INF
 	for o in Parcel.obstacles:
@@ -98,7 +98,7 @@ func _nearest(kind: String) -> Dictionary:
 func _test_world_and_obstacles() -> void:
 	print("\n1) La parcela de 96 x 96 con obstáculos")
 	_check(HouseGrid.LOT_SIZE == Vector2i(96, 96) and _main.get_node("House").position == Vector3(-48, 0, -48), "la casa se centra en una parcela de 96")
-	_check(Parcel.obstacles.size() == 543 and _house.has_piece(0, "foundation", "%d,%d" % [HouseGrid.home_origin().x + 8, HouseGrid.home_origin().y + 8]),
+	_check(Parcel.obstacles.size() == 546 and _house.has_piece(0, "foundation", "%d,%d" % [HouseGrid.home_origin().x + 8, HouseGrid.home_origin().y + 8]),
 		"%d obstáculos y la casa en la zona del centro" % Parcel.obstacles.size())
 	var view: ParcelView = _main.get_node("House/ParcelView")
 	_check(view.get_node_or_null("ObstacleTrunks") != null and view.get_children().any(func(c): return c.name.begins_with("Lake_")),
@@ -357,7 +357,8 @@ func _test_basement() -> void:
 	_main._set_level(0)
 	await _frames(3)
 	var o := HouseGrid.home_origin() + Vector2i(9, 9)
-	_check(_builder.add_basement() and _house.basement_count == 1, "«Agregar sótano» suma el sótano 1")
+	var added: bool = _builder.add_basement()
+	_check(added and _house.basement_count == 1, "«Agregar sótano» suma el sótano 1")
 	await _frames(4)
 	_check(_builder.level == -1 and _hud.get_node("%LevelLabel").text == "Sótano 1", "y se va a él (%s)" % _hud.get_node("%LevelLabel").text)
 	var map: FloorMap = _hud.get_node("%FloorMap")

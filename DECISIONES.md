@@ -1066,3 +1066,51 @@ Decisiones menores tomadas por el desarrollador (el dueño no las pidió una por
   retroexcavadora trabajando en la excavación** (los servicios genéricos ya existen: queda como mejora).
 - El servidor sigue sin guardar cuántos sótanos «agregó» el jugador (como los pisos): un sótano agregado
   y todavía vacío se pierde al recargar desde el servidor; uno con algo construido, no.
+
+## Pulido 3A — parcela, camino y obstáculos (2026-11-04, nube, rama `pulido-3`)
+
+### Medidas (la cuenta)
+- **«La parcela original de la Fase 1» no es 200 × 200.** En la Fase 1 el lote era de
+  12 × 12, y tras probar la Fase 2 el dueño pasó a **32 × 32** (esa es la parcela que
+  tuvo hasta el Pulido 2). Se toma **32** como la original (con 12 el doble sería 24,
+  más chico que la casa de antes). Entonces: **zona inicial = el doble = 64 × 64**
+  (`start_zone` en `data/parcel.json`) y **máximo con desbloqueos = el triple = 96 × 96**
+  (toda la parcela de siempre, `HouseGrid.LOT_SIZE`). Lo que no se usa se ve pero no se pisa.
+- La zona inicial va **pegada a la calle y centrada** (x 16–79, z 32–95). Se abre más por
+  **nivel del jugador** (`unlocks`, en `data/parcel.json`): nivel 4 el terreno de atrás
+  (64 × 32) y nivel 6 los dos costados (16 × 96 cada uno) → toda la parcela. Es
+  cuenta del **servidor** también (`parcel.zone_rects` / `locked_cells` en
+  `neighborhood_parcel.lua`, con el nivel que sale de la experiencia del servidor): construir
+  o llamar a un servicio en zona cerrada se rechaza. Las celdas cerradas se tratan como
+  «bloqueadas» con id `"zone"` (igual que un obstáculo): construir, caminar y llegar con un
+  vehículo ya las respetan sin código extra.
+
+### La casa, cerca de la calle
+- `home_street_gap = 6` (`data/parcel.json`): la zona de la casa (32 × 32) queda **centrada
+  de izquierda a derecha y a 6 celdas de la calle** → esquina en (32, 58)
+  (`ParcelRules.home_origin`, `HouseGrid.home_origin()`). Entre la casa y la calle **no hay
+  obstáculos** (franja libre de 32 + margen de ancho hasta la acera); los obstáculos quedan
+  en la zona inicial a los costados y atrás, y en lo por desbloquear. La generación sigue
+  desde la misma semilla (cambia qué celdas se saltea, así que cambian los obstáculos: 546).
+- **Migración** (formato de casa **5**, guardado sin cambio de versión): una casa de formato < 5
+  se corre **26 celdas hacia la calle** (después de centrarla si venía de un lote más chico),
+  junto con muebles, techos y el personaje (`HouseData.migrated_offset`). Servidor igual
+  (`rules.HOME_SHIFT_Z = 26`, formato 5). Probado con una copia de una partida del
+  Pulido 2 armada en la demo (no se toca ningún archivo del dueño), en `test_parcel` y en Lua.
+  Una casa ya migrada no se vuelve a mover.
+
+### Vallas y vecinos de los costados (`WorldBuilder._build_zone_decor`)
+- **Valla de madera** (postes + 2 barandas, cajas simples: reemplazable por un `.glb`) en
+  los dos costados de la zona abierta, de la zona hasta la acera; **sigue a la zona** cuando se
+  abre terreno. Detrás de cada valla, **una casa de vecino al azar** (tamaño, colores y lugar
+  desde la semilla del mundo, `side_neighbors` en `data/world.json`): solo decoración y silueta.
+  Lo cerrado se ve con una **sombra verde translúcida**. Pasada la valla de los costados no se
+  dibujan obstáculos (es el terreno del vecino).
+
+### Esquivar obstáculos
+- La red de caminos ya excluía las celdas ocupadas, pero **no se regeneraba al limpiar** un
+  obstáculo ni cuando se abría terreno, y las copas de los árboles (más anchas que la celda)
+  hacían ver al personaje «pegado». Ahora (1) `HouseNav` escucha `Parcel.changed` y se
+  regenera, y (2) las celdas **vecinas de un obstáculo cuestan ×3** (`NEAR_OBSTACLE_COST`):
+  el camino los rodea con aire cuando hay lugar. Prueba: `test_parcel` y `polish3a_demo`
+  (el personaje llega al otro lado de un árbol sin pisarlo y, al limpiarlo, el camino se acorta).

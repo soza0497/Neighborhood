@@ -1,5 +1,41 @@
 # Progreso
 
+## ▶ Pulido 3 (versión 0.10.0) — en la nube, rama `pulido-3` (sale de `pulido-2`)
+
+Brief completo en `docs/pulido-3.md`. Tres sub-fases, un push a `pulido-3` al terminar cada una.
+**No se mergea a `main`, no se exporta APK.** Estado:
+
+- **3A parcela, camino y obstáculos: HECHO (2026-11-04)** — ver abajo.
+- 3B interfaz y personaje: pendiente.
+- 3C estilo (contorno sin costuras): pendiente.
+
+**Próximo paso:** 3B (empezar por el área segura de la pantalla).
+
+### Pulido 3A — qué se hizo
+- **Zona disponible = el doble de la parcela original (32 → 64 × 64), pegada a la calle**;
+  con niveles se abre hasta el triple (96 × 96: nivel 4 atrás, nivel 6 costados). Lo demás
+  se ve (sombreado) pero no se pisa ni se construye (teléfono y servidor). `data/parcel.json`.
+  (La «parcela original» es la de 32; la de la Fase 1 era de 12. Ver DECISIONES.)
+- **Vallas de madera** en los costados de la zona y **una casa de vecino al azar** detrás de cada
+  una (solo decoración). Siguen a la zona al abrirse terreno. `data/world.json`.
+- **La casa va cerca de la calle** (a 6 celdas), la franja hasta la calle **sin obstáculos**.
+  **Migración** (formato de casa 5, también en el servidor): casas, muebles, techos y
+  personaje se corren 26 celdas hacia la calle. Probada con una copia de partida del Pulido 2
+  (no se tocó ninguna partida real).
+- **El personaje esquiva obstáculos**: la red de caminos se regenera al limpiar/abrir terreno y
+  el camino rodea con aire árboles y rocas. Prueba: llega al otro lado de un árbol.
+- Pruebas: `test_parcel` **55**, Lua **322**, demo nueva `polish3a_demo` **15** (capturas
+  `docs/capturas/p3a_*.png`).
+
+**Verificación 3A (nube: Godot 4.7.2 con SHA-512 verificado, Lua 5.1 de apt):** sin pantalla —
+casa 150, personaje 34, economía 66, servidor 78, pareja 46, negocio 46, parcela 55; Lua 322.
+Demos con xvfb: `ui_demo` 40, `polish2a_demo` 46, `polish2b_demo` 43, `polish2c_demo` 49 y
+`polish3a_demo` 15. **No se corrieron** las demos que necesitan Nakama real (`server_demo`,
+`economy_server_demo`, `couple_demo`, `couple_live_demo`, `login_demo`, `restaurant_demo`,
+`parcel_server_demo`): en la nube no hay Docker ni Nakama; lo del servidor está cubierto por
+las pruebas Lua. **Antes de usar el servidor: reiniciar Nakama** (`docker compose restart nakama`)
+para que lea los módulos y `data/parcel.json` nuevos. Hay que correr esas demos en la PC.
+
 ## Fase actual: Pulido 2 (versión 0.9.0) — en la nube, rama `pulido-2`
 
 Orden (lo pidió el dueño): **2A errores y claridad → 2B estilo y vida → 2C parcela,

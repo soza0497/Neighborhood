@@ -160,6 +160,21 @@ local function parcel_obstacles(owner_id)
   return parcel_cache[seed], seed
 end
 
+-- Pulido 3A: celdas bloqueadas = obstáculos sin limpiar + zona todavía cerrada
+-- (se abre por nivel, data/parcel.json "unlocks"). Se guardan las celdas de
+-- cada nivel de zona porque son siempre las mismas.
+local locked_cache = {}
+local function parcel_locked(level)
+  if locked_cache[level] == nil then
+    locked_cache[level] = parcel.locked_cells(parcel_cfg, level)
+  end
+  return locked_cache[level]
+end
+
+local function parcel_blocked(state, obstacles, cleared)
+  return (parcel.blocked_cells(obstacles, cleared, parcel_locked(rules.level_for_xp(data, state.xp))))
+end
+
 -- Lo que el hogar guarda de la parcela: limpiados, en camino y cuántos van.
 local function parcel_state(state)
   local p = state.home.parcel
@@ -352,7 +367,7 @@ local function load_state(user_id)
   state.start_fund = state.fund
   state.start_xp = state.xp
   -- Pulido 2C: lo que no se limpió bloquea construir (reglas de apoyo).
-  house_rules.blocked_cells = parcel.blocked_cells(parcel_obstacles(owner_id), parcel_state(state).cleared)
+  house_rules.blocked_cells = parcel_blocked(state, parcel_obstacles(owner_id), parcel_state(state).cleared)
   return state
 end
 
@@ -1339,13 +1354,14 @@ local function parcel_summary(state, now)
   for id, job in pairs(p.pending) do
     pending[id] = { ready_at = job.ready_at, service = job.service, seconds_left = math.max(0, job.ready_at - now) }
   end
-  return { seed = seed, lot = parcel_cfg.lot, cleared = cleared, pending = pending, count = p.count, server_unix = now }
+  return { seed = seed, lot = parcel_cfg.lot, cleared = cleared, pending = pending, count = p.count, server_unix = now,
+    level = rules.level_for_xp(data, state.xp) }
 end
 
 -- ¿Puede llegar el servicio hasta el obstáculo? (con la casa y lo que no se limpió)
 local function parcel_access(state, obstacles, target, def)
   local p = parcel_state(state)
-  local blocked = parcel.blocked_cells(obstacles, p.cleared)
+  local blocked = parcel_blocked(state, obstacles, p.cleared)
   for cx = target.x, target.x + target.w - 1 do
     for cz = target.z, target.z + target.d - 1 do
       blocked[cx .. "," .. cz] = nil
@@ -1378,6 +1394,9 @@ local function parcel_clear_start(state, input, now)
     rules.refuse("Ya viene un servicio para eso.")
   end
   local def = parcel_cfg.obstacles[target.kind]
+  if not parcel.in_zone(parcel.zone_rects(parcel_cfg, rules.level_for_xp(data, state.xp)), target.x, target.z, target.w, target.d) then
+    rules.refuse("Ese terreno todavía no es tuyo: se abre al subir de nivel.")
+  end
   local ok, why = parcel_access(state, obstacles, target, def)
   if not ok then
     rules.refuse(why)
@@ -1415,7 +1434,7 @@ local function parcel_clear_finish(state, input, now)
   p.cleared[id] = true
   p.count = p.count + 1
   state.xp = state.xp + def.xp
-  house_rules.blocked_cells = parcel.blocked_cells(obstacles, p.cleared)
+  house_rules.blocked_cells = parcel_blocked(state, obstacles, p.cleared)
   log_and_notify(state, { kind = "parcel", text = string.format("quedó limpio: %s", def.name) })
   return { changed = { home = true, progress = true }, result = { cleared = id, xp_gained = def.xp, parcel = parcel_summary(state, now) } }
 end

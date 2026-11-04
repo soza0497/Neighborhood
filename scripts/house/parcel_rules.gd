@@ -5,8 +5,10 @@ class_name ParcelRules
 ## el servidor generan los MISMOS obstáculos desde la misma semilla (y revisan
 ## el mismo camino). Si cambiás algo acá, cambialo allá y en sus pruebas.
 ##
-## La parcela es de LOT x LOT celdas; la casa de antes queda en el centro
-## (home_zone). Lo demás se llena de obstáculos (árboles, rocas, un laguito,
+## La parcela es de LOT x LOT celdas; la casa queda centrada y CERCA de la calle
+## (home_zone + home_street_gap, Pulido 3A). Al principio solo se usa la
+## start_zone (el doble de la parcela original); el resto se abre por nivel
+## (unlocks) y mientras tanto es "zona cerrada". Lo demás se llena de obstáculos (árboles, rocas, un laguito,
 ## tocones y maleza) que bloquean construir hasta que se limpian con un
 ## servicio. Cada obstáculo tiene un id estable ("t:x,z").
 
@@ -31,6 +33,58 @@ static func config() -> Dictionary:
 	return copy
 
 
+## Esquina de la casa (la "zona de la casa") dentro de la parcela: centrada de
+## izquierda a derecha y a `home_street_gap` celdas de la calle (Pulido 3A).
+## Si la parcela es del tamaño de la casa (las pruebas viejas) es (0, 0).
+static func home_origin(cfg: Dictionary) -> Vector2i:
+	var lot := int(cfg["lot"])
+	var home := int(cfg["home_zone"])
+	return Vector2i((lot - home) / 2, maxi(0, lot - home - int(cfg.get("home_street_gap", 0))))
+
+
+## Zona que el jugador puede usar con `player_level`: lista de [x, z, ancho, fondo].
+## Empieza con la start_zone (pegada a la calle, centrada) y suma los `unlocks`
+## cuyo nivel ya se alcanzó. Con una parcela chica (pruebas) es toda.
+static func zone_rects(cfg: Dictionary, player_level: int) -> Array:
+	var lot := int(cfg["lot"])
+	var start := int(cfg.get("start_zone", lot))
+	if lot <= start:
+		return [[0, 0, lot, lot]]
+	var rects: Array = [[(lot - start) / 2, lot - start, start, start]]
+	for unlock in cfg.get("unlocks", []):
+		if int(unlock["level"]) <= player_level:
+			var r: Array = unlock["rect"]
+			rects.append([int(r[0]), int(r[1]), int(r[2]), int(r[3])])
+	return rects
+
+
+static func in_zone(rects: Array, x: int, z: int, w := 1, d := 1) -> bool:
+	for cx in range(x, x + w):
+		for cz in range(z, z + d):
+			var inside := false
+			for r in rects:
+				if cx >= r[0] and cx < r[0] + r[2] and cz >= r[1] and cz < r[1] + r[3]:
+					inside = true
+					break
+			if not inside:
+				return false
+	return true
+
+
+## Celdas fuera de la zona usable: "x,z" → "zone" (se ven, pero no se pisan ni se construyen).
+static func locked_cells(cfg: Dictionary, player_level: int) -> Dictionary:
+	var lot := int(cfg["lot"])
+	var rects := zone_rects(cfg, player_level)
+	var cells := {}
+	if rects.size() == 1 and rects[0][2] >= lot and rects[0][3] >= lot:
+		return cells
+	for z in lot:
+		for x in lot:
+			if not in_zone(rects, x, z):
+				cells[_key(x, z)] = "zone"
+	return cells
+
+
 static func next_random(seed: int) -> int:
 	return (seed * FACTOR) % MODULUS
 
@@ -48,9 +102,10 @@ static func seed_from_text(text: String) -> int:
 ## Genera todos los obstáculos: lista de {id, kind, x, z, w, d} en orden fijo.
 static func generate(cfg: Dictionary, seed: int) -> Array:
 	var lot := int(cfg["lot"])
-	var zone_lo := int(floor((lot - int(cfg["home_zone"])) / 2.0))
-	var zone_hi := zone_lo + int(cfg["home_zone"]) - 1
+	# Zona siempre libre: la casa, su margen y toda la franja hasta la calle.
+	var home := home_origin(cfg)
 	var margin := int(cfg.get("clear_margin", 0))
+	var free := Rect2i(home.x - margin, home.y - margin, int(cfg["home_zone"]) + 2 * margin, lot - home.y + margin)
 	var taken := {}
 	var list: Array = []
 	var state := seed
@@ -68,7 +123,7 @@ static func generate(cfg: Dictionary, seed: int) -> Array:
 					var x := int(floor(float(state) / MODULUS * (lot - w + 1)))
 					state = next_random(state)
 					var z := int(floor(float(state) / MODULUS * (lot - d + 1)))
-					if _fits(taken, lot, zone_lo, zone_hi, margin, x, z, w, d):
+					if _fits(taken, lot, free, x, z, w, d):
 						_place(taken, list, kind, def, x, z)
 						break
 		else:
@@ -78,18 +133,17 @@ static func generate(cfg: Dictionary, seed: int) -> Array:
 				for x in lot:
 					state = next_random(state)
 					var roll := float(state) / MODULUS
-					if roll < density and _fits(taken, lot, zone_lo, zone_hi, margin, x, z, w, d):
+					if roll < density and _fits(taken, lot, free, x, z, w, d):
 						_place(taken, list, kind, def, x, z)
 	return list
 
 
-static func _fits(taken: Dictionary, lot: int, zone_lo: int, zone_hi: int, margin: int, x: int, z: int, w: int, d: int) -> bool:
+static func _fits(taken: Dictionary, lot: int, free: Rect2i, x: int, z: int, w: int, d: int) -> bool:
 	if x < 0 or z < 0 or x + w > lot or z + d > lot:
 		return false
 	for cx in range(x, x + w):
 		for cz in range(z, z + d):
-			var in_zone := cx >= zone_lo - margin and cx <= zone_hi + margin and cz >= zone_lo - margin and cz <= zone_hi + margin
-			if taken.has(_key(cx, cz)) or in_zone:
+			if taken.has(_key(cx, cz)) or free.has_point(Vector2i(cx, cz)):
 				return false
 	return true
 
@@ -107,8 +161,9 @@ static func _key(x: int, z: int) -> String:
 	return "%d,%d" % [x, z]
 
 
-## Celdas ocupadas por los obstáculos que NO se limpiaron: "x,z" → id.
-static func blocked_cells(obstacles: Array, cleared: Dictionary) -> Dictionary:
+## Celdas ocupadas por los obstáculos que NO se limpiaron: "x,z" → id (y las de
+## la zona cerrada, `locked`: "x,z" → "zone").
+static func blocked_cells(obstacles: Array, cleared: Dictionary, locked := {}) -> Dictionary:
 	var cells := {}
 	for o in obstacles:
 		if cleared.has(o["id"]):
@@ -116,6 +171,8 @@ static func blocked_cells(obstacles: Array, cleared: Dictionary) -> Dictionary:
 		for cx in range(o["x"], o["x"] + o["w"]):
 			for cz in range(o["z"], o["z"] + o["d"]):
 				cells[_key(cx, cz)] = o["id"]
+	# La zona cerrada manda: ahí tampoco se llama a ningún servicio.
+	cells.merge(locked, true)
 	return cells
 
 

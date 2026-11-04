@@ -32,8 +32,9 @@ signal reloaded
 
 const LAYERS := ["foundation", "floors", "walls", "objects", "roofs", "excavation"]
 ## Versión del formato de la casa. 3 = Pulido 1 (pintura por cara de pared y
-## unión de ventanas en la juntura). Las casas sin número son de antes.
-const FORMAT := 4
+## unión de ventanas en la juntura), 4 = Pulido 2C (parcela de 96), 5 = Pulido 3A
+## (la casa va cerca de la calle). Las casas sin número son de antes.
+const FORMAT := 5
 ## Casas con formato menor a este vienen de antes del Pulido 1 (pintura y ventanas).
 const LEGACY_FORMAT := 3
 
@@ -259,6 +260,11 @@ func from_dict(data: Dictionary) -> void:
 	# parcela cambió de tamaño, la casa se centra en la nueva.
 	var saved_lot: Array = data.get("lot_size", [12, 12])
 	migrated_offset = (HouseGrid.LOT_SIZE - Vector2i(int(saved_lot[0]), int(saved_lot[1]))) / 2
+	# Pulido 3A (formato 5): la casa de antes estaba centrada; ahora va CERCA de
+	# la calle. Se corre hacia el frente lo mismo que el servidor
+	# (rules.HOME_SHIFT_Z). Una casa ya migrada (formato 5) no se toca.
+	if int(data.get("format", 1)) < 5:
+		migrated_offset += Vector2i(0, HouseGrid.home_origin().y - (HouseGrid.LOT_SIZE.y - HouseGrid.HOME_ZONE) / 2)
 	if migrated_offset != Vector2i.ZERO:
 		_shift(migrated_offset)
 	floor_count = clampi(int(data.get("floor_count", kept_floors)), 1, HouseGrid.MAX_LEVELS)

@@ -18,8 +18,8 @@ class_name HouseGrid
 ## lado. Es "static var" (no const) solo para que las pruebas viejas, que
 ## arman casas en un lote de 32, puedan elegir ese tamaño.
 static var LOT_SIZE := Vector2i(96, 96)
-## La zona donde queda la casa original (centro de la parcela). Lo demás está
-## lleno de obstáculos hasta que se limpia (ver ParcelRules).
+## La zona donde queda la casa (cerca de la calle). Lo demás está lleno de
+## obstáculos hasta que se limpia, o cerrado hasta subir de nivel (ver ParcelRules).
 const HOME_ZONE := 32
 ## Cantidad de pisos (niveles) que se pueden construir: planta baja + 4.
 ## (También en el servidor: neighborhood_house.lua y neighborhood_rules.lua.)
@@ -68,9 +68,10 @@ static func level_name(level: int) -> String:
 	return "Planta baja" if level == 0 else "Piso %d" % level
 
 
-## Esquina de la zona de la casa original dentro de la parcela.
+## Esquina de la zona de la casa dentro de la parcela (Pulido 3A): centrada de
+## izquierda a derecha y CERCA de la calle (data/parcel.json, home_street_gap).
 static func home_origin() -> Vector2i:
-	return (LOT_SIZE - Vector2i(HOME_ZONE, HOME_ZONE)) / 2
+	return ParcelRules.home_origin(ParcelRules.config())
 
 
 ## Altura (Y local) de la superficie de un nivel. Nivel 0 = planta baja.

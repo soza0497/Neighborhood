@@ -21,6 +21,8 @@
 		"sky": "#bfe6ff",
 		"fog": "#bfe6ff",
 		"neighbor_wall": "#f2e3c6",
+		"fence": "#c98f5a",
+		"locked_shade": "#2f5a3a",
 		"neighbor_roof": "#d97a6c",
 		"suit": "#33384a",
 		"suitcase": "#8a5a3a",

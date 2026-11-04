@@ -271,7 +271,7 @@ func _work_at(node: Node3D, target: Vector3, seconds: float, what: String) -> vo
 ## Si no hay, una línea recta (los paramédicos "se las arreglan").
 func person_path_to(cell: Vector2i) -> Array:
 	var target := {"x": cell.x, "z": cell.y, "w": 1, "d": 1}
-	var blocked := ParcelRules.blocked_cells(Parcel.obstacles, Parcel.cleared)
+	var blocked := Parcel.blocked_now()
 	blocked.erase("%d,%d" % [cell.x, cell.y])
 	var house_cells := {}
 	if house != null:

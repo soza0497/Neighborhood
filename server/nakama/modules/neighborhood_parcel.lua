@@ -3,8 +3,10 @@ Parcela y obstáculos (Pulido 2C). Sin Nakama: se prueba sola con lua5.1.
 Copia EXACTA de scripts/house/parcel_rules.gd (el teléfono genera los mismos
 obstáculos desde la misma semilla; si cambiás algo acá, cambialo allá también).
 
-La parcela es de LOT x LOT celdas; la casa de antes queda en el centro
-(home_zone). Lo demás se llena de obstáculos (árboles, rocas, un laguito,
+La parcela es de LOT x LOT celdas; la casa queda centrada y CERCA de la calle
+(home_zone + home_street_gap, Pulido 3A). Al principio solo se usa la start_zone
+(el doble de la parcela original); el resto se abre por nivel (unlocks).
+Lo demás se llena de obstáculos (árboles, rocas, un laguito,
 tocones y maleza) que bloquean construir. Cada obstáculo tiene un id estable
 ("t:x,z"); el servidor solo guarda cuáles se limpiaron.
 ]]
@@ -36,15 +38,73 @@ local function key(x, z)
   return x .. "," .. z
 end
 
+-- Esquina de la casa (la "zona de la casa"): centrada y a `home_street_gap`
+-- celdas de la calle. Con una parcela del tamaño de la casa es (0, 0).
+function parcel.home_origin(cfg)
+  return math.floor((cfg.lot - cfg.home_zone) / 2), math.max(0, cfg.lot - cfg.home_zone - (cfg.home_street_gap or 0))
+end
+
+-- Zona usable con el nivel del jugador: lista de { x, z, w, d }.
+function parcel.zone_rects(cfg, player_level)
+  local lot = cfg.lot
+  local start = cfg.start_zone or lot
+  if lot <= start then
+    return { { lot = true, x = 0, z = 0, w = lot, d = lot } }
+  end
+  local rects = { { x = math.floor((lot - start) / 2), z = lot - start, w = start, d = start } }
+  for _, unlock in ipairs(cfg.unlocks or {}) do
+    if unlock.level <= player_level then
+      table.insert(rects, { x = unlock.rect[1], z = unlock.rect[2], w = unlock.rect[3], d = unlock.rect[4] })
+    end
+  end
+  return rects
+end
+
+function parcel.in_zone(rects, x, z, w, d)
+  for cx = x, x + (w or 1) - 1 do
+    for cz = z, z + (d or 1) - 1 do
+      local inside = false
+      for _, r in ipairs(rects) do
+        if cx >= r.x and cx < r.x + r.w and cz >= r.z and cz < r.z + r.d then
+          inside = true
+          break
+        end
+      end
+      if not inside then
+        return false
+      end
+    end
+  end
+  return true
+end
+
+-- Celdas fuera de la zona usable: "x,z" → "zone".
+function parcel.locked_cells(cfg, player_level)
+  local rects = parcel.zone_rects(cfg, player_level)
+  local cells = {}
+  if rects[1].lot then
+    return cells
+  end
+  for z = 0, cfg.lot - 1 do
+    for x = 0, cfg.lot - 1 do
+      if not parcel.in_zone(rects, x, z, 1, 1) then
+        cells[key(x, z)] = "zone"
+      end
+    end
+  end
+  return cells
+end
+
 -- Genera todos los obstáculos: lista de {id, kind, x, z, w, d} en orden fijo.
 -- (Las celdas ocupadas se anotan con un número, z * lot + x: así es más
 -- rápido que con texto, y el resultado es idéntico al del teléfono.)
 function parcel.generate(cfg, seed)
   local lot = cfg.lot
-  local zone_lo = math.floor((lot - cfg.home_zone) / 2)
-  local zone_hi = zone_lo + cfg.home_zone - 1
+  -- Zona siempre libre: la casa, su margen y toda la franja hasta la calle.
+  local home_x, home_z = parcel.home_origin(cfg)
   local margin = cfg.clear_margin or 0
-  local free_lo, free_hi = zone_lo - margin, zone_hi + margin
+  local free_x0, free_x1 = home_x - margin, home_x + cfg.home_zone - 1 + margin
+  local free_z0 = home_z - margin
   local taken = {}
   local list = {}
   local state = seed
@@ -55,7 +115,7 @@ function parcel.generate(cfg, seed)
     end
     for cx = x, x + w - 1 do
       for cz = z, z + d - 1 do
-        if taken[cz * lot + cx] or (cx >= free_lo and cx <= free_hi and cz >= free_lo and cz <= free_hi) then
+        if taken[cz * lot + cx] or (cx >= free_x0 and cx <= free_x1 and cz >= free_z0) then
           return false
         end
       end
@@ -108,7 +168,7 @@ end
 
 -- Celdas ocupadas por la lista de obstáculos que NO se limpiaron.
 -- Devuelve (celdas "x,z" → id, cantidad).
-function parcel.blocked_cells(obstacles, cleared)
+function parcel.blocked_cells(obstacles, cleared, locked)
   local cells, count = {}, 0
   for _, o in ipairs(obstacles) do
     if not (cleared and cleared[o.id]) then
@@ -119,6 +179,10 @@ function parcel.blocked_cells(obstacles, cleared)
         end
       end
     end
+  end
+  -- La zona cerrada manda: ahí tampoco se llama a ningún servicio.
+  for k, v in pairs(locked or {}) do
+    cells[k] = v
   end
   return cells, count
 end

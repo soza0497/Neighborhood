@@ -32,6 +32,8 @@ func _ready() -> void:
 	cfg = ParcelRules.config()
 	EventBus.game_loaded.connect(_on_game_loaded)
 	EventBus.game_saving.connect(func() -> void: GameState.parcel = to_dict())
+	# Pulido 3A: al subir de nivel se pueden abrir terrenos nuevos.
+	EventBus.level_up.connect(func(_l: int, _n: Array) -> void: _rebuild())
 	setup_local(GameState.parcel)
 
 
@@ -54,6 +56,7 @@ func to_dict() -> Dictionary:
 
 ## Con servidor: se pide al entrar y se copia lo que dice.
 func _on_game_loaded() -> void:
+	_rebuild()  # El nivel (y con él la zona abierta) ya se cargó.
 	if Economy.server_mode:
 		refresh()
 
@@ -81,6 +84,25 @@ func apply_summary(summary: Dictionary) -> void:
 	_rebuild()
 
 
+## Zona usable hoy (Pulido 3A): lista de [x, z, ancho, fondo]. Depende del nivel.
+func zone_rects() -> Array:
+	return ParcelRules.zone_rects(cfg, Economy.level())
+
+
+## Cuadro que envuelve toda la zona usable hoy (para vallas y cámara).
+func zone_bounds() -> Rect2i:
+	var rects := zone_rects()
+	var bounds := Rect2i(rects[0][0], rects[0][1], rects[0][2], rects[0][3])
+	for r in rects:
+		bounds = bounds.merge(Rect2i(r[0], r[1], r[2], r[3]))
+	return bounds
+
+
+## Celdas bloqueadas hoy: obstáculos sin limpiar y zona todavía cerrada.
+func blocked_now() -> Dictionary:
+	return ParcelRules.blocked_cells(obstacles, cleared, ParcelRules.locked_cells(cfg, Economy.level()))
+
+
 ## Vuelve a leer la configuración (el tamaño de la parcela pudo cambiar).
 func refresh_config() -> void:
 	cfg = ParcelRules.config()
@@ -90,7 +112,7 @@ func refresh_config() -> void:
 func _rebuild() -> void:
 	cfg = ParcelRules.config()
 	obstacles = ParcelRules.generate(cfg, seed)
-	HouseData.blocked_cells = ParcelRules.blocked_cells(obstacles, cleared)
+	HouseData.blocked_cells = blocked_now()
 	changed.emit()
 	EventBus.parcel_changed.emit()
 
@@ -131,7 +153,13 @@ func cost_of(id: String) -> int:
 
 ## Obstáculo que ocupa una celda ("" si ninguno).
 func obstacle_at(cell: Vector2i) -> String:
-	return str(HouseData.blocked_cells.get("%d,%d" % [cell.x, cell.y], ""))
+	var id := str(HouseData.blocked_cells.get("%d,%d" % [cell.x, cell.y], ""))
+	return "" if id == "zone" else id
+
+
+## ¿Esa celda es de la zona todavía cerrada? (se ve, pero no se pisa)
+func is_locked(cell: Vector2i) -> bool:
+	return str(HouseData.blocked_cells.get("%d,%d" % [cell.x, cell.y], "")) == "zone"
 
 
 ## ¿Puede llegar el servicio? {ok, reason, path}. Se mira con la casa de hoy.
@@ -139,7 +167,7 @@ func access(id: String, house: HouseData) -> Dictionary:
 	var o := obstacle(id)
 	if o.is_empty():
 		return {"ok": false, "reason": "Ese obstáculo no existe.", "path": []}
-	var blocked := ParcelRules.blocked_cells(obstacles, cleared)
+	var blocked := blocked_now()
 	for cx in range(o["x"], o["x"] + o["w"]):
 		for cz in range(o["z"], o["z"] + o["d"]):
 			blocked.erase("%d,%d" % [cx, cz])
@@ -156,6 +184,8 @@ func call_service(id: String, house: HouseData) -> Dictionary:
 	var o := obstacle(id)
 	if o.is_empty() or cleared.has(id) or pending.has(id):
 		return {"ok": false, "error": "Eso ya está en marcha o limpio."}
+	if not ParcelRules.in_zone(zone_rects(), o["x"], o["z"], o["w"], o["d"]):
+		return {"ok": false, "error": "Ese terreno todavía no es tuyo: se abre al subir de nivel."}
 	var path := access(id, house)
 	if not path["ok"]:
 		return {"ok": false, "error": path["reason"]}

@@ -1,5 +1,5 @@
 {
-	"_ayuda": "El mundo alrededor de la casa (Pulido 2B). Todo se calcula desde el tamaño de la parcela, así que si la parcela crece, el mundo la sigue. 'forest' = árboles detrás y a los costados (cantidad por banda y qué tan profundo es el bosque). 'neighbors' = casas de vecinos de decoración, atrás. 'life' = autos y gente que pasan por la calle (solo en tu teléfono, no tocan el servidor). 'seed' cambia la distribución al azar. Los colores salen de data/style.json.",
+	"_ayuda": "El mundo alrededor de la casa (Pulido 2B). Todo se calcula desde el tamaño de la parcela, así que si la parcela crece, el mundo la sigue. 'forest' = árboles detrás y a los costados (cantidad por banda y qué tan profundo es el bosque). 'neighbors' = casas de vecinos de decoración, atrás. 'fence' = valla de madera en los laterales de la zona disponible (Pulido 3A); 'side_neighbors' = una casa de vecino al azar detrás de cada valla (gap = distancia a la valla); 'locked_shade_alpha' = qué tan oscura se ve la parte del terreno todavía cerrada. 'life' = autos y gente que pasan por la calle (solo en tu teléfono, no tocan el servidor). 'seed' cambia la distribución al azar. Los colores salen de data/style.json.",
 	"seed": 7,
 	"terrain_size": 900,
 	"street": { "road_width": 7.0, "sidewalk_width": 2.5, "length": 600 },
@@ -8,5 +8,8 @@
 		"trunk_height": 1.3, "crown_radius": 1.1, "size_variation": 0.45
 	},
 	"neighbors": { "count": 7, "distance_back": 20.0, "spacing": 24.0, "width": [7.0, 11.0], "depth": [6.0, 9.0] },
+	"fence": { "post_spacing": 2.0, "height": 1.2, "post_size": 0.18, "rails": 2 },
+	"side_neighbors": { "gap": 5.0, "width": [7.0, 10.0], "depth": [6.0, 9.0] },
+	"locked_shade_alpha": 0.28,
 	"life": { "cars": 3, "pedestrians": 3, "car_speed": [5.0, 8.5], "walk_speed": [0.9, 1.4], "particles": true }
 }
