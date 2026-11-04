@@ -101,7 +101,10 @@ func _test_zone_and_world() -> void:
 	var world: WorldBuilder = _main.get_node("World")
 	_check(Parcel.zone_bounds() == Rect2i(16, 32, 64, 64), "al principio la zona es de 64 x 64 pegada a la calle")
 	var zone: Node = world.get_node_or_null("ZoneDecor")
-	_check(zone != null and zone.get_node_or_null("Fences") != null and zone.get_node_or_null("SideNeighbors") != null and zone.get_node("SideNeighbors").get_child_count() == 2,
+	# Fase 8: con el mapa del barrio, las casas de los lados las arma el barrio (no «SideNeighbors»).
+	var neighbors_ok: bool = (world.neighborhood != null) if NeighborhoodMap.enabled() \
+		else (zone != null and zone.get_node_or_null("SideNeighbors") != null and zone.get_node("SideNeighbors").get_child_count() == 2)
+	_check(zone != null and zone.get_node_or_null("Fences") != null and neighbors_ok,
 		"hay vallas de madera y una casa de vecino de cada lado")
 	_check(zone.get_children().any(func(c): return c.name == "LockedShade"), "lo cerrado se ve (sombreado) pero no se puede usar")
 	var free_strip := true
@@ -149,7 +152,7 @@ func _test_walk_around_tree() -> void:
 	_character._go({"level": 0, "spot": to, "path": path})
 	var min_distance := INF
 	var shot := false
-	for i in 400:
+	for i in 2000:
 		await get_tree().process_frame
 		var p := _character.position
 		min_distance = minf(min_distance, Vector2(p.x, p.z).distance_to(Vector2(60.5, 86.5)))

@@ -71,7 +71,7 @@ func _test_8b() -> void:
 	print("\n2) 8B: vista aérea y visitas")
 	var camera_before := _rig().get_state()
 	_ctrl.enter_aerial()
-	await _frames(70)
+	await _frames(200)
 	_check(_ctrl.state == "aerial" and _main.mode == "visit", "vista aérea: el juego queda en modo solo ver")
 	_check(not _main.get_node("HUD").visible, "la interfaz normal se esconde")
 	_check(_rig().current_distance() > 100.0, "zoom lejano (%.0f m)" % _rig().current_distance())

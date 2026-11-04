@@ -48,6 +48,19 @@ func _run() -> void:
 	login.get_node("%PasswordEdit").text = "demo-clave-123"
 	await _shot("login_1_formulario.png")
 	login.get_node("%RegisterButton").pressed.emit()
+	# Pulido 3B: la primera vez se pide crear el personaje antes de entrar.
+	var found: Array = []
+	await _wait_until(func() -> bool:
+		var button := login.find_child("DoneButton", true, false) as Button
+		if button != null and button.is_visible_in_tree():
+			found.append(button)
+		return not found.is_empty())
+	var done: Button = found[0] if not found.is_empty() else null
+	_check(done != null, "al crear la cuenta pide crear el personaje")
+	if done != null:
+		await _frames(10)
+		await _shot("login_1b_crear_personaje.png")
+		done.pressed.emit()
 	var main := await _wait_for_main()
 	_check(main != null, "se creó la cuenta y se abrió el juego")
 	if main != null:

@@ -180,7 +180,7 @@ static func placement(lot_id: String) -> Dictionary:
 		x = rect.end.x - near_gap - cols / 2.0
 	elif lot_id == sides["right"]:
 		x = rect.position.x + near_gap + cols / 2.0
-	var south := l.get("facing", "south") == "south"
+	var south: bool = l.get("facing", "south") == "south"
 	var z := rect.end.y - front_gap - rows / 2.0 if south else rect.position.y + front_gap + rows / 2.0
 	return {"center": Vector3(x, 0.0, z), "rot_y": 0.0 if south else PI, "size": Vector2(cols, rows)}
 
@@ -201,7 +201,7 @@ static func door_point(lot_id: String, distance := 1.2) -> Vector3:
 static func sidewalk_point(lot_id: String) -> Vector3:
 	var rect := lot_rect(lot_id)
 	var door := door_point(lot_id)
-	var south := lot(lot_id).get("facing", "south") == "south"
+	var south: bool = lot(lot_id).get("facing", "south") == "south"
 	var street: Dictionary = data().get("streets", [{}])[0]
 	var half_road := float(street.get("road_width", 7.0)) / 2.0
 	var side := float(street.get("sidewalk_width", 2.5))
