@@ -84,7 +84,9 @@ func _kinds(template: Dictionary) -> Array:
 func _normalized(template: Dictionary) -> Array:
 	var list: Array = []
 	for piece in template["pieces"]:
-		var value: Dictionary = piece["v"]
+		var value: Dictionary = (piece["v"] as Dictionary).duplicate()
+		if value.has("rot"):
+			value["rot"] = roundi(float(value["rot"]))  # El JSON devuelve 0 como 0.0: es lo mismo.
 		list.append("%d|%s|%s|%s" % [piece["l"], piece["y"], piece["k"] if piece["y"] not in ["objects", "roofs"] else "", JSON.stringify(value, "", true)])
 	list.sort()
 	return list
@@ -195,7 +197,9 @@ func _test_rejections() -> void:
 	# Sin apoyo: una plantilla con un piso suelto (alterada a mano) no se acepta.
 	var broken: Dictionary = template.duplicate(true)
 	broken["pieces"] = (broken["pieces"] as Array).filter(func(p) -> bool: return p["y"] != "foundation")
-	var unsupported := HouseTemplate.check(empty, broken, Vector2i(10, 10))
+	var bare := HouseData.new()  # Casa vacía de verdad: `empty` ya tiene la copia puesta.
+	bare.next_id = 20
+	var unsupported := HouseTemplate.check(bare, broken, Vector2i(10, 10))
 	_check(not unsupported["valid"] and unsupported["reason"] == "support", "sin cimientos nada se apoya (%s)" % unsupported["reason"])
 	_check(HouseTemplate.check(empty, {}, Vector2i.ZERO)["reason"] == "empty", "una plantilla vacía no vale")
 

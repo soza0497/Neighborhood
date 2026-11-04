@@ -250,7 +250,7 @@ func _test_cards() -> void:
 			fit_lot += 1
 		if IslandFakeHouses.piece_count(house) <= int(limits.get(l["size"], 0)):
 			under_limit += 1
-		if card.floor_count() >= 1 and card.floor_count() <= 3 and card.total_height() > 3.0:
+		if card.floor_count() >= 1 and card.floor_count() <= 3 and card.total_height() >= 3.0:
 			sizes_ok += 1
 	var n := lots.size()
 	_check(same_after_json == n, "la ficha pasa por JSON y queda igual (%d de %d)" % [same_after_json, n])

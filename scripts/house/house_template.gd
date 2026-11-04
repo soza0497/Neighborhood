@@ -212,11 +212,12 @@ static func _first_problem(house: HouseData, writes: Array) -> String:
 		return "locked"
 	var placement := HouseRules.check_placement(house, writes)
 	if not placement["blocked"].is_empty():
-		# Un objeto o techo que choca con otro también es «ocupado».
+		# Si falta apoyo de piso, pared o cimiento, es «support». Un objeto o techo que
+		# choca con otro (sin que falte estructura) es «ocupado».
 		for w in placement["blocked"]:
-			if w["layer"] == "objects" or w["layer"] == "roofs":
-				return "occupied"
-		return "support"
+			if w["layer"] != "objects" and w["layer"] != "roofs":
+				return "support"
+		return "occupied"
 	return ""
 
 

@@ -143,6 +143,7 @@ func _test_speed_by_distance() -> void:
 	_rig.queue_move(Vector3(1000, 0, 0))
 	_rig.step_pending(1.0)
 	_check(_rig.position.x <= float(_rig.config["frame_cap"]) * 10.0 + 0.001, "un cuadro no pasa del tope (%.2f m)" % _rig.position.x)
+	_rig.flush_pending()  # Lo que quedó pendiente no debe colarse en la prueba siguiente.
 	# Amortiguación: con un cuadro corto se mueve solo una parte de lo pendiente.
 	_rig.set_state({"x": 0.0, "z": 0.0, "yaw": 0.0, "distance": 20.0, "pitch": _rig.pitch_degrees})
 	_rig.queue_move(Vector3(1, 0, 0))

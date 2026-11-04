@@ -303,12 +303,12 @@ static func tree_points(lots: Array) -> Array:
 	# A los lados de las calles radiales (sobre la vereda).
 	for street in streets.get("radial", []):
 		var half := float(street["width"]) / 2.0 + 1.0
-		var dir := IslandData.polar(float(street["angle"]), 1.0)
+		var dir: Vector3 = IslandData.polar(float(street["angle"]), 1.0)
 		var normal := Vector3(-dir.z, 0.0, dir.x)
 		var r := float(street["from"]) + 14.0
 		while r < float(street["to"]) - 10.0:
 			for side in [-1.0, 1.0]:
-				var pos := dir * r + normal * half * side
+				var pos: Vector3 = dir * r + normal * half * side
 				# No dentro de la plaza ni del lago.
 				points.append({"pos": pos, "scale": rng.randf_range(0.8, 1.15), "yaw": rng.randf() * TAU})
 			r += spacing
