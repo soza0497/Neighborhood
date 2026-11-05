@@ -254,14 +254,15 @@ func _test_idle_sound_info() -> void:
 	var info: Control = _hud.get_node("%InfoPanel")
 	_hud._open_info()
 	await _frames(3)
-	var checks := info.find_children("*", "CheckButton", true, false).filter(func(c): return c.text.contains("Contorno"))
+	var off_button: Button = info.find_child("Outline_off", true, false)
+	var normal_button: Button = info.find_child("Outline_normal", true, false)
 	var sliders := info.find_children("*", "HSlider", true, false)
-	_check(checks.size() == 1 and sliders.size() == 3, "Info tiene el interruptor de contorno y %d volúmenes" % sliders.size())
-	checks[0].button_pressed = false
+	_check(off_button != null and normal_button != null and sliders.size() == 3, "Info tiene los botones de contorno y %d volúmenes" % sliders.size())
+	off_button.pressed.emit()
 	await _frames(2)
-	_check(not Style.outline_enabled and GameState.settings["outline_enabled"] == false, "el interruptor apaga el contorno y se guarda")
-	checks[0].button_pressed = true
-	_check(Style.outline_enabled, "y lo prende")
+	_check(not Style.outline_enabled and GameState.settings["outline_enabled"] == false, "«Apagado» apaga el contorno y se guarda")
+	normal_button.pressed.emit()
+	_check(Style.outline_enabled and Style.outline_mode == "normal", "«Normal» lo prende")
 	await _shot("p2b_6_info.png")
 	_hud.get_node("%InfoCloseButton").pressed.emit()
 

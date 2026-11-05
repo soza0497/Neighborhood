@@ -299,20 +299,40 @@ func _tint_like_map(button: Button) -> void:
 		button.add_theme_stylebox_override(state, style)
 
 
+## Pulido 6A (11): el jugador eligió un modo de contorno en Info.
+func _on_outline_mode_chosen(mode: String) -> void:
+	GameState.settings["outline_mode"] = mode
+	GameState.settings["outline_enabled"] = mode != "off"
+	Style.set_outline_mode(mode)
+
+
 ## Pulido 2B: en Info, el contorno (calidad) y los volúmenes de sonido.
 func _build_info_extras() -> void:
 	var rows: VBoxContainer = _info_panel.get_node("Rows")
 	var anchor := _fps_check.get_index() + 1
-	var outline := CheckButton.new()
-	outline.text = "Contorno (calidad)"
-	outline.add_theme_font_size_override("font_size", 20)
-	outline.focus_mode = Control.FOCUS_NONE
-	outline.button_pressed = Style.outline_enabled
-	outline.toggled.connect(func(on: bool) -> void:
-		GameState.settings["outline_enabled"] = on
-		Style.set_outline(on))
-	rows.add_child(outline)
-	rows.move_child(outline, anchor)
+	# Pulido 6A (11): contorno fino / normal / apagado (tres botones en fila).
+	var outline_row := HBoxContainer.new()
+	outline_row.add_theme_constant_override("separation", 8)
+	var outline_label := Label.new()
+	outline_label.text = "Contorno"
+	outline_label.add_theme_font_size_override("font_size", 20)
+	outline_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	outline_row.add_child(outline_label)
+	var mode_group := ButtonGroup.new()
+	var mode_names := {"thin": "Fino", "normal": "Normal", "off": "Apagado"}
+	for mode in Style.OUTLINE_MODES:
+		var mode_button := Button.new()
+		mode_button.name = "Outline_" + str(mode)
+		mode_button.text = mode_names[mode]
+		mode_button.toggle_mode = true
+		mode_button.button_group = mode_group
+		mode_button.button_pressed = (mode == Style.outline_mode)
+		mode_button.focus_mode = Control.FOCUS_NONE
+		mode_button.add_theme_font_size_override("font_size", 18)
+		mode_button.pressed.connect(_on_outline_mode_chosen.bind(str(mode)))
+		outline_row.add_child(mode_button)
+	rows.add_child(outline_row)
+	rows.move_child(outline_row, anchor)
 	anchor += 1
 	# Fase 7: comparar el arte nuevo (.glb) con las figuras simples.
 	var use_models := CheckButton.new()

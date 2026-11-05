@@ -22,6 +22,9 @@ const TOON_SHADER := preload("res://assets/shaders/toon.gdshader")
 const OUTLINE_SHADER := preload("res://assets/shaders/outline.gdshader")
 const INVISIBLE_SHADER := preload("res://assets/shaders/invisible.gdshader")
 
+## Los tres modos del contorno (Menú → Info).
+const OUTLINE_MODES: Array = ["thin", "normal", "off"]
+
 ## Se prendió o apagó el contorno.
 signal outline_changed(enabled: bool)
 
@@ -30,8 +33,12 @@ var palette: Dictionary = {}
 ## Fase 7: colores por nombre de material (palette.json → "materials").
 var materials: Dictionary = {}
 var outline_enabled := true
+## Pulido 6A (11): grosor del contorno: "thin" (fino), "normal" o "off" (apagado).
+## `outline_enabled` sigue existiendo (es `outline_mode != "off"`) para el código viejo.
+var outline_mode: String = "thin"
 
 var _outline_material: ShaderMaterial
+var _last_on_mode: String = "thin"
 var _cache: Dictionary = {}
 
 
@@ -55,10 +62,13 @@ func reload() -> void:
 			data[section] = lighting[section]
 	var outline: Dictionary = data.get("outline", {})
 	outline_enabled = bool(outline.get("enabled", true))
+	outline_mode = str(outline.get("default_mode", "thin")) if outline_enabled else "off"
+	if not outline_mode in OUTLINE_MODES:
+		outline_mode = "thin"
 	_outline_material = ShaderMaterial.new()
 	_outline_material.shader = OUTLINE_SHADER
 	_outline_material.set_shader_parameter("outline_color", Color.from_string(str(outline.get("color", "#2b2233")), Color.BLACK))
-	_outline_material.set_shader_parameter("outline_px", float(outline.get("width_px", 2.2)))
+	_outline_material.set_shader_parameter("outline_px", outline_width_px(outline_mode))
 	_cache.clear()
 
 
@@ -114,14 +124,62 @@ func outline_only_material() -> ShaderMaterial:
 	return mat
 
 
+## Pulido 6A (11): el modo guardado en las opciones de la partida. Una partida
+## vieja solo tiene `outline_enabled`: false = apagado; si no, el modo por defecto (fino).
+func mode_from_settings(settings: Dictionary) -> String:
+	var saved: String = str(settings.get("outline_mode", ""))
+	if saved in OUTLINE_MODES:
+		return saved
+	if not bool(settings.get("outline_enabled", true)):
+		return "off"
+	var outline: Dictionary = data.get("outline", {})
+	var fallback: String = str(outline.get("default_mode", "thin"))
+	return fallback if fallback in OUTLINE_MODES else "thin"
+
+
+## Grosor en píxeles de un modo (data/style.json → outline.widths). "off" = 0.
+func outline_width_px(mode: String) -> float:
+	if mode == "off":
+		return 0.0
+	var outline: Dictionary = data.get("outline", {})
+	var widths: Dictionary = outline.get("widths", {})
+	var fallback: float = 1.2 if mode == "thin" else 2.2
+	return float(widths.get(mode, fallback))
+
+
+## Pulido 6A (11): elige fino, normal o apagado. Los materiales ya creados se
+## ajustan solos (comparten UN material de contorno: cambiar su grosor cambia todo).
+func set_outline_mode(mode: String) -> void:
+	if not mode in OUTLINE_MODES:
+		mode = "thin"
+	if mode == outline_mode:
+		return
+	var was_enabled: bool = outline_enabled
+	outline_mode = mode
+	outline_enabled = mode != "off"
+	if outline_enabled:
+		_last_on_mode = mode
+		_outline_material.set_shader_parameter("outline_px", outline_width_px(mode))
+	if was_enabled != outline_enabled:
+		_apply_outline_to_cache()
+		outline_changed.emit(outline_enabled)
+
+
 ## Prende o apaga el contorno en todos los materiales ya creados.
+## Al prender, vuelve al modo que había (o "thin" si estaba apagado de origen).
 func set_outline(enabled: bool) -> void:
 	if enabled == outline_enabled:
 		return
-	outline_enabled = enabled
+	if enabled:
+		set_outline_mode(_last_on_mode)
+	else:
+		_last_on_mode = outline_mode
+		set_outline_mode("off")
+
+
+func _apply_outline_to_cache() -> void:
 	for mat in _cache.values():
-		mat.next_pass = _outline_material if (enabled and mat.get_meta("outlined", true)) else null
-	outline_changed.emit(enabled)
+		mat.next_pass = _outline_material if (outline_enabled and mat.get_meta("outlined", true)) else null
 
 
 ## Pasa todos los materiales de un modelo importado (.glb) al estilo toon,

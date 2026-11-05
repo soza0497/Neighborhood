@@ -57,7 +57,7 @@ const PROBLEMS_INTERVAL := 0.4
 
 func _ready() -> void:
 	# Pulido 2B: estilo (contorno) y volúmenes guardados en las opciones.
-	Style.set_outline(GameState.settings.get("outline_enabled", true))
+	Style.set_outline_mode(Style.mode_from_settings(GameState.settings))
 	ModelLoader.enabled = GameState.settings.get("use_models", true)
 	Sound.apply_volumes()
 	# SaveSystem ya cargó la partida antes de que exista esta escena.

@@ -1,7 +1,9 @@
 {
-	"_ayuda": "Estilo visual del juego (Pulido 2B). El contorno, la niebla y los colores del MUNDO. Los tonos de las sombras, la luz y los colores de los materiales de los modelos .glb están en data/palette.json (un solo lugar). 'tones' = cuánta luz recibe la sombra, el tono medio y la luz (de 0 a 1). 'thresholds' = dónde cambia de tono. 'outline.width_px' = grosor del contorno en píxeles. Los colores van como #rrggbb. El contorno también se puede apagar en Menú → Info (calidad).",
+	"_ayuda": "Estilo visual del juego (Pulido 2B). El contorno, la niebla y los colores del MUNDO. Los tonos de las sombras, la luz y los colores de los materiales de los modelos .glb están en data/palette.json (un solo lugar). 'tones' = cuánta luz recibe la sombra, el tono medio y la luz (de 0 a 1). 'thresholds' = dónde cambia de tono. 'outline.widths' = grosor del contorno en píxeles para «fino» (thin) y «normal» (Pulido 6A; en Menú → Info hay una tercera opción: apagado). 'outline.default_mode' = el modo con que empieza una partida nueva. Los colores van como #rrggbb. El contorno también se puede apagar en Menú → Info (calidad).",
 	"outline": {
 		"enabled": true,
+		"default_mode": "thin",
+		"widths": { "thin": 1.2, "normal": 2.2 },
 		"width_px": 2.2,
 		"color": "#2b2233"
 	},
