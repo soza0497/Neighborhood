@@ -23,7 +23,7 @@ const BASE_MARGINS := Vector4(16, 34, 16, 22)
 const TAP_MAX_MOVE := 14.0
 const TAP_MAX_TIME := 0.35
 const HOURS := [6, 9, 13, 19, 23]
-const ACCIDENT_BUTTONS := ["fall", "trip", "burn"]
+const ACCIDENT_BUTTONS := ["fall", "slip", "trip", "burn"]
 
 var character: Character
 var nav: HouseNav

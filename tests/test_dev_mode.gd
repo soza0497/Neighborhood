@@ -98,17 +98,17 @@ func _free(node: Node) -> void:
 func _test_data() -> void:
 	print("1) Datos de peligros y atención")
 	_check(HazardMap.kinds().has("wet") and HazardMap.kinds().has("hot") and HazardMap.kinds().has("drop"), "hay charco, calor y desnivel")
-	_check(HazardMap.accident_for("wet") == "fall" and HazardMap.accident_for("drop") == "trip" and HazardMap.accident_for("hot") == "burn",
-		"charco = caerse, desnivel = tropezar, calor = quemarse")
-	_check(HazardMap.accident_info("fall")["hurt"] and HazardMap.accident_info("burn")["hurt"] and not HazardMap.accident_info("trip")["hurt"],
-		"caerse y quemarse lastiman; tropezar no")
+	_check(HazardMap.accident_for("wet") == "slip" and HazardMap.accident_for("drop") == "trip" and HazardMap.accident_for("hot") == "burn",
+		"charco = resbalar, desnivel = tropezar, calor = quemarse")
+	_check(HazardMap.accident_info("fall")["hurt"] and HazardMap.accident_info("burn")["hurt"] and not HazardMap.accident_info("trip")["hurt"]
+		and not HazardMap.accident_info("slip")["hurt"], "caerse y quemarse lastiman; tropezar y resbalar no")
 	_check(HazardMap.default_attention() == 1.0 and HazardMap.is_careful(1.0) and not HazardMap.is_careful(0.2), "atención alta cuida, baja no")
 	_check(HazardMap.presets().size() >= 3 and HazardMap.preset_value("dazed") < HazardMap.careful_at(), "hay botones rápidos y son de atención baja")
 	_check(HazardMap.add(0, Vector2i(3, 3), "wet") and HazardMap.kind_at(0, Vector2i(3, 3)) == "wet", "agregar un peligro")
 	_check(not HazardMap.add(0, Vector2i(3, 4), "no_existe"), "un tipo que no existe se rechaza")
 	_check(HazardMap.all().size() == 1 and HazardMap.all()[0]["cell"] == Vector2i(3, 3), "listar los peligros")
 	_check(HazardMap.remove(0, Vector2i(3, 3)) and HazardMap.is_empty(), "quitar un peligro")
-	for hook in ["fall", "trip", "burn"]:
+	for hook in ["fall", "slip", "trip", "burn"]:
 		_check(hook in CharacterAnimator.ANIMATIONS, "gancho de animación «%s»" % hook)
 
 
@@ -185,6 +185,9 @@ func _test_attention_and_hazards() -> void:
 	DevMode.set_enabled(true)
 	var house := HouseData.new()
 	var character := _make_character(house)
+	# Pulido 6B: el charco solo hace resbalar sobre piso resbaloso (o frente a una puerta con piso de adentro).
+	house.apply([HouseData.write(0, "foundation", HouseGrid.cell_key(Vector2i(8, 10)), {"item": "foundation_basic"}),
+		HouseData.write(0, "floors", HouseGrid.cell_key(Vector2i(8, 10)), {"item": "floor_tile"})])
 	DevMode.add_hazard(0, Vector2i(8, 10), "wet")
 	var target := Vector2i(12, 10)
 
@@ -204,18 +207,28 @@ func _test_attention_and_hazards() -> void:
 	_check(character.cell == target and not character.hurt and _accidents.is_empty(), "atención alta: llegó sin accidentes")
 	_check(_ambulances == 0, "atención alta: no se llamó a la ambulancia")
 
-	# Atención baja: pisa el charco y se cae (queda HURT y llama a la ambulancia).
+	# Atención baja: pisa el charco sobre el piso resbaloso y resbala (sin ambulancia).
 	character.teleport_to(0, Vector2i(4, 10))
 	DevMode.apply_attention_preset(character, "dazed")
 	_check(character.attention < HazardMap.careful_at(), "el botón «desorbitado» baja la atención")
 	DevMode.force_go(character, 0, target)
-	_run(character, func() -> bool: return character.hurt)
-	_check(character.hurt and character.state == Character.State.HURT, "atención baja: pisó el charco y quedó lastimado")
-	_check(character.last_accident.get("kind", "") == "fall" and character.cell == Vector2i(8, 10), "se cayó justo en la celda del charco")
-	_check(_accidents == ["fall"] and _ambulances == 1, "avisó el accidente y llamó a la ambulancia")
-	_check(character.get_intention()["verb"] == "lastimado", "su intención dice «lastimado»")
-	character.recover()
-	_check(not character.hurt and character.state == Character.State.IDLE, "la ambulancia lo cura")
+	_run(character, func() -> bool: return not _accidents.is_empty())
+	_check(not character.hurt and character.state == Character.State.IDLE, "atención baja: pisó el charco y resbaló (no queda lastimado)")
+	_check(character.last_accident.get("kind", "") == "slip" and character.current_cell() == Vector2i(8, 10), "resbaló justo en la celda del charco")
+	_check(_accidents == ["slip"] and _ambulances == 0, "avisó el accidente y no llamó a la ambulancia")
+	_check(character._animator.current == "slip", "usa el gancho de animación «slip»")
+	# Un charco sobre piso de madera (no resbaloso) no hace nada.
+	HazardMap.clear()
+	house.apply([HouseData.write(0, "foundation", HouseGrid.cell_key(Vector2i(8, 11)), {"item": "foundation_basic"}),
+		HouseData.write(0, "floors", HouseGrid.cell_key(Vector2i(8, 11)), {"item": "floor_basic"})])
+	DevMode.add_hazard(0, Vector2i(8, 11), "wet")
+	character.teleport_to(0, Vector2i(4, 11))
+	_accidents.clear()
+	DevMode.force_go(character, 0, Vector2i(12, 11))
+	_run(character, func() -> bool: return character.cell == Vector2i(12, 11))
+	_check(_accidents.is_empty() and character.cell == Vector2i(12, 11), "un charco sobre piso de madera no hace resbalar")
+	HazardMap.clear()
+	DevMode.add_hazard(0, Vector2i(8, 10), "wet")
 
 	# Desnivel = tropezar (sin ambulancia); calor = quemarse.
 	HazardMap.clear()
@@ -251,13 +264,14 @@ func _test_attention_and_hazards() -> void:
 	_check(character.cell == Vector2i(2, 2) and _accidents.is_empty(), "sin otro camino, con atención cruza con cuidado")
 	character.teleport_to(0, Vector2i(6, 6))
 	DevMode.set_attention(character, 0.1)
-	DevMode.force_go(character, 0, Vector2i(2, 2))
-	_run(character, func() -> bool: return character.hurt)
-	_check(character.hurt and character.last_accident["cell"] == Vector2i(2, 4), "distraído se cae en el umbral de la puerta")
-	# Teletransportarse a un peligro sin atención también lo hace caer.
-	character.recover()
 	_accidents.clear()
-	_check(DevMode.teleport(character, 0, Vector2i(2, 4))["ok"] and character.hurt, "teletransportarse sobre un charco sin atención: se cae")
+	DevMode.force_go(character, 0, Vector2i(2, 2))
+	_run(character, func() -> bool: return not _accidents.is_empty())
+	_check(_accidents == ["slip"] and character.last_accident["cell"] == Vector2i(2, 4), "distraído resbala en el charco frente a la puerta (hay piso adentro)")
+	# Teletransportarse a un peligro sin atención también lo hace resbalar.
+	_accidents.clear()
+	character.teleport_to(0, Vector2i(6, 6))
+	_check(DevMode.teleport(character, 0, Vector2i(2, 4))["ok"] and _accidents == ["slip"], "teletransportarse sobre un charco frente a la puerta sin atención: resbala")
 	HazardMap.clear()
 	DevMode.set_enabled(false, character)
 	_check(character.attention == 1.0 and HazardMap.is_empty(), "al apagar el modo todo vuelve a lo normal")
@@ -280,6 +294,10 @@ func _test_forced_accidents() -> void:
 	_check(DevMode.force_accident(character, "burn")["ok"] and character.hurt and _ambulances == 2, "quemarse: HURT y ambulancia")
 	character.recover()
 	_ambulances = 0
+	_check(DevMode.force_accident(character, "slip")["ok"] and not character.hurt and _ambulances == 0 and character._animator.current == "slip",
+		"resbalar: sin ambulancia, gancho «slip»")
+	character._animator.play("idle")
+	character.state = Character.State.IDLE
 	_check(DevMode.force_accident(character, "trip")["ok"] and not character.hurt and _ambulances == 0, "tropezar: sin ambulancia")
 	_check(character.state == Character.State.IDLE and character._animator.current == "trip", "tropezar usa el gancho de animación «trip»")
 	_check(not DevMode.force_accident(character, "no_existe")["ok"], "un accidente desconocido se rechaza")

@@ -166,12 +166,11 @@ func _test_parking(services: Services) -> void:
 	_check(first.position.x < 0.0 and absf(first.position.x) > 100.0, "aparecen lejos, en un extremo del mapa (x = %.0f)" % first.position.x)
 	var desired := 48.5
 	var slots: Array = []
-	var jobs: Array = [[first, "van"], [second, "pickup"], [third, "truck"]]
-	var running := 0
-	for job in jobs:
-		running += 1
-		_park_task(services, job[0], desired, slots, func() -> void: running -= 1)
-	var ok: bool = await _wait_for(func() -> bool: return running == 0)
+	# (Un diccionario, porque las funciones anónimas copian las variables simples.)
+	var counter := {"running": 3}
+	for vehicle in [first, second, third]:
+		_park_task(services, vehicle, desired, slots, func() -> void: counter["running"] -= 1)
+	var ok: bool = await _wait_for(func() -> bool: return counter["running"] == 0)
 	_check(ok and slots.size() == 3, "los tres terminan de estacionarse")
 	_check(services.parked_vehicles().size() == 3, "quedan 3 estacionados")
 	var overlap := false
@@ -191,10 +190,10 @@ func _test_parking(services: Services) -> void:
 	for v in all:
 		_check(absf(v.position.z - services.curb_z("left", v.get_meta("kind"))) < 0.05, "%s queda pegado al cordón" % v.get_meta("kind"))
 	# Se van hacia adelante y liberan el lugar.
-	running = 3
+	counter["running"] = 3
 	for v in all:
-		_leave_task(services, v, func() -> void: running -= 1)
-	await _wait_for(func() -> bool: return running == 0)
+		_leave_task(services, v, func() -> void: counter["running"] -= 1)
+	await _wait_for(func() -> bool: return counter["running"] == 0)
 	_check(services.vehicle_count() == 0 and services.parked_vehicles().is_empty(), "al irse, la calle queda libre")
 
 
@@ -300,7 +299,7 @@ func _test_planner_and_removal() -> void:
 	for o in Parcel.obstacles:
 		if not ParcelRules.in_zone(Parcel.zone_rects(), o["x"], o["z"], o["w"], o["d"]):
 			continue
-		if o["kind"] == "bush" and bushes.size() < 2:
+		if o["kind"] == "bush" and bushes.size() < 2 and Parcel.access(o["id"], house)["ok"]:
 			bushes.append(o["id"])
 		elif o["kind"] == "tree" and tree == "" and Parcel.access(o["id"], house)["ok"]:
 			tree = o["id"]

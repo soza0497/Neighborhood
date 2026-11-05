@@ -8,7 +8,7 @@ extends Node
 ## animaciones de esos mismos nombres, se usan esas en vez de estas.
 
 ## Animaciones que el juego puede pedir.
-const ANIMATIONS := ["idle", "walk", "sleep", "sit", "cook", "eat", "shower", "use", "arrive", "wave", "cough", "hurt", "fall", "trip", "burn"]
+const ANIMATIONS := ["idle", "walk", "sleep", "sit", "cook", "eat", "shower", "use", "arrive", "wave", "cough", "hurt", "fall", "slip", "trip", "burn"]
 
 ## La figura que se mueve (el nodo "Body" de CharacterLook).
 var body: Node3D
@@ -96,10 +96,49 @@ func _process(delta: float) -> void:
 			body.position = Vector3(0, 0.12, 0.3)
 			body.scale.y = 1.0 + sin(_time * 3.0) * 0.015
 		"fall":
-			# Pulido 4B: cae de espaldas y queda tendido (gancho: si el modelo trae «fall», se usa).
-			var fall_t := minf(_time_since_play * 3.0, 1.0)
-			body.rotation.x = -PI / 2.0 * fall_t
-			body.position = Vector3(0, 0.12 * fall_t, 0.3 * fall_t)
+			# Pulido 6B: la caída en cuatro tiempos (gancho: si el modelo trae «fall», se usa):
+			# pierde el equilibrio, cae de espaldas, rebota al pegar y queda tendido y mareado.
+			var fall_t := _time_since_play
+			if fall_t < 0.35:
+				var lose := fall_t / 0.35
+				body.rotation.x = -0.4 * lose
+				body.rotation.z = sin(fall_t * 40.0) * 0.22 * lose  # Mueve los brazos.
+				body.position.y = sin(lose * PI) * 0.12
+			elif fall_t < 0.8:
+				var drop := (fall_t - 0.35) / 0.45
+				var eased := drop * drop  # Acelera al caer.
+				body.rotation.x = lerpf(-0.4, -PI / 2.0, eased)
+				body.position = Vector3(0, lerpf(0.0, 0.12, eased), 0.3 * eased)
+			elif fall_t < 1.05:
+				var bounce := sin((fall_t - 0.8) / 0.25 * PI)
+				body.rotation.x = -PI / 2.0
+				body.position = Vector3(0, 0.12 + bounce * 0.10, 0.3)
+				body.scale = Vector3(1.0 + bounce * 0.06, 1.0 - bounce * 0.08, 1.0)
+			else:
+				body.rotation.x = -PI / 2.0
+				body.rotation.y = sin(_time * 1.6) * 0.06
+				body.position = Vector3(0, 0.12, 0.3)
+				body.scale.y = 1.0 + sin(_time * 3.0) * 0.015
+		"slip":
+			# Pulido 6B: resbalón: los pies se le van, cae sentado, queda aturdido y se levanta.
+			var slip_t := _time_since_play
+			if slip_t < 0.3:
+				var kick := slip_t / 0.3
+				body.rotation.x = -0.9 * kick
+				body.rotation.z = sin(slip_t * 35.0) * 0.15
+				body.position.y = sin(kick * PI * 0.5) * 0.18
+			elif slip_t < 0.6:
+				var land := (slip_t - 0.3) / 0.3
+				body.rotation.x = lerpf(-0.9, -0.25, land)
+				body.position.y = lerpf(0.18, -0.25, land * land)
+			elif slip_t < 2.0:
+				body.rotation.x = -0.25
+				body.position.y = -0.25
+				body.rotation.y = sin(_time * 4.0) * 0.2
+			else:
+				var rise := clampf((slip_t - 2.0) / 0.4, 0.0, 1.0)
+				body.rotation.x = lerpf(-0.25, 0.0, rise)
+				body.position.y = lerpf(-0.25, 0.0, rise)
 		"trip":
 			# Pulido 4B: tropiezo: se inclina hacia adelante, se sacude y se endereza.
 			var trip_t := minf(_time_since_play, 1.2)

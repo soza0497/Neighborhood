@@ -49,6 +49,7 @@ var _problems_dirty := true
 var _parcel_view: ParcelView
 var _services: Services
 var _planner: ClearPlanner
+var _doors: DoorAnimator
 var _delivery: Delivery
 var _problems_timer := 0.0
 var _neighborhood: NeighborhoodController
@@ -152,6 +153,11 @@ func _ready() -> void:
 	hazard_view.name = "HazardView"
 	_house_view.add_child(hazard_view)
 	hazard_view.setup(nav)
+	# Pulido 6B: las puertas se abren cuando alguien se acerca.
+	_doors = DoorAnimator.new()
+	_doors.name = "DoorAnimator"
+	add_child(_doors)
+	_doors.setup(_house_view, house)
 
 	set_mode("live")
 	_update_partner_character()

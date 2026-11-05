@@ -322,8 +322,8 @@ func _test_ambulance() -> void:
 	_check(_character.level == 0, "el personaje está en la planta baja")
 	_character.place_at(1, o + Vector2i(4, 2))
 	_character.level = 1
-	var void_door := _character._void_door_inside()
-	_check(void_door == o + Vector2i(5, 2), "hay una puerta al vacío en el piso 1 (celda de adentro %s)" % str(void_door))
+	var void_door: Dictionary = _character._seek_door()
+	_check(not void_door.is_empty() and void_door["inside"] == o + Vector2i(5, 2), "hay una puerta al vacío en el piso 1 (celda de adentro %s)" % str(void_door.get("inside")))
 	var energy: float = _character.data.needs["energy"]
 	var xp := Economy.xp
 	var rig: CameraRig = _main.get_node("CameraRig")

@@ -26,6 +26,8 @@ enum State { IDLE, WALKING, ACTING, WORKING, OPENING, HURT }
 
 ## Metros por segundo real a velocidad x1.
 const WALK_SPEED := 1.6
+## Pulido 6B: qué tan rápido gira hacia donde camina (más alto = gira más seco).
+const TURN_RATE := 12.0
 ## Minutos del juego que se queda quieto antes de pensar de nuevo.
 const THINK_PAUSE := Vector2(2.0, 5.0)
 ## Hasta cuántas celdas se aleja cuando pasea sin nada que hacer.
@@ -57,6 +59,9 @@ var _plan: Dictionary = {}
 var _order: Dictionary = {}
 var _path := PackedVector3Array()
 var _path_index := 0
+## Pulido 6B: la última celda donde se revisó si pisaba un peligro (se mira al cambiar de celda,
+## porque el camino alisado ya no pasa por el centro de cada celda).
+var _hazard_cell := Vector2i(-100000, -100000)
 var _idle_minutes := 0.0
 var _act_minutes := 0.0
 var _work_minutes := 0.0
@@ -245,7 +250,7 @@ func _process(delta: float) -> void:
 				if _idle_minutes <= 0.0:
 					_think()
 			State.WALKING:
-				_walk(WALK_SPEED * delta * GameClock.speed)
+				_walk(WALK_SPEED * delta * GameClock.speed, delta)
 			State.ACTING:
 				_act(minutes)
 			State.WORKING:
@@ -290,13 +295,14 @@ func _think() -> void:
 		_open_queue = [delivery.dropped_boxes()[0]]
 		_next_box()
 		return
-	# Pulido 2C: un piso alto con una puerta al vacío: a veces se asoma y se cae.
-	if level > 0 and _order.is_empty() and _rng.randf() < 0.15:
-		var door := _void_door_inside()
-		if door != Vector2i(-1, -1):
-			var path := _find_path(level, cell, level, door)
-			if not path.is_empty() or door == cell:
-				_go({"level": level, "spot": door, "path": path, "fall": true})
+	# Pulido 2C/6B: una puerta cuya regla de accidente dice «seek» (por ejemplo la que da al
+	# vacío en un piso alto): a veces la IA va a asomarse a probar suerte.
+	if _order.is_empty():
+		var door := _seek_door()
+		if not door.is_empty() and _rng.randf() < float(door["rule"].get("seek", 0.0)):
+			var door_path := _find_path(level, cell, level, door["inside"])
+			if not door_path.is_empty() or door["inside"] == cell:
+				_go({"level": level, "spot": door["inside"], "path": door_path, "door_accident": door})
 				return
 	var choice := _order
 	_order = {}
@@ -372,8 +378,10 @@ func _wander() -> void:
 ## Empieza a caminar hacia lo planeado.
 func _go(option: Dictionary) -> void:
 	_plan = option
-	_path = option["path"]
+	# Pulido 6B: el camino de la red va de celda en celda; se alisa para caminar en cualquier dirección.
+	_path = PathSmoother.smooth(option["path"], _segment_clear)
 	_path_index = 0
+	_hazard_cell = current_cell()
 	state = State.WALKING
 	_animator.play("walk")
 	_mark_intention()
@@ -381,25 +389,97 @@ func _go(option: Dictionary) -> void:
 
 # --- Caminar ---
 
-func _walk(distance: float) -> void:
+func _walk(distance: float, delta := 0.016) -> void:
 	while distance > 0.0 and _path_index < _path.size():
 		var target := _path[_path_index]
 		var to_target := target - position
 		var flat := Vector3(to_target.x, 0, to_target.z)
 		if flat.length() > 0.01:
-			rotation.y = atan2(flat.x, flat.z)
+			# Pulido 6B: gira suave hacia donde va (en vez de cambiar de golpe).
+			rotation.y = lerp_angle(rotation.y, atan2(flat.x, flat.z), 1.0 - exp(-TURN_RATE * delta))
 		if to_target.length() <= distance:
 			position = target
 			distance -= to_target.length()
 			_path_index += 1
-			# Pulido 4B: ¿pisó una celda peligrosa sin prestar atención?
-			if _step_on_hazard(target) or state != State.WALKING:
-				return
 		else:
 			position += to_target.normalized() * distance
 			distance = 0.0
+		# Pulido 4B/6B: ¿entró a una celda peligrosa sin prestar atención?
+		var here := current_cell()
+		if here != _hazard_cell:
+			_hazard_cell = here
+			if _step_on_hazard(position) or state != State.WALKING:
+				return
 	if _path_index >= _path.size():
 		_arrive()
+
+
+## Pulido 6B: ¿la recta entre dos puntos del camino está libre? (para alisar el camino)
+## Revisa cada pocos centímetros, con el cuerpo a los lados: celdas donde se pueda estar parado,
+## sin paredes en el medio (ni puertas: por ahí se pasa por el centro, como siempre), sin
+## pegarse a un árbol o una roca y, si presta atención, sin peligros.
+func _segment_clear(a: Vector3, b: Vector3) -> bool:
+	var segment_level := _level_at(a)
+	var careful := HazardMap.is_careful(attention)
+	var none := Vector2i(-100000, -100000)
+	var previous_center := none
+	var seen: Dictionary = {}
+	var list := PathSmoother.samples(a, b)
+	for i in list.size():
+		var point: Vector2 = list[i]
+		var cell := Vector2i(floori(point.x), floori(point.y))
+		# Cada tres muestras, la primera es la del centro de la recta (las otras son el cuerpo).
+		if i % 3 == 0:
+			if previous_center != none and cell != previous_center and not _step_is_free(segment_level, previous_center, cell):
+				return false
+			previous_center = cell
+		if seen.has(cell):
+			continue
+		seen[cell] = true
+		if not nav.is_walkable(segment_level, cell):
+			return false
+		if careful and HazardMap.kind_at(segment_level, cell) != "":
+			return false
+		if segment_level == 0 and not Parcel.obstacles.is_empty() and _touches_obstacle(cell):
+			return false
+	return true
+
+
+## ¿Se puede pasar de una celda a otra vecina (o en diagonal) sin cruzar ninguna pared?
+func _step_is_free(segment_level: int, from: Vector2i, to: Vector2i) -> bool:
+	var step := to - from
+	if absi(step.x) + absi(step.y) == 1:
+		return house.get_piece(segment_level, "walls", AccidentRules.shared_edge(from, to)) == null
+	if absi(step.x) == 1 and absi(step.y) == 1:
+		# Diagonal: tienen que estar libres las dos formas de rodear la esquina.
+		for corner in [Vector2i(to.x, from.y), Vector2i(from.x, to.y)]:
+			if not nav.is_walkable(segment_level, corner):
+				return false
+			if not _step_is_free(segment_level, from, corner) or not _step_is_free(segment_level, corner, to):
+				return false
+		return true
+	return false  # Saltó más de una celda: la muestra fue demasiado espaciada.
+
+
+func _touches_obstacle(cell: Vector2i) -> bool:
+	for dx in range(-1, 2):
+		for dz in range(-1, 2):
+			if Parcel.obstacle_at(cell + Vector2i(dx, dz)) != "":
+				return true
+	return false
+
+
+## El piso (nivel) al que pertenece un punto del camino, según su altura.
+func _level_at(point: Vector3) -> int:
+	var here := Vector2i(floori(point.x), floori(point.z))
+	var best := level
+	var best_gap := INF
+	for candidate in HouseGrid.level_range():
+		var gap := absf(point.y - nav.ground_y(candidate, here))
+		if gap < best_gap - 0.001:
+			best_gap = gap
+			best = candidate
+	return best
 
 
 func _arrive() -> void:
@@ -415,8 +495,8 @@ func _arrive() -> void:
 		_start_open_box()
 	elif _plan.has("gate"):
 		_finish_gate()
-	elif _plan.has("fall"):
-		_fall_from_door()
+	elif _plan.has("door_accident"):
+		_door_accident()
 	elif _plan.has("action"):
 		_start_action()
 	else:
@@ -432,6 +512,12 @@ func _start_action() -> void:
 		_set_idle()  # El objeto ya no está.
 		return
 	var item := Catalog.get_item(object["item"])
+	# Pulido 6B: ¿una regla del objeto (data/accidents.json) dice que acá pasa un accidente?
+	var found := AccidentRules.first_match(AccidentRules.rules_for_item(str(object["item"])), "use_object",
+		_accident_context({"level": _plan["level"], "action": str(action.get("id", ""))}))
+	if not found.is_empty() and AccidentRules.rolls(found["rule"], _rng):
+		if _accident(str(found["rule"].get("accident", "")), "%s (atención %.2f)" % [found["rule"].get("reason", "accidente"), attention]):
+			return
 	var size := HouseGrid.rotated_size(HouseData.item_footprint(item), int(object.get("rot", 0)))
 	var anchor := HouseData.object_anchor(object)
 	var center := Vector3(anchor.x + size.x / 2.0, HouseGrid.level_y(_plan["level"]), anchor.y + size.y / 2.0)
@@ -682,55 +768,44 @@ func _finish_gate() -> void:
 		_set_idle()
 
 
-## ¿Hay una puerta a un piso alto que da al vacío? Devuelve la celda de adentro
-## junto a ella, o (-1, -1) si no hay.
-func _void_door_inside() -> Vector2i:
+## Contexto para las reglas de accidentes (data/accidents.json): dónde está, con qué atención.
+func _accident_context(extra := {}) -> Dictionary:
+	var context := {"house": house, "level": level, "cell": cell, "attention": attention, "action": ""}
+	context.merge(extra, true)
+	return context
+
+
+## Una puerta de este piso con una regla de accidente que la IA puede ir a probar (`seek`):
+## devuelve {inside, outside, edge, rule_id, rule} o {} si no hay.
+func _seek_door() -> Dictionary:
 	for key in house.get_layer(level, "walls"):
 		var wall: Dictionary = house.get_piece(level, "walls", key)
-		if Catalog.get_item(wall.get("opening", "")).get("kind", "") != "door":
+		var item_id := str(wall.get("opening", ""))
+		if Catalog.get_item(item_id).get("kind", "") != "door":
+			continue
+		var found := AccidentRules.first_match(AccidentRules.rules_for_item(item_id), "pass_door", _accident_context({"edge": key}))
+		if found.is_empty() or float(found["rule"].get("seek", 0.0)) <= 0.0:
 			continue
 		var sides := HouseGrid.edge_cells(key)
-		var inside_a := house.has_piece(level, "floors", HouseGrid.cell_key(sides[0]))
-		var inside_b := house.has_piece(level, "floors", HouseGrid.cell_key(sides[1]))
-		if inside_a != inside_b:
-			var inside: Vector2i = sides[0] if inside_a else sides[1]
+		for i in 2:
+			var inside: Vector2i = sides[i]
 			if nav.is_walkable(level, inside):
-				return inside
-	return Vector2i(-1, -1)
+				return {"inside": inside, "outside": sides[1 - i], "edge": key, "rule_id": found["id"], "rule": found["rule"]}
+	return {}
 
 
-## Se asoma por la puerta al vacío y se cae: queda lastimado en el suelo de
-## afuera (sin muerte ni pérdida de progreso) y llama a la ambulancia.
-func _fall_from_door() -> void:
-	var door := _void_door_inside()
-	var ground := cell
-	if door != Vector2i(-1, -1):
-		for key in house.get_layer(level, "walls"):
-			var wall: Dictionary = house.get_piece(level, "walls", key)
-			if Catalog.get_item(wall.get("opening", "")).get("kind", "") != "door":
-				continue
-			for side in HouseGrid.edge_cells(key):
-				if not house.has_piece(level, "floors", HouseGrid.cell_key(side)) and HouseGrid.is_cell_in_lot(side):
-					ground = side
-	fall_to(ground)
+## Llegó junto a la puerta: pasa lo que dice la regla (por ejemplo caerse al vacío).
+func _door_accident() -> void:
+	var door: Dictionary = _plan["door_accident"]
+	var rule: Dictionary = door["rule"]
+	var outside: Vector2i = door["outside"]
+	if not AccidentRules.rolls(rule, _rng) or not _accident(str(rule.get("accident", "fall")), str(rule.get("reason", "accidente en una puerta")), outside):
+		_set_idle()
 
 
-## La caída: baja al suelo de esa celda, se lastima y pide la ambulancia.
-## (También se puede llamar directo: es el disparador de ejemplo.)
+## La caída por una puerta al vacío (la usan las demos): baja a esa celda del suelo.
 func fall_to(ground: Vector2i) -> void:
-	_stop_action()
-	hurt = true
-	state = State.HURT
-	level = 0
-	cell = ground
-	place_at(0, ground)
-	data.add_need("energy", -15.0)
-	data.add_journal("Se cayó por una puerta al vacío (¡ay!)")
-	_animator.play("hurt")
-	_bubble.text = "¡Ay!"
-	_bubble.modulate = Color(1, 0.6, 0.5)
-	EventBus.toast.emit("¡%s se cayó! Llamamos a la ambulancia." % data.name)
-	EventBus.ambulance_requested.emit(self)
+	_accident("fall", "se cayó por una puerta al vacío", ground)
 
 
 ## La ambulancia lo revisó y lo curó.
@@ -894,8 +969,18 @@ func _step_on_hazard(point: Vector3) -> bool:
 			continue
 		if HazardMap.is_careful(attention):
 			return false  # Lo cruza con cuidado.
-		var reason := "%s sin prestar atención (atención %.2f)" % [HazardMap.kind_info(kind).get("log", "pisó un peligro"), attention]
-		return _accident(HazardMap.accident_for(kind), reason)
+		# Pulido 6B: las reglas del peligro (data/accidents.json) deciden SI pasa algo: un
+		# charco solo hace resbalar sobre piso resbaloso o frente a una puerta con piso de adentro.
+		var rule_ids := AccidentRules.rules_for_hazard(kind)
+		var accident: String = HazardMap.accident_for(kind)
+		var reason: String = str(HazardMap.kind_info(kind).get("log", "pisó un peligro"))
+		if not rule_ids.is_empty():
+			var found := AccidentRules.first_match(rule_ids, "enter_cell", _accident_context({"level": candidate, "cell": here}))
+			if found.is_empty() or not AccidentRules.rolls(found["rule"], _rng):
+				return false
+			accident = str(found["rule"].get("accident", accident))
+			reason = str(found["rule"].get("reason", reason))
+		return _accident(accident, "%s sin prestar atención (atención %.2f)" % [reason, attention])
 	return false
 
 
@@ -958,26 +1043,31 @@ func force_accident(kind: String) -> bool:
 
 ## Lo comparten el accidente forzado y los peligros del mapa. Nada de dinero ni progreso:
 ## solo baja un poco la energía y queda anotado en el diario.
-func _accident(kind: String, reason: String) -> bool:
+func _accident(kind: String, reason: String, drop_to := Vector2i(-100000, -100000)) -> bool:
 	var info := HazardMap.accident_info(kind)
 	if info.is_empty() or data == null or hurt or state == State.WORKING:
 		return false
 	var here := current_cell()
 	var here_level := current_level()
+	var start_position := position
 	_stop_action()
 	_order = {}
 	_path = PackedVector3Array()
 	level = here_level
 	cell = here
-	if kind == "fall" and level != 0:
+	var drops := false  # ¿Cae desde un piso alto hasta el suelo?
+	if kind == "fall" and (level != 0 or drop_to != Vector2i(-100000, -100000)):
 		# Cae hasta el suelo de abajo (la ambulancia llega por la calle).
-		var ground := here
+		var ground := drop_to if drop_to != Vector2i(-100000, -100000) else here
 		if not nav.is_walkable(0, ground):
-			var spot := nav.nearest_walkable(HouseGrid.cell_center(here))
+			var spot := nav.nearest_walkable(HouseGrid.cell_center(ground))
 			ground = spot[1] if not spot.is_empty() and spot[0] == 0 else spawn_cell()
+		drops = level != 0 or start_position.y > nav.ground_y(0, ground) + 0.3
 		level = 0
 		cell = ground
 	place_at(level, cell)
+	if drops:
+		_animate_drop(start_position, position)
 	data.add_need("energy", float(info.get("energy", 0.0)))
 	data.add_journal(str(info.get("journal", "Tuvo un accidente")))
 	_animator.play(str(info.get("anim", "hurt")))
@@ -993,7 +1083,7 @@ func _accident(kind: String, reason: String) -> bool:
 		EventBus.toast.emit("¡%s se lastimó! Llamamos a la ambulancia." % data.name)
 		EventBus.ambulance_requested.emit(self)
 	else:
-		# Un tropiezo: se sacude y sigue (sin ambulancia).
+		# Un tropiezo o un resbalón: se sacude y sigue (sin ambulancia).
 		state = State.IDLE
 		_idle_minutes = float(info.get("seconds", 1.2))
 		_mark_intention()
@@ -1005,6 +1095,21 @@ func _accident(kind: String, reason: String) -> bool:
 				_bubble.text = ""
 				_bubble.modulate = Color.WHITE)
 	return true
+
+
+## Pulido 6B: la caída desde un piso alto no es un salto de teletransporte: baja en arco,
+## primero despacio y cada vez más rápido (como cae algo), mientras gira la animación «fall».
+func _animate_drop(from: Vector3, to: Vector3) -> void:
+	var height := maxf(from.y - to.y, 0.5)
+	var seconds := clampf(sqrt(2.0 * height / 9.8), 0.35, 0.9)
+	position = from
+	var tween := create_tween()
+	tween.tween_method(func(progress: float) -> void:
+		# En horizontal avanza parejo; en vertical acelera (progress al cuadrado).
+		position = Vector3(lerpf(from.x, to.x, progress), lerpf(from.y, to.y, progress * progress), lerpf(from.z, to.z, progress)),
+		0.0, 1.0, seconds)
+	tween.tween_callback(func() -> void:
+		position = to)
 
 
 ## Un ícono chato (billboard) sobre la cabeza durante el accidente.

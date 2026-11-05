@@ -42,6 +42,7 @@
 		"cough": ["cough", "toser"],
 		"hurt": ["hurt", "lying_down"],
 		"fall": ["fall", "falling", "caer"],
+		"slip": ["slip", "slipping", "resbalar"],
 		"trip": ["trip", "stumble", "tropezar"],
 		"burn": ["burn", "burned", "quemarse"]
 	}
