@@ -105,6 +105,11 @@ static func make_ghost(node: Node, valid: bool) -> void:
 	_apply_override(node, transparent_material(color))
 
 
+## Pulido 6A (4): cimientos sobre un obstáculo: ámbar (un servicio lo retira y se ponen solos).
+static func make_ghost_service(node: Node) -> void:
+	_apply_override(node, transparent_material(Color(1.0, 0.75, 0.2, 0.55)))
+
+
 ## Pulido 2: deja una pieza "prevista": igual que la real pero con el color
 ## aclarado y un brillo que la vista prende y apaga. Devuelve los materiales
 ## (copias propias de esta pieza) para animarles el brillo ("glow").

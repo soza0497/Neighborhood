@@ -196,8 +196,12 @@ func _test_add_floor() -> void:
 	_check(_house.floors_total() == 1, "no se agregó el piso")
 	_house.apply([HouseData.write(0, "roofs", "o60", null)])
 	EventBus.build_add_floor_requested.emit()
+	await _frames(2)
+	# Pulido 6A (3): primero pregunta; el piso se agrega al confirmar.
+	_check(_house.floors_total() == 1 and _builder.pending_action() == "add_floor", "pide confirmar antes de agregar el piso")
+	EventBus.build_confirm_requested.emit()
 	await _frames(4)
-	_check(_house.floors_total() == 2 and _builder.level == 1, "con una parte sin techo, agrega el piso y va a él")
+	_check(_house.floors_total() == 2 and _builder.level == 1, "al confirmar, agrega el piso y va a él")
 	await _frames(3)
 	_check(map.shown_levels() == 2, "el selector muestra 2 pisos")
 	# Dos pisos con algo para mostrar el frente.

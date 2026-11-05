@@ -394,6 +394,16 @@ func _shift(offset: Vector2i) -> void:
 		main_bedroom_cell = _shift_room_key(main_bedroom_cell, offset)
 
 
+## Pulido 6A (8): al mudar la casa, los tipos de cuarto elegidos se corren con ella.
+func shift_room_data(offset: Vector2i) -> void:
+	var moved_types := {}
+	for key in room_types:
+		moved_types[_shift_room_key(str(key), offset)] = room_types[key]
+	room_types = moved_types
+	if main_bedroom_cell != "":
+		main_bedroom_cell = _shift_room_key(main_bedroom_cell, offset)
+
+
 static func _shift_room_key(key: String, offset: Vector2i) -> String:
 	var parts := key.split(":")
 	if parts.size() != 2:

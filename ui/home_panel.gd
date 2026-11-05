@@ -195,6 +195,13 @@ func _on_revert(id: int) -> void:
 
 func _build_templates() -> void:
 	var list := HouseTemplates.all()
+	# Pulido 6A (8): mudar la casa entera de lugar (con un costo; no se pierde material).
+	_content.add_child(PanelRows.title("Mover la casa"))
+	_content.add_child(PanelRows.label(
+		"Cambiá la casa entera de lugar dentro de tu parcela, con los muebles y la pintura. Se paga la mudanza ($%d + $%d por pieza + $%d por cada celda que se corre); el material no se pierde." % [
+			int(HouseMove.config()["base"]), int(HouseMove.config()["per_piece"]), int(HouseMove.config()["per_step"])], 15, Color(0.8, 0.85, 0.95)))
+	var move_offline := Economy.server_mode and (not GameServer.online or Economy.busy)
+	_content.add_child(PanelRows.row([PanelRows.button("Mover la casa", _on_move_house, move_offline or house == null or Economy.shared, 220)]))
 	_content.add_child(PanelRows.title("Plantillas de casa (mudanza)"))
 	_content.add_child(PanelRows.label(
 		"Guardá la estructura de tu casa (cimientos, pisos, paredes con puertas y ventanas, techos, escaleras y pilares, con su pintura; sin muebles) para volver a construirla en otro lugar del lote. Tenés %d de %d." % [list.size(), HouseTemplates.MAX_TEMPLATES], 15, Color(0.8, 0.85, 0.95)))
@@ -245,6 +252,12 @@ func _on_save_template() -> void:
 	else:
 		_template_note = result["error"]
 	_rebuild()  # El aviso se cambió después de guardar: se dibuja de nuevo.
+
+
+func _on_move_house() -> void:
+	_template_note = ""
+	hide()
+	EventBus.house_move_requested.emit()
 
 
 func _on_place_template(id: String) -> void:

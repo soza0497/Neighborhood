@@ -18,8 +18,8 @@ const OWNER_ONLY := 1
 
 
 ## Pulido 4B: opciones que son SOLO de este teléfono y nunca viajan al servidor (el modo
-## desarrollador). Si un día se agrega otra, va acá.
-const LOCAL_ONLY_SETTINGS := ["dev_mode"]
+## desarrollador y, Pulido 6A, los cimientos que esperan que retiren un obstáculo). Si un día se agrega otra, va acá.
+const LOCAL_ONLY_SETTINGS := ["dev_mode", "pending_foundations"]
 
 
 ## Las opciones sin las que son solo locales (lo único que se sube al servidor).

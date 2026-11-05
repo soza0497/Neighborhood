@@ -41,6 +41,9 @@ func _run() -> void:
 	await _test_grid_and_outdoor()
 	await _test_quick_menu()
 	await _test_floor_map()
+	await _test_basement()
+	await _test_foundation_over_obstacle()
+	await _test_move_house()
 	print("\nDEMO PULIDO 6A: %d pasaron, %d fallaron · capturas: %s" % [_passed, _failed, ", ".join(_shots)])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -207,6 +210,127 @@ func _test_floor_map() -> void:
 	await _frames(6)
 	_check(FloorMap.top_edge_exposed(_house, 0, HouseGrid.edge_key(Vector2i(o.x + 4, o.y), true)), "el borde del primer piso fuera del segundo se dibuja")
 	await _shot("p6a_8_maqueta_segundo_piso.png")
+
+
+func _test_basement() -> void:
+	print("\n7) Sótano: confirmar, guía, oscuro y efecto hueco")
+	_build_sample()
+	Economy.add_money(5000)
+	_main.set_mode("build")
+	await _frames(4)
+	var o := _origin()
+	# Agregar sótano pide confirmar (un toque suelto no lo agrega).
+	EventBus.build_add_basement_requested.emit()
+	await _frames(2)
+	_check(_house.basement_count == 0 and _builder.pending_action() == "add_basement", "«Agregar sótano» primero pregunta")
+	EventBus.build_cancel_requested.emit()
+	await _frames(2)
+	_check(_builder.pending_action() == "" and _house.basement_count == 0, "cancelar lo deja como estaba")
+	EventBus.build_add_basement_requested.emit()
+	await _frames(2)
+	EventBus.build_confirm_requested.emit()
+	await _frames(5)
+	_check(_house.basement_count == 1 and _builder.level == -1, "al confirmar, se agrega y se baja a él")
+	var basement: BasementView = _main.get_node("House").find_child("BasementView", true, false)
+	_check(basement != null and basement.visible, "se ve el fondo oscuro del sótano")
+	_check(BasementView.guide_cells(_house, -1).size() == 30, "la guía es la huella de la casa (30 celdas)")
+	_look(0.0, -50.0, 14.0)
+	await _shot("p6a_9_sotano_guia.png")
+	# Solo se excava bajo la casa.
+	var dig := {"item": "excavation_basic"}
+	_check(HouseRules.is_supported(_house, -1, "excavation", HouseGrid.cell_key(o + Vector2i(1, 1)), dig), "bajo la casa se puede excavar")
+	_check(not HouseRules.is_supported(_house, -1, "excavation", HouseGrid.cell_key(o + Vector2i(20, 20)), dig), "afuera de la casa no")
+	var writes: Array = []
+	var cells := HouseGrid.cells_in_rect(o + Vector2i(1, 1), o + Vector2i(4, 3))
+	for c in cells:
+		writes.append(HouseData.write(-1, "excavation", HouseGrid.cell_key(c), dig))
+		writes.append(HouseData.write(-1, "foundation", HouseGrid.cell_key(c), {"item": "foundation_basic"}))
+		writes.append(HouseData.write(-1, "floors", HouseGrid.cell_key(c), {"item": "floor_basic"}))
+	for edge in HouseGrid.edges_around_rect(o + Vector2i(1, 1), o + Vector2i(4, 3)):
+		writes.append(HouseData.write(-1, "walls", edge, {"item": "wall_basic"}))
+	_house.apply(writes)
+	await _frames(6)
+	var view: HouseView = _main.get_node("House")
+	var visible_walls := 0
+	var total_walls := 0
+	for edge in HouseGrid.edges_around_rect(o + Vector2i(1, 1), o + Vector2i(4, 3)):
+		total_walls += 1
+		var node := view.get_piece_node(-1, "walls", edge)
+		if node != null and node.visible:
+			visible_walls += 1
+	_check(total_walls > 0 and visible_walls < total_walls and visible_walls > 0,
+		"efecto hueco: se esconden las paredes del frente (%d de %d se ven)" % [visible_walls, total_walls])
+	await _shot("p6a_10_sotano_efecto_hueco.png")
+	_look(2.4, -40.0, 14.0)
+	await _frames(6)
+	await _shot("p6a_11_sotano_girado.png")
+	EventBus.build_level_set_requested.emit(0)
+	await _frames(4)
+	_check(not basement.visible, "arriba, el sótano oscuro se esconde")
+	_main.set_mode("live")
+	await _frames(3)
+
+
+func _test_foundation_over_obstacle() -> void:
+	print("\n8) Cimientos sobre un árbol: se pide el servicio y se ponen solos")
+	_build_sample()
+	Economy.add_money(5000)
+	var queue: FoundationQueue = _main.get_node("FoundationQueue")
+	queue.use_default_services = true
+	# Un árbol de la zona usable que no esté debajo de la casa.
+	var tree_id := ""
+	for obstacle in Parcel.obstacles:
+		if obstacle["kind"] == "tree" and ParcelRules.in_zone(Parcel.zone_rects(), obstacle["x"], obstacle["z"], 1, 1) \
+				and not Parcel.cleared.has(obstacle["id"]) and not _house.has_piece(0, "foundation", "%d,%d" % [obstacle["x"], obstacle["z"]]):
+			tree_id = obstacle["id"]
+			break
+	_check(tree_id != "", "hay un árbol en la zona para probar")
+	if tree_id == "":
+		return
+	var tree := Parcel.obstacle(tree_id)
+	var key := "%d,%d" % [tree["x"], tree["z"]]
+	var write := HouseData.write(0, "foundation", key, {"item": "foundation_basic"})
+	_check(not HouseRules.check_placement(_house, [write])["blocked"].is_empty(), "sobre el árbol, los cimientos están bloqueados")
+	var split := FoundationQueue.split_blocked([write], func(cell: Vector2i) -> String: return Parcel.obstacle_at(cell))
+	_check(split["deferred"].has(tree_id), "se reconoce el árbol como lo que estorba")
+	var asked: Dictionary = await queue.request(split["deferred"])
+	_check(asked["requested"] == [tree_id] and asked["failed"].is_empty() and Parcel.pending.has(tree_id), "se llamó al servicio del árbol")
+	_check(queue.waiting_count() == 1 and not _house.has_piece(0, "foundation", key), "los cimientos esperan")
+	# El servicio termina: el árbol queda limpio y los cimientos se ponen solos.
+	Parcel.pending.erase(tree_id)
+	Parcel.cleared[tree_id] = true
+	Parcel._rebuild()
+	await _frames(8)
+	_check(_house.has_piece(0, "foundation", key), "terminado el servicio, los cimientos se pusieron solos")
+	_check(queue.waiting_count() == 0, "la cola quedó vacía")
+	_main.get_node("CameraRig").set_state({"x": tree["x"] + 0.0, "z": tree["z"] + 0.0, "yaw": 0.0, "distance": 12.0, "pitch": -45.0})
+	await _shot("p6a_12_cimientos_sobre_arbol.png")
+
+
+func _test_move_house() -> void:
+	print("\n9) Mover la casa entera")
+	_build_sample()
+	Economy.add_money(5000)
+	var placer: TemplatePlacer = _main.get_node("House/TemplatePlacer")
+	var before := _house.get_layer(0, "foundation").size()
+	var money := Economy.money
+	EventBus.house_move_requested.emit()
+	await _frames(5)
+	_check(placer.active and placer.moving, "se activó el modo mudanza")
+	var delta := Vector2i(8, -3)
+	placer.set_offset(placer.offset + delta)
+	await _frames(3)
+	_check(placer.last_check["valid"] and placer.last_check["fee"] == HouseMove.fee(_house, delta), "cabe y se ve lo que cuesta (%s)" % [placer.last_check.get("reason", "")])
+	_look(0.0, -50.0, 30.0)
+	await _shot("p6a_13_mudanza_silueta.png")
+	var ok: bool = await placer.confirm()
+	await _frames(6)
+	_check(ok and _house.get_layer(0, "foundation").size() == before, "la casa se mudó entera (sin perder piezas)")
+	_check(Economy.money < money, "se cobró la mudanza (de $%d a $%d)" % [money, Economy.money])
+	var o := _origin() + delta
+	_check(_house.has_piece(0, "foundation", HouseGrid.cell_key(o)), "los cimientos están en el lugar nuevo")
+	_main.get_node("CameraRig").set_state({"x": o.x + 3.0, "z": o.y + 2.5, "yaw": 0.0, "distance": 18.0, "pitch": -40.0})
+	await _shot("p6a_14_casa_mudada.png")
 
 
 # --- Ayudantes ---

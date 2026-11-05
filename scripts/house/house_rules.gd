@@ -43,7 +43,10 @@ static func is_supported(house: HouseData, level: int, layer: String, key: Strin
 			if level >= 0 or not HouseGrid.is_valid_level(level) or not HouseGrid.is_cell_in_lot(dig_cell) or is_blocked(dig_cell):
 				return false
 			# Se excava de arriba hacia abajo: el sótano de abajo sobre el de arriba.
-			return level == -1 or house.has_piece(level + 1, "excavation", key)
+			# Pulido 6A (3): el primero solo debajo de la casa (donde hay cimientos arriba).
+			if level == -1:
+				return house.has_piece(0, "foundation", key)
+			return house.has_piece(level + 1, "excavation", key)
 		"floors":
 			var cell := HouseGrid.key_to_cell(key)
 			if not HouseGrid.is_cell_in_lot(cell) or is_blocked(cell):

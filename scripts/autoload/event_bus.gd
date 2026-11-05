@@ -100,6 +100,14 @@ signal plan_discard_requested
 ## Pulido 2C: parcela, servicios y cajas.
 signal parcel_changed
 signal parcel_obstacle_tapped(id: String)
+## Pulido 6A (4): unos cimientos cubren obstáculos; hay que retirarlos. GANCHO para el equipo de
+## servicios (6B): `obstacle_ids` = los obstáculos a retirar, `writes` = los cimientos que esperan.
+## Ver FoundationQueue (por defecto llama al servicio de siempre).
+## Pulido 6A (8): ☰ → Casa → «Mover la casa»: elegir otro lugar de la parcela (con costo).
+signal house_move_requested
+## La casa se mudó `delta` celdas (el personaje y la pareja se reubican al volver a vivir).
+signal house_moved(delta: Vector2i)
+signal foundation_services_requested(obstacle_ids: Array, writes: Array)
 signal boxes_changed(dropped: int)
 signal boxes_open_all_requested
 signal box_tapped(level: int, key: String)

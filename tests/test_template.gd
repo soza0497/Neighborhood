@@ -242,7 +242,9 @@ func _test_ids_and_order() -> void:
 	base.apply(dig)
 	var basement := HouseTemplate.capture(base, "Sótano")
 	var basement_writes := HouseTemplate.writes_for(basement, Vector2i(9, 9), HouseData.new())
-	_check(basement_writes[0]["level"] == -1 and basement_writes[0]["layer"] == "excavation", "el sótano se excava primero")
+	# Pulido 6A (3): el sótano solo se excava bajo la casa, así que los cimientos de arriba van primero.
+	_check(basement_writes[0]["level"] == 0 and basement_writes[0]["layer"] == "foundation", "primero los cimientos de arriba")
+	_check(basement_writes[1]["level"] == -1 and basement_writes[1]["layer"] == "excavation", "después el sótano se excava")
 	_check(HouseTemplate.check(HouseData.new(), basement, Vector2i(9, 9))["valid"], "una plantilla con sótano se puede colocar")
 
 

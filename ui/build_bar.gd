@@ -218,8 +218,9 @@ func _update_actions() -> void:
 	var erasing := tool == "build" and build_mode == "erase"
 	_actions["multi"].visible = erasing
 	if _add_floor_button != null:
-		_add_floor_button.visible = tool == "build"
-		_add_basement_button.visible = tool == "build"
+		# Pulido 6A (3): agregar piso o sótano vive en el menú Construir (y pide confirmar).
+		_add_floor_button.visible = tool == "build" and build_mode == "add"
+		_add_basement_button.visible = tool == "build" and build_mode == "add"
 	if not erasing and _actions["multi"].button_pressed:
 		_actions["multi"].button_pressed = false
 

@@ -128,10 +128,17 @@ static func writes_for(template: Dictionary, offset: Vector2i, house: HouseData)
 		by_level[level][layer].append(piece)
 	var writes: Array = []
 	var next_number := house.next_id
+	# Pulido 6A (3): el sótano solo se excava debajo de la casa, así que los cimientos de la
+	# planta baja van PRIMERO (antes que las excavaciones de los sótanos).
+	var ground_level: Dictionary = by_level.get(0, {})
+	for piece in ground_level.get("foundation", []):
+		writes.append(HouseData.write(0, "foundation", shift_key("foundation", piece["k"], offset), (piece["v"] as Dictionary).duplicate(true)))
 	for level in level_order():
 		if not by_level.has(level):
 			continue
 		for layer in LAYER_ORDER:
+			if level == 0 and layer == "foundation":
+				continue  # Ya se escribieron arriba.
 			for piece in by_level[level].get(layer, []):
 				var value: Dictionary = (piece["v"] as Dictionary).duplicate(true)
 				var key: String = piece["k"]

@@ -15,6 +15,9 @@ const WALL_THICKNESS := 0.16
 
 var active := false
 var template: Dictionary = {}
+## Pulido 6A (8): true = no se coloca una plantilla nueva, se MUDA la casa que ya está
+## (la silueta es la casa entera; confirmar paga la mudanza).
+var moving := false
 ## Esquina (celda) donde está la plantilla ahora.
 var offset := Vector2i.ZERO
 ## Resultado de la última revisión (HouseTemplate.check).
@@ -41,6 +44,7 @@ func setup(builder: HouseBuilder, house: HouseData, view: Node3D, camera: Camera
 	_camera = camera
 	_build_ui()
 	EventBus.template_place_requested.connect(request_place)
+	EventBus.house_move_requested.connect(request_move)
 	EventBus.game_mode_changed.connect(func(mode: String) -> void:
 		if mode != "build":
 			cancel())
@@ -59,11 +63,38 @@ func request_place(template_id: String) -> void:
 	start(found)
 
 
+## Pedido de la interfaz (☰ → Casa → «Mover la casa»): la silueta es la casa entera.
+func request_move() -> void:
+	if _builder != null and not _builder.active:
+		EventBus.game_mode_change_requested.emit("build")
+		if not _builder.active:
+			return
+	var whole := HouseMove.as_template(_house)
+	if whole.is_empty():
+		EventBus.toast.emit(HouseMove.reason_text("empty"))
+		return
+	start_move(whole)
+
+
+## Empieza a mudar la casa: arranca justo donde está (así «mismo lugar» se ve como tal).
+func start_move(whole: Dictionary) -> bool:
+	if not start(whole):
+		return false
+	moving = true
+	var origin: Array = whole.get("origin", [0, 0])
+	set_offset(Vector2i(int(origin[0]), int(origin[1])))
+	EventBus.build_hint.emit("Mudar la casa: arrastrá la silueta. Verde = cabe. La mudanza cuesta plata, pero no se pierde material.")
+	_confirm_button.text = "Mudar"
+	return true
+
+
 ## Empieza a colocar `new_template` (el centro de la cámara es el punto de partida).
 func start(new_template: Dictionary) -> bool:
 	if new_template.is_empty() or (new_template.get("pieces", []) as Array).is_empty():
 		return false
 	cancel()
+	moving = false
+	_confirm_button.text = "Colocar"
 	template = new_template
 	_builder.select_item("")
 	_make_hologram()
@@ -82,6 +113,7 @@ func cancel() -> void:
 	if not active:
 		return
 	active = false
+	moving = false
 	_touches.clear()
 	if _hologram != null:
 		_hologram.queue_free()
@@ -111,6 +143,16 @@ func set_offset(new_offset: Vector2i) -> void:
 func refresh() -> void:
 	if not active:
 		return
+	if moving:
+		last_check = HouseMove.check(_house, move_delta())
+		var move_valid: bool = last_check["valid"]
+		_material.albedo_color = COLOR_OK if move_valid else COLOR_BAD
+		if move_valid:
+			_label.text = "La casa se muda acá · la mudanza cuesta $%d" % int(last_check["fee"])
+		else:
+			_label.text = HouseMove.reason_text(last_check["reason"])
+		_confirm_button.disabled = not move_valid or _busy
+		return
 	last_check = HouseTemplate.check(_house, template, offset)
 	var valid: bool = last_check["valid"]
 	_material.albedo_color = COLOR_OK if valid else COLOR_BAD
@@ -126,6 +168,19 @@ func confirm() -> bool:
 	if not active or _busy:
 		return false
 	refresh()
+	if moving:
+		if not last_check["valid"]:
+			EventBus.build_hint.emit(HouseMove.reason_text(last_check["reason"]))
+			return false
+		_busy = true
+		_confirm_button.disabled = true
+		var moved: bool = await _builder.move_house(move_delta())
+		_busy = false
+		if moved:
+			cancel()
+		else:
+			refresh()
+		return moved
 	if not last_check["valid"]:
 		EventBus.build_hint.emit(HouseTemplate.reason_text(last_check["reason"]))
 		return false
@@ -138,6 +193,12 @@ func confirm() -> bool:
 	else:
 		refresh()
 	return ok
+
+
+## Cuántas celdas se corre la casa respecto de donde está ahora.
+func move_delta() -> Vector2i:
+	var origin: Array = template.get("origin", [0, 0])
+	return offset - Vector2i(int(origin[0]), int(origin[1]))
 
 
 func _template_size() -> Vector2i:

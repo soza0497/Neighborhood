@@ -30,7 +30,10 @@
 		"truck": "#e8b04a",
 		"van": "#f4f4f4",
 		"ambulance": "#f6f6f6",
-		"cross": "#e04b4b"
+		"cross": "#e04b4b",
+		"basement_ground": "#3a281c",
+		"basement_bg": "#1d130d",
+		"basement_guide": "#ffd98a"
 	},
 	"fog": {
 		"enabled": true,

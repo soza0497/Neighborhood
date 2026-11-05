@@ -2,13 +2,36 @@
 
 ## ▶ PULIDO 6A (versión 0.13.0) — construcción y casa — rama `pulido-6a` (sale de `main`). **No se mergea, no se exporta APK.**
 
-**Estado:** 6A-1 y 6A-2 hechas (sin correr); 6A-3 (sótano, cimientos sobre obstáculos, mover la casa) en curso. Spec: `docs/pulido-6.md` §6A.
+**Estado:** 6A completa (11 puntos), en 3 sub-fases con un push cada una. Spec: `docs/pulido-6.md` §6A. Decisiones en `DECISIONES.md` → «Pulido 6A».
 **Todo el GDScript y Lua nuevo se escribió SIN ejecutar** (la nube no tiene Godot ni Lua): esperá errores de sintaxis o de tipos al primer arranque.
 
 **Próximo paso (el desarrollador principal, en la PC con Godot):**
-1. `godot --headless --path . --import` (registra `FurnitureQuickMenu`, `LongPressTip`, importa `dollar.svg`/`pencil.svg` y crea los `.uid` nuevos; commitearlos).
-2. `godot --headless --path . res://tests/test_build6a.tscn` (nueva) y todas las de antes (`test_house`, `test_art`, `test_camera`, `test_floor_map`, `test_template`, `test_dev_mode`…); `lua5.1 server/tests/test_rules.lua` (se agregaron comprobaciones de 6A).
-3. Con ventana: `SHOT_DIR=docs/capturas godot --path . res://tests/polish6a_demo.tscn` (genera `p6a_*.png`; **todavía no existen**) y `tests/ui_demo.tscn` (se ajustó a «Comprar» y al botón Pintar).
+1. `godot --headless --path . --import` (registra las clases nuevas —`FurnitureQuickMenu`, `LongPressTip`, `BasementView`, `FoundationQueue`, `HouseMove`—, importa `dollar.svg`/`pencil.svg` y crea los `.uid` nuevos; commitearlos).
+2. `godot --headless --path . res://tests/test_build6a.tscn` (**nueva**, ≈ 170 comprobaciones; si falla, copiame el «FALLÓ: …») y las de antes: `test_house`, `test_art`, `test_template` (se ajustaron 3), `test_camera`, `test_floor_map`, `test_dev_mode`, `test_economy`, `test_parcel`, `test_server`…
+3. `lua5.1 server/tests/test_rules.lua` (**se agregaron ≈ 40 comprobaciones**: muebles afuera, excavación solo bajo la casa, mudar la casa) y `test_goals.lua`. Si Nakama corre, reiniciarlo: hay un RPC nuevo (`house_move`) y cambió `neighborhood_house.lua`.
+4. Con ventana: `SHOT_DIR=docs/capturas godot --path . res://tests/polish6a_demo.tscn` (genera `p6a_*.png`, ~14 capturas; **todavía no existen**), `tests/ui_demo.tscn` y `tests/polish2a_demo.tscn` (se ajustaron a «Comprar», al botón Pintar y a confirmar «Agregar piso»).
+5. Mirar a mano en el teléfono (cuando se exporte): la pared pintada de dos colores (¿se ve algún borde raro en las esquinas?), el cartelito al mantener un botón, el sótano oscuro con la guía, y la maqueta de pisos (ver «Pendientes»).
+
+### Qué se hizo (por sub-fase)
+- **6A-1** (pintura, íconos, contorno): pared = cuerpo neutro + dos láminas finas (cara A / cara B); el canto de arriba y las columnas quedan neutros. «Adentro / Afuera / Cara tocada»
+  para pintar. Pared nueva hereda el color de la vecina en línea. **Pintar** es su botón (brocha) y «Modificar» se llama **Mover**. Comprar = dólar, Obra/Construir = lápiz. Título del
+  menú sobre la barra. Cartelito con el nombre al **mantener presionado** cualquier botón con ícono. Brújula escondida al construir. Contorno **fino (defecto) / normal / apagado** en Info.
+- **6A-2** (cuadrícula, afuera, mini menú, maqueta): cuadrícula solo en la valla (máscara en el shader); `outdoor: true` en mesa, plantas, lámpara, florero y banca nueva (+ pruebas Lua);
+  mantener presionado un mueble (modo vivir) abre flechas y girar; maqueta: borde de arriba pared por pared.
+- **6A-3** (sótano, cimientos, mudanza): agregar piso/sótano piden confirmar (solo en Construir); sótano solo bajo la casa (teléfono + servidor), fondo café oscuro, guía, efecto hueco;
+  cimientos sobre obstáculos piden los servicios y se ponen solos (cola, gancho para 6B); mover la casa con costo (☰ → Casa), RPC `house_move`.
+
+### ⚠ Qué quedó SIN correr (la nube no tiene Godot ni Lua; el brief prohíbe descargar binarios)
+Nada de GDScript ni de Lua se ejecutó ni compiló; no hay capturas (`docs/capturas/p6a_*.png` se generan con la demo). Riesgos típicos al primer arranque: inferencia de tipos, nombres de la API,
+`await` dentro de funciones estáticas (`LongPressTip`), el uniform `sampler2D` de `grid.gdshader`, y `match`/lambdas. `dollar.svg` y `pencil.svg` necesitan el paso de importar (sin él, esos botones salen sin ícono).
+
+### Pendientes / errores conocidos de Pulido 6A
+- **Maqueta (10):** sin la captura del dueño no se pudo ver el «hueco»; se corrigió la causa más probable (aristas de arriba por piso entero). Si sigue, mandame la captura.
+- **Mover la casa compartida:** no se puede (el servidor y el teléfono lo rechazan); falta el flujo de aprobación de la pareja. Los tipos de cuarto se corren con la casa pero **no** vuelven con «Deshacer».
+- **Cimientos sobre obstáculos:** si no alcanza la plata cuando el terreno queda libre, los cimientos esperan en la cola y se reintentan en el próximo cambio de la parcela. 6B puede reemplazar la llamada al servicio (señal `foundation_services_requested`).
+- **Mini menú:** solo en modo vivir; no hay prueba con dedos reales. La banca de jardín no tiene acción «sentarse» (el personaje no sale afuera de la casa).
+- **Brújula:** se esconde al construir; 6C la reubica (conflicto previsto en `ui/hud.gd` y `ui/build_bar.gd`; los demás archivos de 6A no se cruzan con `scripts/character/*`, `scripts/debug/*` ni la cámara).
+- Demos viejas con coordenadas de antes (`polish2c_demo`: la excavación ahora exige casa arriba) pueden fallar; ajustar con `HouseGrid.home_origin()`.
 
 ## ▶ Guías de arte: escritas en la rama `guias-arte`, sin verificar con Blender instalado
 Ocho guías para principiante total en `docs/arte/` (00 mapa, 01 instalar Blender, 02 primera silla, 03 muebles con

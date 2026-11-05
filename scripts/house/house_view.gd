@@ -47,6 +47,18 @@ var _outlines_dirty := true
 ## usan las demos para comparar «antes y después».
 static var seamless_outline := true
 var _outline_nodes: Dictionary = {}
+## Pulido 6A (3): «efecto hueco» en los sótanos. Se ven las paredes del fondo y NO las del frente
+## (las que tapan la vista), como estar mirando un hoyo. false = apagado (pruebas).
+var hole_effect := true
+## Hacia dónde está la cámara (horizontal, en 8 sectores), y si hay que volver a decidir qué paredes se ven.
+var _hole_to_cam := Vector2.ZERO
+var _hole_sector := -1
+var _hole_dirty := true
+## Una pared es «del frente» si su cara de afuera mira a la cámara más que esto.
+const HOLE_FACING_MIN := 0.2
+## Con la cámara mirando casi derecho hacia abajo (la parte horizontal de su mirada es menor
+## que esto, de 0 a 1) no se esconde nada: no hay «frente».
+const HOLE_MIN_LOOK := 0.25
 
 
 func _ready() -> void:
@@ -248,6 +260,7 @@ func set_boxed(ids: Dictionary) -> void:
 func _process(delta: float) -> void:
 	if _outlines_dirty:
 		_rebuild_outlines()
+	_update_hole_effect()
 	if _planned_materials.is_empty():
 		return
 	_glow_clock = fmod(_glow_clock + delta, PLAN_GLOW_PERIOD)
@@ -275,6 +288,9 @@ func _refresh_by_id(id: String) -> void:
 ## en rojo): esos tramos no llevan contorno propio y una sola caja envuelve
 ## todos los que son contiguos en línea recta, así la pared se ve continua.
 func _wall_is_flat(level: int, key: String, value: Variant) -> bool:
+	# Pulido 6A (3): en un sótano con efecto hueco, cada tramo lleva su contorno (algunos se esconden).
+	if hole_active() and level < 0:
+		return false
 	if not seamless_outline or value == null or str(value.get("opening", "")) != "":
 		return false
 	if HouseData.is_under_construction(value):
@@ -353,6 +369,7 @@ func rebuild_all() -> void:
 	_posts.clear()
 	_pending.clear()
 	_outlines_dirty = true
+	_hole_dirty = true
 	if house == null:
 		return
 	for level in HouseGrid.level_range():
@@ -393,6 +410,83 @@ func make_piece(level: int, layer: String, key: String, value: Dictionary, previ
 	return null
 
 
+# --- Efecto hueco de los sótanos (Pulido 6A, 3) ---
+
+## ¿Está el efecto en marcha? Solo cuando se mira un sótano.
+func hole_active() -> bool:
+	return hole_effect and top_visible_level < 0
+
+
+## ¿Esta pared da hacia la cámara? (Entonces, en un sótano, se esconde.) Es una pared del
+## contorno del hueco: tiene «hueco» (piso, cimientos o excavación) de un solo lado; la normal
+## apunta del lado con hueco al lado sin él. `to_cam` = hacia dónde está la cámara (en X-Z).
+static func wall_is_front(target: HouseData, level: int, key: String, to_cam: Vector2) -> bool:
+	if to_cam.length() < 0.001:
+		return false
+	var cells := HouseGrid.edge_cells(key)
+	var in_a := has_hole_cell(target, level, cells[0])
+	var in_b := has_hole_cell(target, level, cells[1])
+	if in_a == in_b:
+		return false  # Pared de adentro o suelta: siempre se ve.
+	var outward := Vector2(cells[1] - cells[0]) if in_a else Vector2(cells[0] - cells[1])
+	return outward.normalized().dot(to_cam.normalized()) > HOLE_FACING_MIN
+
+
+## ¿La celda es parte del hoyo del sótano (excavada, con cimientos o con piso)?
+static func has_hole_cell(target: HouseData, level: int, cell: Vector2i) -> bool:
+	var key := HouseGrid.cell_key(cell)
+	return target.has_piece(level, "excavation", key) or target.has_piece(level, "foundation", key) \
+		or target.has_piece(level, "floors", key)
+
+
+## Vuelve a decidir qué paredes de los sótanos se ven, si cambió el lado desde el que se mira.
+func _update_hole_effect() -> void:
+	if house == null:
+		return
+	if not hole_active():
+		if _hole_sector != -2:
+			_hole_sector = -2
+			_hole_to_cam = Vector2.ZERO
+			_refresh_hole_walls()
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	# Hacia dónde está la cámara, visto desde arriba: lo contrario de hacia dónde mira.
+	var forward := -cam.global_transform.basis.z
+	var away := Vector2(-forward.x, -forward.z)
+	var sector := -1
+	var to_cam := Vector2.ZERO
+	if away.length() >= HOLE_MIN_LOOK:
+		sector = posmod(int(round(away.angle() / (PI / 4.0))), 8)
+		to_cam = Vector2.from_angle(sector * PI / 4.0)
+	if sector != _hole_sector or _hole_dirty:
+		_hole_sector = sector
+		_hole_to_cam = to_cam
+		_hole_dirty = false
+		_refresh_hole_walls()
+
+
+func _refresh_hole_walls() -> void:
+	for id in _nodes:
+		var parts: PackedStringArray = str(id).split("|")
+		if parts[1] != "walls" or int(parts[0]) >= 0:
+			continue
+		_nodes[id].visible = not wall_is_front(house, int(parts[0]), parts[2], _hole_to_cam)
+	for id in _posts:
+		var parts: PackedStringArray = str(id).split("|")
+		var level := int(parts[0])
+		if level >= 0:
+			continue
+		var visible_post := true
+		if _hole_to_cam != Vector2.ZERO:
+			visible_post = false
+			for edge in HouseGrid.vertex_edges(HouseGrid.key_to_cell(parts[1])):
+				if house.has_piece(level, "walls", edge) and not wall_is_front(house, level, edge, _hole_to_cam):
+					visible_post = true
+		_posts[id].visible = visible_post
+
+
 func _on_piece_changed(level: int, layer: String, key: String) -> void:
 	_refresh_piece(level, layer, key)
 	if layer == "walls":
@@ -430,6 +524,7 @@ func _refresh_piece(level: int, layer: String, key: String) -> void:
 			_pending[id] = [level, layer, key]
 		_levels[HouseGrid.level_index(level)].add_child(node)
 		_nodes[id] = node
+		_hole_dirty = true
 
 
 ## Pone o quita la columna de una esquina según si llega alguna pared.

@@ -6,7 +6,7 @@ extends Node
 ## Al final dice cuántas pruebas pasaron. Si alguna falla, dice cuál.
 ##
 ## Se va llenando por sub-fase: 6A-1 (contorno, pintura, íconos), 6A-2 (cuadrícula, muebles
-## afuera, mini menú, maqueta).
+## afuera, mini menú, maqueta), 6A-3 (sótano, cimientos sobre obstáculos, mover la casa).
 
 var _passed := 0
 var _failed := 0
@@ -22,6 +22,9 @@ func _ready() -> void:
 	_test_outdoor_furniture()
 	_test_quick_menu_logic()
 	_test_floor_map_top_edges()
+	_test_basement()
+	_test_foundation_queue()
+	_test_house_move()
 	print("\nPRUEBAS 6A: %d pasaron, %d fallaron" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -263,3 +266,153 @@ func _test_floor_map_top_edges() -> void:
 	house.apply([HouseData.write(0, "roofs", "o1", {"item": "roof_flat", "rect": [3, 3, 3, 3]})])
 	_check(not FloorMap.top_edge_exposed(house, 0, "h:4,5"), "bajo el techo no se ve")
 	_check(FloorMap.top_edge_exposed(house, 0, "h:4,0"), "fuera del techo, sí (antes todo el piso se apagaba por tener un techo)")
+
+
+# --- 3. Sótano: solo bajo la casa, guía y efecto hueco ---
+
+func _test_basement() -> void:
+	print("\n3) Sótano")
+	var house := _box_house()
+	var dig := {"item": "excavation_basic"}
+	_check(HouseRules.is_supported(house, -1, "excavation", "2,2", dig), "se excava bajo la casa")
+	_check(not HouseRules.is_supported(house, -1, "excavation", "12,12", dig), "no se excava donde no hay casa")
+	house.apply([HouseData.write(-1, "excavation", "2,2", dig)])
+	_check(HouseRules.is_supported(house, -2, "excavation", "2,2", dig), "el segundo sótano sigue sobre el primero")
+	# La guía: la huella de la casa de arriba.
+	var guide := BasementView.guide_cells(house, -1)
+	_check(guide.size() == 36 and Vector2i(0, 0) in guide and Vector2i(5, 5) in guide and not Vector2i(6, 6) in guide,
+		"la guía del sótano 1 es la huella de la casa (%d celdas)" % guide.size())
+	var guide2 := BasementView.guide_cells(house, -2)
+	_check(guide2 == [Vector2i(2, 2)], "la guía del sótano 2 es lo excavado arriba (%s)" % [guide2])
+	_check(BasementView.guide_cells(house, 0).is_empty(), "en la planta baja no hay guía")
+	# Efecto hueco: el sótano excavado en un rectángulo 4x3.
+	var basement := HouseData.new()
+	var writes: Array = []
+	for c in HouseGrid.cells_in_rect(Vector2i(2, 2), Vector2i(5, 4)):
+		writes.append(HouseData.write(-1, "excavation", HouseGrid.cell_key(c), dig))
+		writes.append(HouseData.write(-1, "foundation", HouseGrid.cell_key(c), {"item": "foundation_basic"}))
+	for edge in HouseGrid.edges_around_rect(Vector2i(2, 2), Vector2i(5, 4)):
+		writes.append(HouseData.write(-1, "walls", edge, {"item": "wall_basic"}))
+	basement.apply(writes)
+	_check(HouseView.has_hole_cell(basement, -1, Vector2i(3, 3)) and not HouseView.has_hole_cell(basement, -1, Vector2i(9, 9)), "una celda excavada es parte del hoyo")
+	# Cámara al sur (+Z) del hoyo: la pared sur es la del frente y la norte la del fondo.
+	var to_cam := Vector2(0, 1)
+	_check(HouseView.wall_is_front(basement, -1, "h:3,5", to_cam), "la pared sur (cara a la cámara) se esconde")
+	_check(not HouseView.wall_is_front(basement, -1, "h:3,2", to_cam), "la pared norte (el fondo) se ve")
+	_check(not HouseView.wall_is_front(basement, -1, "v:2,3", to_cam) and not HouseView.wall_is_front(basement, -1, "v:6,3", to_cam),
+		"las de los lados (de perfil) se ven")
+	# Cámara al este: la pared este es la del frente.
+	_check(HouseView.wall_is_front(basement, -1, "v:6,3", Vector2(1, 0)) and not HouseView.wall_is_front(basement, -1, "v:2,3", Vector2(1, 0)),
+		"mirando desde el este se esconde la pared este y se ve la oeste")
+	_check(not HouseView.wall_is_front(basement, -1, "h:3,5", Vector2.ZERO), "mirando derecho hacia abajo no se esconde nada")
+	# Una pared de adentro (entre dos celdas del hoyo) siempre se ve.
+	basement.apply([HouseData.write(-1, "walls", "v:4,3", {"item": "wall_basic"})])
+	_check(not HouseView.wall_is_front(basement, -1, "v:4,3", Vector2(1, 0)) and not HouseView.wall_is_front(basement, -1, "v:4,3", Vector2(-1, 0)),
+		"una pared de adentro del hoyo siempre se ve")
+	# Colores del sótano en el estilo.
+	_check(Style.color("basement_bg", Color.MAGENTA) != Color.MAGENTA and Style.color("basement_ground", Color.MAGENTA) != Color.MAGENTA,
+		"el estilo tiene los cafés oscuros del sótano")
+	var bg: Color = Style.color("basement_bg")
+	_check(bg.get_luminance() < 0.1, "el fondo del sótano es muy oscuro")
+
+
+# --- 4. Cimientos sobre obstáculos ---
+
+func _test_foundation_queue() -> void:
+	print("\n4) Cimientos sobre obstáculos")
+	var of := func(cell: Vector2i) -> String:
+		if cell == Vector2i(5, 5) or cell == Vector2i(6, 5):
+			return "r:5,5"  # Una roca de 2x1.
+		if cell == Vector2i(9, 9):
+			return "t:9,9"
+		return ""
+	var blocked: Array = [
+		HouseData.write(0, "foundation", "5,5", {"item": "foundation_basic"}),
+		HouseData.write(0, "foundation", "6,5", {"item": "foundation_basic"}),
+		HouseData.write(0, "foundation", "9,9", {"item": "foundation_basic"}),
+		HouseData.write(0, "foundation", "20,20", {"item": "foundation_basic"}),  # Zona cerrada: sin obstáculo.
+		HouseData.write(0, "floors", "5,5", {"item": "floor_basic"}),
+	]
+	var split := FoundationQueue.split_blocked(blocked, of)
+	_check(split["deferred"].keys().size() == 2 and split["deferred"]["r:5,5"].size() == 2 and split["deferred"]["t:9,9"].size() == 1,
+		"los cimientos se agrupan por obstáculo (roca: 2, árbol: 1)")
+	_check(split["impossible"].size() == 2, "lo que no es un obstáculo (zona cerrada) o no es un cimiento queda imposible")
+	var cost := FoundationQueue.total_service_cost(["r:5,5", "t:9,9"], func(id: String) -> int: return 250 if id.begins_with("r") else 90)
+	_check(cost == 340, "el costo suma los servicios (%d)" % cost)
+	var queue := {"r:5,5": [blocked[0]], "t:9,9": [blocked[2]]}
+	var found := FoundationQueue.ready_entries(queue, func(id: String) -> bool: return id == "t:9,9")
+	_check(found["ready"].keys() == ["t:9,9"] and found["waiting"] == ["r:5,5"], "lo ya retirado se coloca; lo demás espera")
+	_check(FoundationQueue.ready_entries({}, func(_id: String) -> bool: return true)["ready"].is_empty(), "una cola vacía no hace nada")
+	_check(FoundationQueue.SETTINGS_KEY in CloudSync.LOCAL_ONLY_SETTINGS, "la cola es solo de este teléfono (no viaja al servidor)")
+	var public_settings := CloudSync.public_settings({"pending_foundations": {"r:5,5": []}, "use_models": true})
+	_check(not public_settings.has("pending_foundations") and public_settings.has("use_models"), "public_settings la saca")
+
+
+# --- 8. Mover la casa ---
+
+func _test_house_move() -> void:
+	print("\n8) Mover la casa entera")
+	var house := _box_house()
+	house.apply([
+		HouseData.write(0, "objects", "o1", {"item": "table_basic", "cell": [1, 1], "rot": 0}),
+		HouseData.write(0, "roofs", "o2", {"item": "roof_flat", "rect": [0, 0, 6, 6]}),
+	])
+	var wall: Dictionary = house.get_piece(0, "walls", "h:2,0").duplicate()
+	wall["color_a"] = "#ff0000"
+	house.apply([HouseData.write(0, "walls", "h:2,0", wall)])
+	var pieces := HouseMove.piece_count(house)
+	_check(pieces == 36 + 36 + 24 + 1 + 1, "cuenta las piezas de todas las capas (%d)" % pieces)
+	var cfg := HouseMove.config()
+	_check(HouseMove.fee(house, Vector2i.ZERO) == 0, "no moverse no cuesta")
+	_check(HouseMove.fee(house, Vector2i(3, 0)) == int(cfg["base"]) + int(cfg["per_piece"]) * pieces + int(cfg["per_step"]) * 3, "la mudanza cuesta base + piezas + distancia")
+	_check(HouseMove.fee(house, Vector2i(5, -2)) == int(cfg["base"]) + int(cfg["per_piece"]) * pieces + int(cfg["per_step"]) * 7, "la distancia suma X y Z")
+	_check(HouseMove.fee(house, Vector2i(5000, 5000)) <= int(cfg["max"]), "tiene tope")
+	_check(HouseMove.fee(HouseData.new(), Vector2i(3, 0)) == 0, "una casa vacía no cuesta")
+	var box := HouseMove.footprint(house)
+	_check(box.position == Vector2i(0, 0) and box.size.x >= 6 and box.size.y >= 6, "el rectángulo de la casa (%s)" % [box])
+	var template := HouseMove.as_template(house)
+	_check(not template.is_empty() and template["move"] == true and (template["pieces"] as Array).size() == pieces, "la silueta lleva todas las piezas, también los muebles")
+	var has_furniture := false
+	for piece in template["pieces"]:
+		if piece["y"] == "objects":
+			has_furniture = true
+	_check(has_furniture, "los muebles viajan en la mudanza")
+	# Mudarla 10 a la derecha y 4 abajo.
+	var delta := Vector2i(10, 4)
+	var check := HouseMove.check(house, delta)
+	_check(check["valid"] and check["fee"] == HouseMove.fee(house, delta), "10 a la derecha y 4 abajo cabe (%s)" % check.get("reason", ""))
+	var moved := house.duplicate_data()
+	moved.apply(check["writes"])
+	_check(HouseMove.piece_count(moved) == pieces, "no se pierde ninguna pieza")
+	_check(moved.has_piece(0, "foundation", "12,4") and not moved.has_piece(0, "foundation", "2,0") and moved.has_piece(0, "foundation", "10,4"),
+		"los cimientos se corrieron")
+	_check(moved.has_piece(0, "walls", "h:12,4") and (moved.get_piece(0, "walls", "h:12,4") as Dictionary).get("color_a", "") == "#ff0000", "las paredes llevan su pintura")
+	var table: Dictionary = moved.get_piece(0, "objects", "o1")
+	_check(table["cell"] == [11, 5], "el mueble se corrió igual (%s)" % [table["cell"]])
+	_check(moved.get_piece(0, "roofs", "o2")["rect"] == [10, 4, 6, 6], "el techo también")
+	_check(moved.next_id == house.next_id, "los nombres de objetos siguen")
+	# Deshacer con las escrituras inversas deja todo como estaba.
+	var inverse := house.duplicate_data()
+	var undo_writes := inverse.apply(check["writes"])
+	inverse.apply(undo_writes)
+	_check(inverse.has_piece(0, "foundation", "2,0") and not inverse.has_piece(0, "foundation", "12,4"), "deshacer vuelve la casa a su lugar")
+	# Lugares que no sirven.
+	_check(HouseMove.check(house, Vector2i.ZERO)["reason"] == "same", "al mismo lugar: no")
+	_check(HouseMove.check(house, Vector2i(-3, 0))["reason"] == "outside", "fuera del lote (izquierda)")
+	_check(HouseMove.check(house, Vector2i(HouseGrid.LOT_SIZE.x, 0))["reason"] == "outside", "fuera del lote (derecha)")
+	_check(HouseMove.check(HouseData.new(), Vector2i(3, 0))["reason"] == "empty", "sin casa: no hay qué mudar")
+	HouseData.blocked_cells = {"12,5": "t:12,5"}
+	_check(HouseMove.check(house, delta)["reason"] == "blocked", "un árbol en el destino la bloquea")
+	HouseData.blocked_cells = {}
+	# Con un sótano debajo, también viaja.
+	house.apply([HouseData.write(-1, "excavation", "2,2", {"item": "excavation_basic"})])
+	var with_basement := HouseMove.check(house, delta)
+	_check(with_basement["valid"], "una casa con sótano se muda entera (%s)" % with_basement.get("reason", ""))
+	var moved2 := house.duplicate_data()
+	moved2.apply(with_basement["writes"])
+	_check(moved2.has_piece(-1, "excavation", "12,6"), "el sótano se mueve con la casa")
+	# Los tipos de cuarto viajan.
+	house.room_types = {"0:3,3": "bedroom"}
+	house.main_bedroom_cell = "0:3,3"
+	house.shift_room_data(delta)
+	_check(house.room_types.has("0:13,7") and house.main_bedroom_cell == "0:13,7", "los tipos de cuarto se corren con la casa")

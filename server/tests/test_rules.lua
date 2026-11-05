@@ -1060,20 +1060,71 @@ local function sup(h, level, layer, key, value)
   return (hr.check_batch(data, h, { { level = level, layer = layer, key = key, value = value } }))
 end
 local DIG = { item = "excavation_basic" }
+check(not sup(bh, -1, "excavation", "50,50", DIG), "servidor (6A): no se excava donde no hay casa arriba")
+bh.levels[4].foundation["50,50"] = { item = "foundation_basic" }
 check(sup(bh, -1, "excavation", "50,50", DIG), "servidor: se puede excavar el primer sótano")
+check(not sup(bh, -1, "excavation", "51,50", DIG), "servidor (6A): la celda de al lado, sin cimientos arriba, no")
 check(not sup(bh, -2, "excavation", "50,50", DIG), "servidor: el segundo necesita el primero")
 check(not sup(bh, 0, "excavation", "50,50", DIG), "servidor: no se excava en la planta baja")
 check(not sup(bh, -1, "foundation", "50,50", { item = "foundation_basic" }), "servidor: cimientos de sótano sin excavar, no")
 bh.levels[3].excavation["50,50"] = { item = "excavation_basic" }
 check(sup(bh, -1, "foundation", "50,50", { item = "foundation_basic" }), "servidor: excavado, ya van cimientos")
 check(sup(bh, -2, "excavation", "50,50", DIG), "servidor: y se puede seguir bajando")
-local dug = rules.build(data, new_state(3000, 99999), { w(-1, "excavation", "50,50", DIG) }, NOW)
+local dig_state = new_state(3000, 99999)
+dig_state.house.levels[4].foundation["50,50"] = { item = "foundation_basic" }
+local dug = rules.build(data, dig_state, { w(-1, "excavation", "50,50", DIG) }, NOW)
 check(dug.money_change == -30 and dug.writes[1].value.ready_at == NOW + 90, "servidor: excavar cuesta $30 y tiene espera de 90 s")
 check(refusal_of(rules.build, data, new_state(3000, 99999), { w(0, "excavation", "50,50", DIG) }, NOW) ~= nil, "servidor: excavar en la planta baja se rechaza")
 check(refusal_of(rules.build, data, new_state(3000, 99999), { w(-4, "excavation", "50,50", DIG) }, NOW) ~= nil, "servidor: más abajo del tercer sótano, no")
 check(refusal_of(rules.build, data, new_state(3000, 99999), { w(1, "foundation", "50,50", { item = "foundation_basic" }) }, NOW) ~= nil, "servidor: cimientos arriba, no")
 local five = rules.normalize_house({ levels = { { foundation = { ["1,1"] = { item = "foundation_basic" } } }, {}, {}, {}, {} }, next_id = 2, lot_size = { 96, 96 }, format = 3 })
 check(#five.levels == 8 and five.levels[4].foundation["1,27"] ~= nil, "servidor: una casa de 5 niveles pasa a 8 (la planta baja queda en el lugar 4)")
+
+-- Pulido 6A (8): mudar la casa entera.
+local function move_state(money)
+  local st = new_state(money or 5000, 99999)
+  st.check_support = true
+  foundation(st.house, 20, 20, 23, 23)
+  floors(st.house, 0, 20, 20, 23, 23)
+  st.house.levels[4].walls["h:20,20"] = { item = "wall_basic", color_a = "#ff0000" }
+  st.house.levels[4].objects["o1"] = { item = "table_basic", cell = { 21, 21 }, rot = 0 }
+  st.house.next_id = 2
+  return st
+end
+local mv = move_state()
+check(rules.piece_count(mv.house) == 34, "mudanza: la casa tiene 34 piezas")
+check(rules.move_fee(data, mv.house, 0, 0) == 0, "mudanza: no moverse no cuesta")
+local cfg_move = data.progression.move_house
+check(rules.move_fee(data, mv.house, 3, 0) == cfg_move.base + cfg_move.per_piece * 34 + cfg_move.per_step * 3, "mudanza: base + piezas + distancia")
+check(rules.move_fee(data, mv.house, 5, -2) == cfg_move.base + cfg_move.per_piece * 34 + cfg_move.per_step * 7, "mudanza: la distancia suma X y Z")
+local fee_before = rules.move_fee(data, mv.house, 5, 2)
+local moved = rules.move_house(data, mv, 5, 2, NOW)
+check(moved.money_change == -fee_before and mv.money == 5000 - fee_before, "mudanza: se cobra solo la mudanza")
+check(mv.house.levels[4].foundation["25,22"] ~= nil and mv.house.levels[4].foundation["20,20"] == nil, "mudanza: los cimientos se corrieron")
+check(mv.house.levels[4].walls["h:25,22"] ~= nil and mv.house.levels[4].walls["h:25,22"].color_a == "#ff0000", "mudanza: la pared lleva su pintura")
+check(mv.house.levels[4].objects["o1"].cell[1] == 26 and mv.house.levels[4].objects["o1"].cell[2] == 23, "mudanza: el mueble se corrió con la casa")
+check(rules.piece_count(mv.house) == 34, "mudanza: no se perdió ninguna pieza")
+check(#mv.history.undo == 1, "mudanza: es un solo paso de deshacer")
+rules.undo(mv, data)
+check(mv.money == 5000 and mv.house.levels[4].foundation["20,20"] ~= nil and mv.house.levels[4].foundation["25,22"] == nil, "mudanza: deshacer la deja donde estaba y devuelve la plata")
+check(refusal_of(rules.move_house, data, move_state(), 0, 0, NOW) ~= nil, "mudanza: al mismo lugar se rechaza")
+check(refusal_of(rules.move_house, data, move_state(), 500, 0, NOW) ~= nil, "mudanza: un lugar que no existe se rechaza")
+check(refusal_of(rules.move_house, data, move_state(), 1.5, 0, NOW) ~= nil, "mudanza: solo celdas enteras")
+check(refusal_of(rules.move_house, data, move_state(), 80, 0, NOW) ~= nil, "mudanza: fuera del lote se rechaza")
+local poor = move_state(10)
+local poor_refusal = refusal_of(rules.move_house, data, poor, 3, 0, NOW)
+check(poor_refusal ~= nil and poor_refusal.reason == "money" and poor.money == 10, "mudanza: sin plata se rechaza y no cobra")
+local shared_state = move_state()
+shared_state.shared = true
+check(refusal_of(rules.move_house, data, shared_state, 3, 0, NOW) ~= nil, "mudanza: la casa compartida no se muda sola")
+local empty_state = new_state(5000, 99999)
+check(refusal_of(rules.move_house, data, empty_state, 3, 0, NOW) ~= nil, "mudanza: sin casa no hay nada que mudar")
+-- Un obstáculo en el destino la rechaza.
+local blocked_state = move_state()
+local previous_blocked = hr.blocked_cells
+hr.blocked_cells = { ["25,22"] = "t:25,22" }
+check(refusal_of(rules.move_house, data, blocked_state, 5, 2, NOW) ~= nil, "mudanza: un árbol en el destino la rechaza")
+hr.blocked_cells = previous_blocked
 
 print(string.format("\nPRUEBAS LUA: %d pasaron, %d fallaron", passed, failed))
 os.exit(failed > 0 and 1 or 0)

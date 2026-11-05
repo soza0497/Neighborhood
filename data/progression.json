@@ -1,9 +1,10 @@
 {
-	"_ayuda": "Progresión y economía. levels = experiencia TOTAL necesaria para llegar a cada nivel (el primero es el nivel 1). resale_percent = qué % del precio se devuelve al borrar una pieza. discovery_xp_percent y discovery_xp_min = experiencia por construir un tipo de pieza por PRIMERA vez (% del precio, con mínimo). accelerate_coins_per_minute = lo que cuesta cada minuto (real) que se salta con un acelerador. Los precios y niveles de cada pieza están en catalog.json (price, unlock_level, build_seconds).",
+	"_ayuda": "Progresión y economía. levels = experiencia TOTAL necesaria para llegar a cada nivel (el primero es el nivel 1). resale_percent = qué % del precio se devuelve al borrar una pieza. discovery_xp_percent y discovery_xp_min = experiencia por construir un tipo de pieza por PRIMERA vez (% del precio, con mínimo). accelerate_coins_per_minute = lo que cuesta cada minuto (real) que se salta con un acelerador. move_house = lo que cuesta MUDAR la casa entera de lugar (Pulido 6A): base + per_piece × piezas + per_step × (celdas que se corre en X + en Z), con tope max; no se pierde ni se vuelve a comprar material. Los precios y niveles de cada pieza están en catalog.json (price, unlock_level, build_seconds).",
 	"format_version": 1,
 	"levels": [0, 100, 250, 500, 900, 1400],
 	"resale_percent": 50,
 	"discovery_xp_percent": 10,
 	"discovery_xp_min": 5,
-	"accelerate_coins_per_minute": 6
+	"accelerate_coins_per_minute": 6,
+	"move_house": { "base": 60, "per_piece": 1, "per_step": 4, "max": 5000 }
 }

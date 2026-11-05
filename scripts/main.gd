@@ -53,6 +53,8 @@ var _problems_timer := 0.0
 var _neighborhood: NeighborhoodController
 var _template_placer: TemplatePlacer
 var _quick_menu: FurnitureQuickMenu
+var _basement_view: BasementView
+var _foundation_queue: FoundationQueue
 const PROBLEMS_INTERVAL := 0.4
 
 
@@ -80,6 +82,16 @@ func _ready() -> void:
 	_house_view.add_child(_template_placer)
 	_template_placer.setup(_builder, house, _house_view, _camera_rig)
 	_live.view = _house_view
+	# Pulido 6A (3): el sótano (fondo oscuro, guía de la casa de arriba).
+	_basement_view = BasementView.new()
+	_house_view.add_child(_basement_view)
+	_basement_view.setup(house)
+	# Pulido 6A (4): cimientos sobre obstáculos (pide los servicios y coloca los cimientos al terminar).
+	_foundation_queue = FoundationQueue.new()
+	_foundation_queue.name = "FoundationQueue"
+	add_child(_foundation_queue)
+	_foundation_queue.setup(house, _builder)
+	_builder.foundation_queue = _foundation_queue
 	# Pulido 6A (7): mini menú de «mantener presionado un mueble» (modo vivir).
 	_quick_menu = FurnitureQuickMenu.new()
 	_quick_menu.name = "FurnitureQuickMenu"
@@ -112,11 +124,12 @@ func _ready() -> void:
 	EventBus.build_nudge_requested.connect(_builder.nudge_selected)
 	EventBus.build_paint_step_requested.connect(_builder.paint_step)
 	EventBus.build_paint_scope_requested.connect(_builder.set_paint_scope)
+	EventBus.house_moved.connect(_on_house_moved)
 	EventBus.build_context_action_requested.connect(_builder.context_action)
 	EventBus.build_erase_multi_toggled.connect(_builder.set_erase_multi)
 	EventBus.build_copy_outline_requested.connect(_builder.copy_outline)
-	EventBus.build_add_floor_requested.connect(_builder.add_floor)
-	EventBus.build_add_basement_requested.connect(_builder.add_basement)
+	EventBus.build_add_floor_requested.connect(_builder.ask_add_floor)
+	EventBus.build_add_basement_requested.connect(_builder.ask_add_basement)
 	EventBus.plan_confirm_requested.connect(_builder.confirm_plan)
 	EventBus.plan_discard_requested.connect(_builder.discard_draft)
 	EventBus.camera_pitch_requested.connect(_camera_rig.set_pitch)
@@ -300,6 +313,14 @@ func set_mode(new_mode: String) -> void:
 		_update_problems()  # Fuera de construir no se pinta nada de rojo.
 
 
+## Pulido 6A (8): la casa se mudó; el personaje (y la pareja) van con ella.
+func _on_house_moved(delta: Vector2i) -> void:
+	for person in [_character, partner_character]:
+		if person != null and person.state != Character.State.WORKING:
+			person.place_at(person.level, person.cell + delta)
+	_problems_dirty = true
+
+
 func _on_build_item_selected(item_id: String) -> void:
 	_builder.select_item(item_id)
 	# Para poner techos hay que verlos.
@@ -321,6 +342,12 @@ func _set_level(level: int) -> void:
 		world.visible = new_level >= 0
 	if _parcel_view != null:
 		_parcel_view.visible = new_level >= 0
+	# Pulido 6A (3): bajo tierra, fondo café oscuro y la guía de la casa de arriba.
+	if _basement_view != null:
+		_basement_view.show_level(new_level)
+		var env_node := get_node_or_null("WorldEnvironment") as WorldEnvironment
+		if env_node != null:
+			_basement_view.apply_environment(env_node.environment, new_level < 0)
 	# La cámara mira a la altura de ese piso (la planta baja queda igual).
 	_camera_rig.set_floor_height(new_level * HouseGrid.WALL_HEIGHT)
 	EventBus.build_level_changed.emit(new_level)

@@ -474,6 +474,7 @@ func _test_pulido2_basements() -> void:
 	var house := _box_house()
 	var item := {"item": "excavation_basic"}
 	_check(HouseRules.is_supported(house, -1, "excavation", "2,2", item), "se puede excavar el primer sótano")
+	_check(not HouseRules.is_supported(house, -1, "excavation", "12,12", item), "6A: no se excava donde no hay casa arriba")
 	_check(not HouseRules.is_supported(house, -2, "excavation", "2,2", item), "el segundo sótano necesita el primero excavado")
 	_check(not HouseRules.is_supported(house, 0, "excavation", "2,2", item) and not HouseRules.is_supported(house, 1, "excavation", "2,2", item), "no se excava en la planta baja ni arriba")
 	_check(not HouseRules.is_supported(house, -4, "excavation", "2,2", item), "más abajo del tercer sótano, no")

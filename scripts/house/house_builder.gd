@@ -167,6 +167,11 @@ var _pending_ok: Array = []
 var _pending_blocked: Array = []
 ## La selección que espera Confirmar no tiene manijas (borrar, copiar contorno).
 var _pending_plain := false
+## Pulido 6A (3, 8): una ACCIÓN esperando Confirmar ("add_floor", "add_basement").
+## No es una obra con piezas: Confirmar la ejecuta y Cancelar la descarta.
+var _pending_action := ""
+## Pulido 6A (4): la cola de cimientos sobre obstáculos (la pone la escena principal).
+var foundation_queue: FoundationQueue
 ## Pulido 3B: celda donde está "sostenido" un mueble antes de confirmarlo (para
 ## poder girarlo con el botón ANTES de ponerlo). NO_CELL = ninguno.
 const NO_CELL := Vector2i(-100000, -100000)
@@ -339,6 +344,42 @@ func _sync_grid() -> void:
 		_grid.position.y = pick_height() + 0.03
 
 
+## Pulido 6A (3): agregar un piso ya no pasa con un toque suelto: primero pregunta y espera Confirmar.
+func ask_add_floor() -> void:
+	var problem := HouseRules.add_floor_problem(house)
+	if problem != "":
+		EventBus.build_hint.emit(problem)
+		EventBus.toast.emit(problem)
+		return
+	_ask_action("add_floor", "Agregar piso", "¿Agregar un piso arriba? Confirmá con el botón o cancelá.")
+
+
+## Pulido 6A (3): lo mismo para el sótano.
+func ask_add_basement() -> void:
+	var problem := HouseRules.add_basement_problem(house)
+	if problem != "":
+		EventBus.build_hint.emit(problem)
+		EventBus.toast.emit(problem)
+		return
+	_ask_action("add_basement", "Agregar sótano", "¿Agregar un sótano abajo? Confirmá con el botón o cancelá.")
+
+
+## Qué acción espera Confirmar ("" = ninguna). Lo usan las pruebas.
+func pending_action() -> String:
+	return _pending_action
+
+
+## Deja una acción esperando Confirmar.
+func _ask_action(action: String, label: String, hint: String) -> void:
+	_cancel_gesture()
+	_pending_action = action
+	_pending_plain = true
+	_awaiting_confirm = true
+	EventBus.build_pending_changed.emit(true)
+	EventBus.build_confirm_label.emit(label)
+	EventBus.build_hint.emit(hint)
+
+
 ## "Agregar piso" (Obra): suma un piso arriba y lo muestra. Si no se puede
 ## (no hay una parte sin techo, no hay piso de abajo...), avisa por qué.
 ## Devuelve true si lo agregó.
@@ -455,6 +496,54 @@ func nudge_selected(direction: String) -> void:
 		select_object(moved_key, layer)
 
 
+## Pulido 6A (8): muda la casa entera `delta` celdas, pagando solo la mudanza (HouseMove).
+## Con servidor lo hace el servidor (house_move); sin cuenta, acá. Un solo paso de deshacer.
+func move_house(delta: Vector2i) -> bool:
+	if has_draft():
+		EventBus.build_hint.emit("Primero confirmá o descartá las obras previstas o la propuesta.")
+		return false
+	if Economy.shared:
+		EventBus.build_hint.emit("Mudar la casa compartida se pide a tu pareja: por ahora no se puede desde acá.")
+		return false
+	var check := HouseMove.check(house, delta)
+	if not check["valid"]:
+		EventBus.build_hint.emit(HouseMove.reason_text(check["reason"]))
+		return false
+	var fee: int = check["fee"]
+	if not Economy.can_change(-fee):
+		EventBus.build_hint.emit("Te faltan $%d para la mudanza." % (fee - Economy.money))
+		return false
+	if not Economy.can_request():
+		return false
+	if Economy.server_mode:
+		EventBus.build_hint.emit(Economy.BUSY_TEXT)
+		var result: Dictionary = await Economy.request("house_move", {"dx": delta.x, "dz": delta.y})
+		if not result["ok"]:
+			EventBus.build_hint.emit(result["error"])
+			return false
+		history.apply_remote(CloudSync.writes_from_server(result["data"].get("writes", [])))
+		fee = -int(result["data"].get("money_change", -fee))
+	else:
+		history.commit(check["writes"], -fee)
+	house.shift_room_data(delta)
+	select_object("")
+	EventBus.house_moved.emit(delta)
+	EventBus.build_hint.emit("¡Casa mudada! La mudanza costó $%d." % fee)
+	return true
+
+
+## Pulido 6A (4): construye ya unas escrituras (cobra como siempre, sin pasar por el plan).
+## Lo usa la cola de cimientos cuando un obstáculo ya fue retirado. true si se construyó.
+func place_now(writes: Array) -> bool:
+	if writes.is_empty():
+		return true
+	var bypass := _plan_bypass
+	_plan_bypass = true
+	var done: bool = await _apply(writes)
+	_plan_bypass = bypass
+	return done
+
+
 ## Pulido 6A (7): corre UN mueble una celda sin entrar a construir (lo usa el mini menú de
 ## «mantener presionado un mueble»). Funciona en cualquier modo. Devuelve true si se movió.
 func nudge_piece(piece_level: int, key: String, direction: String) -> bool:
@@ -498,6 +587,15 @@ func rotate_piece(piece_level: int, key: String) -> bool:
 func confirm_pending() -> void:
 	if not _awaiting_confirm:
 		return
+	if _pending_action != "":
+		var action := _pending_action
+		_cancel_gesture()
+		match action:
+			"add_floor":
+				add_floor()
+			"add_basement":
+				add_basement()
+		return
 	var ok := _pending_ok
 	var blocked := _pending_blocked
 	# Si no alcanza el dinero, la selección se conserva para ajustarla.
@@ -508,7 +606,30 @@ func confirm_pending() -> void:
 	if not Economy.can_request():
 		return  # Sin conexión o esperando: la selección se conserva.
 	_cancel_gesture()
+	# Pulido 6A (4): cimientos sobre obstáculos → se piden los servicios y los cimientos
+	# de esa zona se ponen solos cuando terminen.
+	if foundation_deferred_possible(blocked):
+		var split := FoundationQueue.split_blocked(blocked, func(cell: Vector2i) -> String: return Parcel.obstacle_at(cell))
+		if not split["deferred"].is_empty():
+			var asked: Dictionary = await foundation_queue.request(split["deferred"])
+			_report_foundation_services(asked)
+			blocked = split["impossible"]
 	_commit(ok, blocked)
+
+
+## ¿Hay cimientos bloqueados que se pueden resolver llamando servicios?
+func foundation_deferred_possible(blocked: Array) -> bool:
+	return foundation_queue != null and not blocked.is_empty() and tool == Tool.FOUNDATION
+
+
+## Cuenta qué pasó con los servicios pedidos por los cimientos.
+func _report_foundation_services(asked: Dictionary) -> void:
+	var failed: Dictionary = asked.get("failed", {})
+	if not failed.is_empty():
+		EventBus.toast.emit(str(failed.values()[0]))
+	var count := (asked.get("requested", []) as Array).size() - failed.size()
+	if count > 0:
+		EventBus.build_hint.emit("Llamamos %d servicio%s para retirar lo que estorba. Los cimientos de esa zona se ponen solos al terminar." % [count, "" if count == 1 else "s"])
 
 
 ## Botón "Cancelar": descarta la selección que estaba esperando.
@@ -1527,7 +1648,12 @@ func _show_money_hint(money_change: int) -> void:
 ## Avisa cuánto cuesta lo que espera Confirmar (y si va a la propuesta).
 func _announce_cost() -> void:
 	EventBus.build_approval_changed.emit(needs_approval(_pending_ok))
-	EventBus.build_cost_changed.emit(-Economy.quote(house, _pending_ok)["money"])
+	# Pulido 6A (4): los cimientos sobre obstáculos suman el costo de los servicios que se van a llamar.
+	var service_cost := 0
+	if foundation_queue != null and tool == Tool.FOUNDATION and not _pending_blocked.is_empty():
+		var split := FoundationQueue.split_blocked(_pending_blocked, func(cell: Vector2i) -> String: return Parcel.obstacle_at(cell))
+		service_cost = FoundationQueue.total_service_cost(split["deferred"].keys(), func(id: String) -> int: return Parcel.cost_of(id))
+	EventBus.build_cost_changed.emit(-Economy.quote(house, _pending_ok)["money"] + service_cost)
 
 
 ## Mouse moviéndose sin apretar (solo en la PC): muestra dónde caería.
@@ -1562,6 +1688,7 @@ func _cancel_gesture() -> void:
 		_awaiting_confirm = false
 		EventBus.build_pending_changed.emit(false)
 	_pending_plain = false
+	_pending_action = ""
 	_held_cell = NO_CELL
 	_paint_targets.clear()
 	_paint_surface = ""
@@ -1773,7 +1900,10 @@ func _add_ghost(w: Dictionary, valid: bool) -> void:
 	if node == null:
 		return
 	if tool != Tool.PAINT or not valid:
-		HousePieces.make_ghost(node, valid and not removing)
+		if not valid and _is_service_foundation(w):
+			HousePieces.make_ghost_service(node)  # Pulido 6A (4): ámbar = se retira el obstáculo y se pone solo.
+		else:
+			HousePieces.make_ghost(node, valid and not removing)
 	node.position.y += HouseGrid.level_y(lvl) - HouseGrid.level_y(level)
 	_ghost.add_child(node)
 
@@ -1783,6 +1913,13 @@ func _add_ghost(w: Dictionary, valid: bool) -> void:
 		if real != null and real.visible:
 			real.visible = false
 			_hidden_nodes.append(real)
+
+
+## Pulido 6A (4): ¿es un cimiento sobre un obstáculo que un servicio puede retirar?
+func _is_service_foundation(w: Dictionary) -> bool:
+	if foundation_queue == null or tool != Tool.FOUNDATION or w["layer"] != "foundation" or w["value"] == null:
+		return false
+	return Parcel.obstacle_at(HouseGrid.key_to_cell(w["key"])) != ""
 
 
 func _clear_preview() -> void:

@@ -20,6 +20,7 @@ RPC (el teléfono las llama con GameServer.call_rpc):
   build_apply      construir / quitar / mover / pintar  {writes}
                    (en la casa compartida, un cambio estructural se guarda
                    como PEDIDO para que lo apruebe la pareja)
+  house_move       {dx, dz}  mudar la casa entera (solo se paga la mudanza; Pulido 6A)
   build_undo       deshacer el último paso propio (devuelve lo cobrado)
   build_redo       rehacer
   build_accelerate terminar todas las obras pagando
@@ -1044,6 +1045,14 @@ local function build_apply(state, input, now)
   return { changed = { house = true, home = true, progress = result.xp_gained > 0, history = true }, result = result }
 end
 
+-- RPC house_move {dx, dz}: Pulido 6A (8). Cobra la mudanza; todo lo de la casa se corre igual.
+local function house_move(state, input, now)
+  local result = rules.move_house(data, state, input.dx, input.dz, now, encode_history)
+  log_and_notify(state, { kind = "build", text = "mudó la casa de lugar",
+    money_fund = result.money_fund, money_own = result.money_own })
+  return { changed = { house = true, home = true, history = true }, result = result }
+end
+
 local function build_undo(state, _input, _now)
   local result = rules.undo(state, data)
   if not result.skipped then
@@ -1487,6 +1496,7 @@ end
 nk.register_rpc(game_load, "game_load")
 nk.register_rpc(game_import, "game_import")
 nk.register_rpc(game_rpc("build_apply", build_apply), "build_apply")
+nk.register_rpc(game_rpc("house_move", house_move), "house_move")
 nk.register_rpc(game_rpc("build_undo", build_undo), "build_undo")
 nk.register_rpc(game_rpc("build_redo", build_redo), "build_redo")
 nk.register_rpc(game_rpc("build_accelerate", build_accelerate), "build_accelerate")

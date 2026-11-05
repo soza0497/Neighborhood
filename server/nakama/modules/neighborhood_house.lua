@@ -407,7 +407,11 @@ function M.is_supported(data, house, level, layer, key, value)
     if level >= 0 or level < M.MIN_LEVEL or x == nil or not M.is_cell_in_lot(x, z) or M.is_blocked(x, z) then
       return false
     end
-    return level == -1 or has_piece(house, level + 1, "excavation", key)
+    -- Pulido 6A (3): el primer sótano solo se excava debajo de la casa (hay cimientos arriba).
+    if level == -1 then
+      return has_piece(house, 0, "foundation", key)
+    end
+    return has_piece(house, level + 1, "excavation", key)
   elseif layer == "floors" then
     local x, z = M.parse_cell(key)
     if x == nil or not M.is_cell_in_lot(x, z) or M.is_blocked(x, z) then

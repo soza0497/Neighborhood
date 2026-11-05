@@ -768,6 +768,97 @@ function rules.build(data, state, writes, now, encode)
     xp_gained = xp_gained }
 end
 
+-- --- Mudar la casa entera (Pulido 6A, 8) ---
+
+-- La misma cuenta que HouseMove.fee del juego: base + por pieza + por distancia, con tope.
+local MOVE_LAYERS = { "foundation", "excavation", "floors", "walls", "objects", "roofs" }
+
+function rules.piece_count(house)
+  local total = 0
+  for _, level in ipairs(house.levels) do
+    for _, layer in ipairs(MOVE_LAYERS) do
+      for _ in pairs(level[layer] or {}) do
+        total = total + 1
+      end
+    end
+  end
+  return total
+end
+
+function rules.move_fee(data, house, dx, dz)
+  if (dx == 0 and dz == 0) or rules.piece_count(house) == 0 then
+    return 0
+  end
+  local cfg = (data.progression or {}).move_house or {}
+  local total = (num(cfg.base) or 60) + (num(cfg.per_piece) or 1) * rules.piece_count(house)
+    + (num(cfg.per_step) or 4) * (math.abs(dx) + math.abs(dz))
+  local top = num(cfg.max) or 5000
+  return math.min(math.floor(total + 0.5), top)
+end
+
+-- Las escrituras de la mudanza (como HouseMove.writes_for): primero se quita lo de las celdas
+-- viejas y después se pone todo en las nuevas. Objetos y techos conservan su nombre.
+function rules.move_writes(house, dx, dz)
+  local moved = copy(house)
+  rules.shift_house(moved, dx, dz)
+  local removals, placements = {}, {}
+  for index, level in ipairs(house.levels) do
+    local level_number = index - 1 + rules.MIN_LEVEL
+    local new_level = moved.levels[index]
+    for _, layer in ipairs(MOVE_LAYERS) do
+      for key in pairs(level[layer]) do
+        if layer ~= "objects" and layer ~= "roofs" and new_level[layer][key] == nil then
+          table.insert(removals, { level = level_number, layer = layer, key = key, value = nil })
+        end
+      end
+      for key, value in pairs(new_level[layer]) do
+        table.insert(placements, { level = level_number, layer = layer, key = key, value = value })
+      end
+    end
+  end
+  for _, w in ipairs(placements) do
+    table.insert(removals, w)
+  end
+  return removals
+end
+
+-- Muda la casa (dx, dz) celdas. El material no se pierde: solo se paga la mudanza. El servidor revisa
+-- que todo quede apoyado, dentro del lote y sin obstáculos (las mismas reglas de siempre).
+-- Devuelve {writes, money_change, money_fund, money_own, xp_gained}.
+function rules.move_house(data, state, dx, dz, now, encode)
+  dx, dz = num(dx), num(dz)
+  if not (is_int(dx) and is_int(dz)) or math.abs(dx) > rules.LOT_SIZE or math.abs(dz) > rules.LOT_SIZE then
+    refuse("Ese lugar no existe.")
+  end
+  if dx == 0 and dz == 0 then
+    refuse("La casa ya está ahí.")
+  end
+  if state.shared then
+    refuse("Mudar la casa compartida se pide entre los dos: por ahora no se puede.")
+  end
+  if rules.piece_count(state.house) == 0 then
+    refuse("Todavía no hay casa para mudar.")
+  end
+  local fee = rules.move_fee(data, state.house, dx, dz)
+  local available = state.money + (state.fund or 0)
+  if available < fee then
+    refuse(string.format("Te faltan $%d para la mudanza.", fee - available), { reason = "money" })
+  end
+  local original = copy(state.house)
+  local writes = rules.move_writes(state.house, dx, dz)
+  local inverse = {}
+  for _, w in ipairs(writes) do
+    table.insert(inverse, 1, rules.apply_writes(state.house, { w })[1])
+  end
+  check_support(data, state, writes, "No se puede mudar la casa ahí: algo no entra (borde, obstáculo, terreno cerrado o sin apoyo).", original)
+  local money_change = -fee
+  local fund_change, own_change = rules.split_for(state, money_change)
+  rules.apply_split(state, fund_change, own_change)
+  push_step(state.history, { writes = writes, inverse = inverse, money = money_change,
+    money_fund = fund_change, money_own = own_change }, encode)
+  return { writes = writes, money_change = money_change, money_fund = fund_change, money_own = own_change, xp_gained = 0 }
+end
+
 -- Deshacer el último paso: devuelve EXACTAMENTE lo que se cobró (a la caja
 -- lo que salió de la caja, a la billetera lo de la billetera).
 -- Con dos personas editando: si alguien cambió después esas piezas, no se

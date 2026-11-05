@@ -1410,3 +1410,43 @@ pivote en el centro de la base, **contorno por shader (no modelado)**; el arte s
 - **Contorno:** `Style.outline_mode` = `thin` (1,2 px) / `normal` (2,2 px) / `off`. Por defecto **fino**. Se guarda en `settings["outline_mode"]`
   (y `outline_enabled` sigue existiendo por compatibilidad). Partida vieja: `outline_enabled=false` → apagado; si no, fino. Un solo material de
   contorno compartido: cambiar el grosor cambia todo al instante.
+
+### 6A-2 — Cuadrícula, muebles afuera, mini menú, maqueta
+- **Cuadrícula solo dentro de la valla:** el shader `grid.gdshader` recibe una máscara (`ParcelRules.zone_mask_image`: 1 píxel = 1 celda del lote,
+  blanco = parcela usable) y no dibuja fuera; el borde amarillo marca el contorno de lo usable. Se vuelve a armar con `Parcel.changed` (al subir de
+  nivel se abre terreno). Fuera de la valla el terreno se ve pero no se cuadricula.
+- **Muebles afuera = dato del catálogo:** `outdoor: true` (ya existía para pilar y escalera exterior; las reglas del teléfono y del servidor ya lo
+  entendían: en la planta baja se apoya en el pasto). Lo llevan mesa, planta en maceta, palmera, lámpara de pie, florero y la **banca de jardín**
+  (`bench_garden`, nueva, sin acciones del personaje: el personaje todavía no camina afuera de la casa). Silla, sofá, cama, etc. siguen necesitando piso.
+  Paredes, puertas y ventanas no tienen `outdoor`. No hubo que tocar código: solo datos + pruebas (Godot y Lua).
+- **Mantener presionado un mueble (modo vivir):** `FurnitureQuickMenu` (`ui/furniture_quick_menu.gd`). A los 0,55 s con el dedo quieto, elige el mueble que
+  está justo bajo el dedo o, si no, el **más cercano dentro de 170 px**, y abre una cruz de flechas (de la pantalla: arriba/abajo/izquierda/derecha, se
+  traducen a norte/sur/este/oeste según la cámara) + girar + cerrar. Mueve por la cuadrícula con las reglas de siempre (`HouseBuilder.nudge_piece` /
+  `rotate_piece`, que no necesitan estar en modo construir). Se cierra solo a los 8 s. Solo muebles (escaleras y pilares son estructura). No consume
+  toques: la cámara sigue andando. No toqué `live_controller.gd` (es de 6B/6C): el menú escucha por su cuenta.
+- **Maqueta de pisos (10):** sin captura del dueño ni Godot, la causa más probable es que el borde de arriba de las paredes de atrás se decidía **por
+  piso entero** (`open_top`: no había techo ni piso encima en TODO el nivel); con un segundo piso más chico en una esquina, el primero perdía esas
+  aristas y quedaba un «hueco» sobre su techo. Ahora se decide **pared por pared** (`FloorMap.top_edge_exposed`): se dibuja si ninguna de sus dos celdas
+  tiene piso arriba ni techo del mismo nivel. **No se pudo confirmar contra la captura**: si el hueco sigue, hay que ver la captura.
+
+### 6A-3 — Sótano, cimientos sobre obstáculos, mover la casa
+- **Agregar piso / sótano piden confirmar** (`HouseBuilder.ask_add_floor/ask_add_basement` + `_pending_action`): sale el botón Confirmar/Cancelar de siempre; los
+  botones viven solo en Obra → Construir. `add_floor()` / `add_basement()` siguen siendo los que ejecutan.
+- **Sótano:** solo se excava **bajo la casa** (el primero exige cimientos arriba en esa celda; los de abajo, la excavación de arriba). Regla en teléfono
+  (`HouseRules`) **y en el servidor** (`neighborhood_house.lua`), con pruebas. Por eso las plantillas escriben primero los cimientos de la planta baja
+  (`HouseTemplate.writes_for`). Visual (`BasementView`): fondo y suelo café muy oscuro (`basement_bg` / `basement_ground` en `data/style.json`, sin niebla) y una
+  **guía** translúcida con la huella de lo de arriba (sótano 1: cimientos y pisos de la casa; más abajo: lo excavado arriba). **Efecto hueco**
+  (`HouseView.wall_is_front`): en un sótano se esconden las paredes del contorno cuya cara de afuera mira a la cámara (8 sectores, por la dirección en que
+  mira) y se ven las del fondo y las de adentro; con la cámara mirando derecho hacia abajo no se esconde nada. En un sótano el contorno es por tramo
+  (no hay caja de contorno continua) para que se pueda esconder cada pared.
+- **Cimientos sobre obstáculos** (`FoundationQueue`): al confirmar cimientos que cubren obstáculos, los de celdas libres se construyen y por cada obstáculo cubierto
+  se **pide el servicio** (`Parcel.call_service`, el de siempre: cobra el servidor / el teléfono y hace la espera). Los cimientos de esa zona quedan en una cola
+  (`settings["pending_foundations"]`, solo en este teléfono) y se colocan **solos** cuando `Parcel.changed` avisa que el obstáculo ya no está. La vista previa
+  usa ámbar (no rojo) para esos cimientos y el botón Confirmar suma el costo de los servicios. **Gancho para 6B:** `EventBus.foundation_services_requested(ids, writes)`;
+  si 6B quiere pedirlos con sus vehículos, pone `FoundationQueue.use_default_services = false` y atiende la señal. Zona todavía cerrada = sigue en rojo.
+- **Mover la casa** (`HouseMove`, ☰ → Casa → «Mover la casa»): la silueta es la casa entera (también muebles) y reusa `TemplatePlacer` (modo `moving`). **El material
+  no se pierde:** nada se vende ni se vuelve a comprar; se paga solo la mudanza `base 60 + 1 por pieza + 4 por celda corrida (X + Z)`, tope 5000
+  (`data/progression.json → move_house`, la misma cuenta en teléfono y servidor). Mismas revisiones de siempre (apoyo, lote, obstáculos, zona). Un solo paso
+  de deshacer (devuelve la mudanza). Servidor: RPC `house_move {dx, dz}` (`rules.move_house`, también cobra y rechaza). La casa compartida no se muda sola
+  (queda como pendiente). Los tipos de cuarto y el personaje se corren con la casa.
+- **Plantillas (9):** se dejan en ☰ → Casa como pidió el dueño.
