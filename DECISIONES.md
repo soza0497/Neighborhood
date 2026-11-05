@@ -1387,3 +1387,35 @@ pivote en el centro de la base, **contorno por shader (no modelado)**; el arte s
 - **La demo viaja en el APK** aunque `tests/*` se excluye del export: el script y la escena están en `scripts/island/` y `scenes/island/`; `tests/island_demo.tscn` solo la instancia.
 - **Sin correr:** la nube no tenía Godot ni Lua. Ver `PROGRESO.md`.
 
+
+## Pulido 6B — servicios, personaje y accidentes (versión 0.13.0, rama `pulido-6b`)
+
+- **Calle y vehículos** (`data/services.json`, `VehicleSpace`, `Services`): cada vehículo llega desde un extremo (140 m) por su carril. Los que vienen por la **izquierda** usan el
+  carril del lado de la parcela y se estacionan en **su** cordón; los de la **derecha**, el de enfrente, **sin vuelta en U** (la gente cruza a pie). Las máquinas (tractor,
+  retroexcavadora) siempre vienen por la izquierda porque entran a la parcela; lo demás **alterna** (una por cada lado). Los números del carril (`lane_offset` 0,2 m del centro,
+  `curb_gap`) salen de cuentas: un vehículo estacionado y otro que pasa por el carril no se tocan con ninguna pareja de medidas (lo revisan `test_services` y el test Lua).
+- **Que no se atraviesen**: choque entre rectángulos girados (SAT). Un vehículo que anda **espera** detrás del que tiene adelante (hasta `max_wait` = 12 s y después sigue, para que
+  nunca se trabe); al **estacionar** busca el lugar libre más cercano (prefiere detrás: ya recorrió ese tramo) y reserva el tramo ya mismo; dos que aparecen a la vez nacen uno detrás del otro;
+  los de manos contrarias no están en la calle a la vez (`wait_road`). La entrada de una máquina queda reservada para que nadie se estacione enfrente.
+- **Equipos**: la clave del equipo es la máquina (`tractor`, `excavator`) o el servicio (`gardener`, `lumberjack`). Un obstáculo nuevo cuyo equipo ya anda se **suma a su lista** (los atiende uno tras otro);
+  de otro tipo → otro vehículo a la vez. El equipo se queda esperando hasta `linger_seconds` (30 s) a otro obstáculo suyo que ya viene. Las máquinas atienden de izquierda a derecha y, si llegan más, vuelven a venir.
+- **El corte avisa** (`Services.cut_finished`) y `main.gd` llama a `Parcel.finish` **en ese momento** (el servidor decide); después `ParcelView.play_removal` hace la animación. La espera («cooldown»)
+  sigue siendo `seconds` de `data/parcel.json`; lo único que se agregó al viaje es el tiempo de manejo del vehículo.
+- **Eliminar con selección múltiple**: como `scripts/house/*` y `ui/build_bar.*` no se pueden tocar en esta rama, el marcado vive afuera: `ClearPlanner` mira si la herramienta del constructor es Eliminar
+  (`builder.tool == ERASE`) y `LiveController` le pasa los toques sobre obstáculos. El panel propio (`ClearPanel`) confirma una sola vez. **Fuera de Eliminar tocar un obstáculo no hace nada** (solo una pista cada 20 s).
+  `Parcel.quote(ids)` y `Parcel.call_services(ids, house)` son la puerta para que 6A (cimientos sobre árboles) llame a los servicios: revisan todo antes, no llaman a ninguno si no alcanza la plata, y saltan (avisando) los que no se pueden.
+- **Postes**: la gente a pie rodea los círculos de `WorldBuilder.neighborhood.lamp_positions` (`VehicleSpace.avoid_circles`, `pole_clear` 0,5 m). La ambulancia y el repartidor usan el mismo estacionamiento y la misma salida hacia adelante.
+- **Caminar en cualquier dirección**: el camino de la red (celda a celda) se **alisa** (`PathSmoother`) saltando al punto más lejano al que se llega en línea recta con el cuerpo (±0,3 m) libre: sin paredes en el medio (**nunca se corta una puerta**),
+  sin pegarse a árboles/rocas y, si presta atención, sin peligros; las escaleras no se cortan. Gira suave (`TURN_RATE`). Como el camino ya no pasa por cada centro de celda, los peligros se revisan **al cambiar de celda**.
+  `scripts/house/house_nav.gd` no se tocó.
+- **Accidentes por elemento** (`data/accidents.json`): reglas con disparador (`enter_cell`, `use_object`, `pass_door`), condiciones con un vocabulario fijo (una condición desconocida **nunca** se cumple), accidente y probabilidad. El catálogo declara `accidents`
+  (puerta: `door_void`; cocinas: `stove_burn`) y `slippery` (baldosa sí, madera no); los peligros declaran `rules` (charco: `puddle_slip` y `puddle_door`). Puerta con piso a ambos lados = ninguna regla coincide = sin accidente;
+  piso de un lado y vacío del otro (piso alto) = caída, que la IA va a probar con la frecuencia `seek` (0,15, como antes). La sartén solo quema a quien anda distraído (`attention_below` 0,5).
+- **Charco = resbalón** (`slip`, nuevo): no lastima ni llama a la ambulancia, ~2,4 s sentado y aturdido; solo pasa sobre piso resbaloso o frente a una puerta con piso de adentro, y solo a quien no presta atención. `fall` sigue siendo el que lastima.
+- **Caída**: animación en 4 tiempos (pierde el equilibrio, cae de espaldas, rebota, queda tendido); desde un piso alto baja en **arco** (acelera) en lugar de teletransportarse.
+- **Puertas** (`DoorAnimator`): el lado lo da `swing` de la pared (si algún día el constructor lo guarda al colocar) o, si no, el lado con piso (hacia adentro). Es un solo sentido siempre. Se anima la hoja de cajas de `HousePieces._add_door`
+  reubicándola en un pivote en la bisagra (sin tocar `scripts/house/*`); abre a ≤ 1,15 m de un personaje y cierra pasados 1,7 m.
+- **Expresiones** (`data/expressions.json`): sin textos sobre la cabeza; una nube de cómic con una carita o un símbolo, dibujada por código (círculos, líneas, arcos, polígonos) la primera vez que se usa. 34 expresiones y ~25 situaciones con 1–4 variantes
+  cada una (`action:<id>`, `need:<n>`, `accident:<tipo>`, `no_reach`, `cough`, `welcome`, `thanks`, `arrive`, `service:*`). Se pueden agregar sin tocar el código. Los servicios usan la misma nube. Lo escrito (`bubble`, `icon` de `actions.json`/`hazards.json`) se quitó.
+- **Modo desarrollador**: el panel va dentro de un scroll y su tamaño máximo es el área segura (`fit_to` se puede probar con cualquier pantalla); se esconde al construir y reaparece si estaba abierto; «Ir hasta ahí» lleva el **piso** y el **punto** tocados.
+  Sigue sin tocar dinero, experiencia ni propiedad.

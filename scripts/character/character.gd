@@ -1102,12 +1102,17 @@ func _animate_drop(from: Vector3, to: Vector3) -> void:
 	var seconds := clampf(sqrt(2.0 * height / 9.8), 0.35, 0.9)
 	position = from
 	var tween := create_tween()
-	tween.tween_method(func(progress: float) -> void:
-		# En horizontal avanza parejo; en vertical acelera (progress al cuadrado).
-		position = Vector3(lerpf(from.x, to.x, progress), lerpf(from.y, to.y, progress * progress), lerpf(from.z, to.z, progress)),
-		0.0, 1.0, seconds)
-	tween.tween_callback(func() -> void:
-		position = to)
+	tween.tween_method(_drop_step.bind(from, to), 0.0, 1.0, seconds)
+	tween.tween_callback(_drop_end.bind(to))
+
+
+## Un paso de la caída: en horizontal avanza parejo; en vertical acelera (progreso al cuadrado).
+func _drop_step(progress: float, from: Vector3, to: Vector3) -> void:
+	position = Vector3(lerpf(from.x, to.x, progress), lerpf(from.y, to.y, progress * progress), lerpf(from.z, to.z, progress))
+
+
+func _drop_end(to: Vector3) -> void:
+	position = to
 
 
 ## Teletransporta al personaje a una celda caminable (modo desarrollador). Cancela lo

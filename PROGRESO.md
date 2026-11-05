@@ -1,5 +1,54 @@
 # Progreso
 
+## ▶ PULIDO 6B (versión 0.13.0) — servicios, personaje y accidentes · rama `pulido-6b` (sale de `main`)
+
+**No se mergea a `main`, no se exporta APK.** Hecho en la nube (sin Godot ni Lua): **NADA de GDScript ni de Lua se ejecutó ni se compiló**; se escribió con tipos
+explícitos y se repasó a mano. Esperá algún error de sintaxis/tipos al primer arranque. No se tocó `ui/build_bar.*`, `scripts/house/*` ni la cámara (son de 6A/6C).
+Lo que pide `docs/pulido-6.md` (sección 6B), punto por punto:
+
+| # | Punto | Dónde |
+|---|-------|-------|
+| 1 | Servicio en vehículo: llega por su carril, se estaciona sin atravesar a otros, un equipo atiende varios, el corte avisa y el obstáculo desaparece al terminar (árbol que cae y rueda) | `scripts/world/services.gd` (rehecho), `vehicle_space.gd`, `parcel_view.gd`, `data/services.json` |
+| 2 | Llamar al servicio desde «Eliminar» (marcar varios, una confirmación, «llega en X s») | `scripts/world/clear_planner.gd`, `ui/clear_panel.gd`, `Parcel.quote/call_services`, `live_controller.gd` |
+| 3 | Ambulancia: el paramédico rodea los postes; sale por su carril hacia adelante (misma navegación que todos) | `Services.run_ambulance`, `Services.walk_route`, `VehicleSpace.avoid_circles` |
+| 4 | Caminar en cualquier dirección (camino alisado + giro suave) | `scripts/character/path_smoother.gd`, `character.gd` (`_segment_clear`, `_walk`) |
+| 5 | Charco con efecto (resbalar) sobre piso resbaloso y frente a una puerta con piso de adentro | `data/accidents.json` (`puddle_slip`, `puddle_door`), accidente `slip` |
+| 6 | Accidentes por elemento, en datos | `data/accidents.json`, `scripts/character/accident_rules.gd`; catálogo: `accidents` y `slippery`; peligros: `rules` |
+| 7 | Puertas que se abren hacia su lado | `scripts/world/door_animator.gd` |
+| 8 | Modo desarrollador: ir al piso y punto tocados; panel dentro de la pantalla (scroll); oculto al construir | `ui/dev_panel.gd`, `scripts/debug/dev_mode.gd`, `Character.force_action` |
+| 9 | Expresiones: nubecita de cómic en vez de diálogos | `data/expressions.json`, `expression_art.gd`, `expression_bubble.gd` |
+| 10 | Caída pulida (4 tiempos + arco desde un piso alto) | `character_animator.gd` (`fall`, `slip`), `Character._animate_drop` |
+
+### ⚠ Qué quedó SIN correr (hay que correrlo en la PC con Godot, en este orden)
+1. `godot --headless --path . --import` (registra las clases nuevas: `VehicleSpace`, `ClearPlanner`, `ClearPanel`, `AccidentRules`, `PathSmoother`, `DoorAnimator`,
+   `ExpressionArt`, `ExpressionBubble`; crea los `.uid` de los scripts nuevos → commitearlos) y arreglar lo que falle al compilar.
+2. Pruebas **nuevas**: `tests/test_services.tscn`, `tests/test_accidents.tscn`, `tests/test_expressions.tscn` (cada una termina con «PRUEBAS: N pasaron, 0 fallaron»;
+   si algo falla, copiá el «FALLÓ: …») y en Lua `lua5.1 server/tests/test_rules.lua` (se agregó un bloque «Pulido 6B» de coherencia entre `services.json`,
+   `accidents.json`, `expressions.json`, `hazards.json`, `catalog.json` y `parcel.json`; el servidor Lua NO cambió).
+3. Pruebas de antes: `test_dev_mode` (**se tocó**: el charco ahora resbala y solo sobre baldosa o frente a una puerta), `test_character`, `test_house`, `test_parcel`,
+   `test_economy`, `test_server`, `test_couple`, `test_business`, `test_art`, `test_neighborhood`, `test_camera`, `test_floor_map`, `test_template`, `test_island`, `test_goals.lua`.
+4. Demo con ventana (saca capturas a `docs/capturas/`): `SHOT_DIR=docs/capturas godot --path . res://tests/polish6b_demo.tscn` → `p6b_*.png`. **Las capturas todavía no existen.**
+   `polish2c_demo` se ajustó a los cambios (`_seek_door`, nubecita) pero tampoco se corrió.
+
+### Cómo probarlo en el teléfono (cuando se exporte)
+1. Tocá un árbol: ya no sale ningún menú (solo una pista). **Construir → Eliminar → tocá 2–3 obstáculos**: se marcan con un aro y arriba sale el panel con el total
+   y «llega en X s». «Llamar» cobra una vez. A los pocos segundos llega una camioneta por la calle, se estaciona en el cordón y baja el leñador; el árbol cae, rueda y desaparece
+   apenas termina el corte; el equipo atiende los demás uno tras otro y se va por su carril.
+2. Modo desarrollador → «Peligros» → poné un charco sobre una baldosa y otro frente a la puerta; con atención baja el personaje resbala (nube de sorpresa, sin ambulancia). Sobre madera no pasa nada.
+3. Caída por la puerta de un piso alto: baja en arco, rebota, queda mareado (nube con estrellitas) y llega la ambulancia (el paramédico rodea los postes).
+4. Las puertas se abren solas cuando el personaje se acerca (siempre hacia adentro de la casa). El personaje cruza el pasto en diagonal, sin escalones de 4 u 8 direcciones.
+5. Panel de desarrollador: en un teléfono bajito se desliza (scroll) y no se sale; al pasar a construir desaparece y vuelve al volver a vivir. «Ir hasta ahí» respeta el piso y el punto.
+
+### Pendientes / dudas de 6B (por favor mirar)
+- **Puertas:** el lado por el que se abre sale de la casa: `swing` en la pared si existe (a futuro, que el constructor lo guarde al colocar — hoy `scripts/house/*` no se tocó), si no, hacia el lado con piso.
+  Las puertas con modelo `.glb` no se animan (no hay cajas que girar). La animación depende de cómo `HousePieces._add_door` dibuja la hoja (caja de 6 cm de grueso): si cambian eso, ajustar `DoorAnimator.make_pivot`.
+- **«Ir hasta ahí siempre baja a planta baja»:** no pude reproducir la causa (sin Godot). Hice que respete el piso y el punto y que diga «¿falta una escalera?»; sospecho que la bajada venía del accidente `fall` en un piso alto (ahora el charco resbala, no cae).
+- Dos vehículos de manos contrarias no se cruzan (el segundo espera en el extremo, `Services.wait_road`); los autos de decoración de `WorldLife` **no** esquivan a los estacionados (con el barrio activo la decoración es `NeighborhoodLife`).
+- Las caras/nubes se dibujan por código la primera vez que se usan (~decenas de ms cada una): si se nota un tirón en el teléfono, precalentarlas (`ExpressionArt.texture(id)`) al cargar.
+- Los números de `data/services.json` (carril, velocidades, distancia de llegada 140 m) son una primera estimación; la espera real sigue siendo la de `parcel.json`.
+- El panel de servicios queda arriba al centro: cuando 6C unifique los paneles/áreas seguras conviene moverlo a su sistema. El botón de Eliminar de 6A no cambió; los cimientos sobre obstáculos (6A) deben llamar a `Parcel.call_services(ids, house)`.
+- Sin capturas ni medición de FPS; no se tocó el servidor (dinero sigue decidido por el servidor: `parcel_clear_start` por cada obstáculo, con el total revisado antes en el teléfono).
+
 ## ▶ Guías de arte: escritas en la rama `guias-arte`, sin verificar con Blender instalado
 Ocho guías para principiante total en `docs/arte/` (00 mapa, 01 instalar Blender, 02 primera silla, 03 muebles con
 partes, 04 Krita y paleta, 05 íconos SVG con Inkscape, 06 cuarto de prueba, 07 personaje, 08 problemas y atajos), más

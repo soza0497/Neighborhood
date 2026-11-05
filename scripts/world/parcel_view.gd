@@ -287,21 +287,30 @@ func _animate_tree_fall(ghost: Node3D, o: Dictionary, cfg: Dictionary) -> void:
 	var roll_seconds := float(cfg.get("tree_roll_seconds", 0.7))
 	var roll_distance := float(cfg.get("tree_roll_distance", 0.9))
 	var fade_seconds := float(cfg.get("fade_seconds", 0.5))
+	var base_position: Vector3 = ghost.position
 	var tween := create_tween()
 	# 1) Se vuelca: empieza lento y acelera (ease in).
-	tween.tween_method(func(angle: float) -> void: pivot.transform.basis = Basis(tilt_axis, angle) * Basis().scaled(Vector3.ONE * s),
-		0.0, PI / 2.0 - 0.1, fall_seconds).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_method(_tree_tilt.bind(pivot, tilt_axis, s), 0.0, PI / 2.0 - 0.1, fall_seconds).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	# 2) Rebota un poquito al pegar contra el suelo.
-	tween.tween_method(func(angle: float) -> void: pivot.transform.basis = Basis(tilt_axis, angle) * Basis().scaled(Vector3.ONE * s),
-		PI / 2.0 - 0.1, PI / 2.0 - 0.32, 0.12).set_trans(Tween.TRANS_SINE)
-	tween.tween_method(func(angle: float) -> void: pivot.transform.basis = Basis(tilt_axis, angle) * Basis().scaled(Vector3.ONE * s),
-		PI / 2.0 - 0.32, PI / 2.0 - 0.05, 0.12).set_trans(Tween.TRANS_SINE)
+	tween.tween_method(_tree_tilt.bind(pivot, tilt_axis, s), PI / 2.0 - 0.1, PI / 2.0 - 0.32, 0.12).set_trans(Tween.TRANS_SINE)
+	tween.tween_method(_tree_tilt.bind(pivot, tilt_axis, s), PI / 2.0 - 0.32, PI / 2.0 - 0.05, 0.12).set_trans(Tween.TRANS_SINE)
 	# 3) Rueda un poco por el pasto (se mueve y gira sobre su eje).
-	var base_position: Vector3 = ghost.position
-	tween.tween_method(func(progress: float) -> void:
-		ghost.position = base_position + fall_axis * roll_distance * progress
-		pivot.transform.basis = Basis(fall_axis, progress * 1.6) * Basis(tilt_axis, PI / 2.0 - 0.05) * Basis().scaled(Vector3.ONE * s),
-		0.0, 1.0, roll_seconds).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_method(_tree_roll.bind(ghost, pivot, base_position, fall_axis, tilt_axis, roll_distance, s), 0.0, 1.0, roll_seconds).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	# 4) Se achica y desaparece.
 	tween.tween_property(ghost, "scale", Vector3(0.05, 0.05, 0.05), fade_seconds)
 	tween.tween_callback(ghost.queue_free)
+
+
+## Inclina el árbol `angle` radianes alrededor de `axis` (conserva su tamaño `s`).
+func _tree_tilt(angle: float, pivot: Node3D, axis: Vector3, s: float) -> void:
+	if is_instance_valid(pivot):
+		pivot.transform.basis = Basis(axis, angle) * Basis().scaled(Vector3.ONE * s)
+
+
+## El árbol ya caído rueda: avanza `distance` en la dirección de la caída y gira sobre su eje.
+func _tree_roll(progress: float, ghost: Node3D, pivot: Node3D, base_position: Vector3, fall_axis: Vector3,
+		tilt_axis: Vector3, distance: float, s: float) -> void:
+	if not is_instance_valid(ghost) or not is_instance_valid(pivot):
+		return
+	ghost.position = base_position + fall_axis * distance * progress
+	pivot.transform.basis = Basis(fall_axis, progress * 1.6) * Basis(tilt_axis, PI / 2.0 - 0.05) * Basis().scaled(Vector3.ONE * s)

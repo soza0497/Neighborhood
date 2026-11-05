@@ -1063,5 +1063,94 @@ check(refusal_of(rules.build, data, new_state(3000, 99999), { w(1, "foundation",
 local five = rules.normalize_house({ levels = { { foundation = { ["1,1"] = { item = "foundation_basic" } } }, {}, {}, {}, {} }, next_id = 2, lot_size = { 96, 96 }, format = 3 })
 check(#five.levels == 8 and five.levels[4].foundation["1,27"] ~= nil, "servidor: una casa de 5 niveles pasa a 8 (la planta baja queda en el lugar 4)")
 
+-- --- Pulido 6B: servicios, accidentes por elemento y expresiones ---
+-- Godot lee estos datos (el servidor solo cobra y espera); acá se revisa que los archivos se
+-- entiendan entre sí, para no descubrir un error de tipeo recién en el teléfono.
+do
+  local services_cfg = read_data("services.json")
+  local accidents_cfg = read_data("accidents.json")
+  local hazards_cfg = read_data("hazards.json")
+  local expressions_cfg = read_data("expressions.json")
+  local actions_cfg = read_data("actions.json")
+  local catalog_cfg = read_data("catalog.json")
+
+  -- Cada servicio de parcel.json tiene su equipo y su espera; cada máquina tiene medidas.
+  for id, def in pairs(pcfg.obstacles) do
+    check(services_cfg.crews[def.service] ~= nil, "servicios: «" .. tostring(def.service) .. "» (" .. id .. ") tiene equipo en services.json")
+    check(type(def.seconds) == "number" and def.seconds > 0, "servicios: «" .. id .. "» tiene espera (seconds) en parcel.json para mostrar «llega en X s»")
+    if def.vehicle ~= nil and def.vehicle ~= "" then
+      check(services_cfg.vehicles[def.vehicle] ~= nil, "servicios: la máquina «" .. def.vehicle .. "» tiene medidas")
+    end
+  end
+  for service, crew in pairs(services_cfg.crews) do
+    if crew.vehicle ~= "" then
+      check(services_cfg.vehicles[crew.vehicle] ~= nil, "servicios: el vehículo «" .. crew.vehicle .. "» del equipo «" .. service .. "» tiene medidas")
+    end
+  end
+  for kind, size in pairs(services_cfg.vehicles) do
+    check(size.length > size.width and size.width > 1, "servicios: «" .. kind .. "» es más largo que ancho")
+  end
+  -- El carril libre junto a un vehículo estacionado en el cordón (para que no se atraviesen).
+  local lane, curb_gap, road_half = services_cfg.road.lane_offset, services_cfg.road.curb_gap, 3.5
+  for kind, size in pairs(services_cfg.vehicles) do
+    local parked_inner_edge = road_half - curb_gap - size.width  -- borde de adentro del estacionado
+    for other, other_size in pairs(services_cfg.vehicles) do
+      check(lane + other_size.width / 2 <= parked_inner_edge + 0.001,
+        "servicios: «" .. other .. "» pasa por su carril junto a «" .. kind .. "» estacionado")
+    end
+  end
+
+  -- Varios obstáculos pedidos juntos: el costo no sube por los que están en camino, solo por los limpiados.
+  check(parcel.cost(pcfg, "tree", 0) * 2 + parcel.cost(pcfg, "bush", 0) == 90 * 2 + 15, "servicios: tres obstáculos pedidos juntos cuestan lo mismo que de a uno")
+  check(parcel.cost(pcfg, "tree", 1) > parcel.cost(pcfg, "tree", 0), "servicios: limpiar uno sí encarece los que vienen después")
+
+  -- Accidentes por elemento: reglas, catálogo y peligros se entienden.
+  local triggers = { enter_cell = true, use_object = true, pass_door = true }
+  local rule_count = 0
+  for id, rule in pairs(accidents_cfg.rules) do
+    rule_count = rule_count + 1
+    check(triggers[rule.on], "accidentes: la regla «" .. id .. "» tiene un disparador conocido (" .. tostring(rule.on) .. ")")
+    check(hazards_cfg.accidents[rule.accident] ~= nil, "accidentes: la regla «" .. id .. "» usa un accidente que existe (" .. tostring(rule.accident) .. ")")
+    local chance = rule.chance or 1
+    check(chance >= 0 and chance <= 1, "accidentes: la probabilidad de «" .. id .. "» va de 0 a 1")
+  end
+  check(rule_count >= 6, "accidentes: hay reglas (" .. rule_count .. ")")
+  local door_declares, stove_declares, tile_slippery, wood_slippery = false, false, false, false
+  for _, item in ipairs(catalog_cfg.items) do
+    for _, rule_id in ipairs(item.accidents or {}) do
+      check(accidents_cfg.rules[rule_id] ~= nil, "accidentes: «" .. item.id .. "» declara la regla «" .. rule_id .. "», que existe")
+      if item.id == "door_basic" and rule_id == "door_void" then door_declares = true end
+      if item.id == "stove_basic" and rule_id == "stove_burn" then stove_declares = true end
+    end
+    if item.id == "floor_tile" then tile_slippery = item.slippery == true end
+    if item.id == "floor_basic" then wood_slippery = item.slippery == true end
+  end
+  check(door_declares and stove_declares, "accidentes: la puerta y la cocina declaran sus reglas")
+  check(tile_slippery and not wood_slippery, "accidentes: la baldosa es resbalosa y la madera no")
+  for kind, hazard in pairs(hazards_cfg.hazards) do
+    check(hazards_cfg.accidents[hazard.accident] ~= nil, "accidentes: el peligro «" .. kind .. "» causa un accidente que existe")
+    for _, rule_id in ipairs(hazard.rules or {}) do
+      check(accidents_cfg.rules[rule_id] ~= nil, "accidentes: el peligro «" .. kind .. "» declara la regla «" .. rule_id .. "», que existe")
+    end
+  end
+  check(hazards_cfg.hazards.wet.accident == "slip" and hazards_cfg.accidents.slip.hurt == false, "accidentes: el charco hace resbalar y no lastima")
+
+  -- Expresiones: todas las situaciones usan dibujos que existen, y toda acción y accidente tiene las suyas.
+  local expression_count = 0
+  for _ in pairs(expressions_cfg.expressions) do expression_count = expression_count + 1 end
+  check(expression_count >= 25, "expresiones: hay variedad (" .. expression_count .. ")")
+  for event, variants in pairs(expressions_cfg.events) do
+    for _, id in ipairs(variants) do
+      check(expressions_cfg.expressions[id] ~= nil, "expresiones: «" .. event .. "» usa «" .. id .. "», que existe")
+    end
+  end
+  for accident in pairs(hazards_cfg.accidents) do
+    check(expressions_cfg.events["accident:" .. accident] ~= nil, "expresiones: el accidente «" .. accident .. "» tiene sus expresiones")
+  end
+  for _, action in ipairs(actions_cfg.actions) do
+    check(expressions_cfg.events["action:" .. action.id] ~= nil, "expresiones: la acción «" .. action.id .. "» tiene sus expresiones")
+  end
+end
+
 print(string.format("\nPRUEBAS LUA: %d pasaron, %d fallaron", passed, failed))
 os.exit(failed > 0 and 1 or 0)
