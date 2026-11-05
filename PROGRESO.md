@@ -1,3 +1,12 @@
+## Pulido 6C (interfaz y cámara) — hecho en la PC, rama `pulido-6c`
+- Botón de ánimo: el toque llegaba dos veces (toque + clic emulado) y la tarjeta se abría y cerraba sola; ahora hay una guarda (`_is_tap`).
+- Menú de servicio (y los demás popups): salía pegado arriba a la izquierda por `set_anchors_preset`; ahora centrado y dentro del área segura (`_keep_inside_screen`).
+- Centrar: pasa a la fila de techos/paredes y es un botón de dos modos (libre / siguiendo); si el personaje se va a trabajar vuelve solo a libre (`camera_follow_changed`).
+- Cámara baja: `data/camera.json` con avance vertical 1.0 (antes 0.3) y zona muerta 6 px; a ajustar en el teléfono.
+- Nombres de casas: apagados; tocar una casa de vecino muestra su nombre 3 s.
+- Sin verificar en el teléfono: la «montañita» del botón detrás de un menú abierto (no se reprodujo).
+- Prueba: `tests/polish6c_demo.tscn` (15/15).
+
 # Progreso
 
 ## ▶ Guías de arte: escritas en la rama `guias-arte`, sin verificar con Blender instalado

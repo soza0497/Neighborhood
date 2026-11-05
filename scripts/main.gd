@@ -102,6 +102,7 @@ func _ready() -> void:
 	EventBus.view_roofs_toggle_requested.connect(_on_roofs_toggle)
 	EventBus.view_walls_toggle_requested.connect(_on_walls_toggle)
 	EventBus.camera_focus_character_requested.connect(_focus_character)
+	EventBus.camera_follow_changed.connect(func(on: bool) -> void: _follow_character = on)
 	# Constructor 2.0 (Pulido 1).
 	EventBus.build_nudge_requested.connect(_builder.nudge_selected)
 	EventBus.build_paint_step_requested.connect(_builder.paint_step)
@@ -219,6 +220,8 @@ func _on_service_due(id: String) -> void:
 
 func _process(delta: float) -> void:
 	_check_home_sync()
+	if mode == "live":
+		_follow_step()
 	_problems_timer -= delta
 	if _problems_dirty and _problems_timer <= 0.0 and mode == "build":
 		_problems_dirty = false
@@ -348,6 +351,21 @@ func _emit_view() -> void:
 
 
 ## Brújula: la cámara va al personaje y se ve su piso.
+## Pulido 6C: con el modo «siguiendo» la cámara acompaña al personaje. Si se va a trabajar
+## (desaparece de la casa), vuelve sola a libre.
+var _follow_character := false
+
+
+func _follow_step() -> void:
+	if not _follow_character or _character == null:
+		return
+	if _character.state == Character.State.WORKING:
+		_follow_character = false
+		EventBus.camera_follow_changed.emit(false)
+		return
+	_camera_rig.focus_on(_character.global_position)
+
+
 func _focus_character() -> void:
 	_set_level(_character.level)
 	_camera_rig.focus_on(_character.global_position)

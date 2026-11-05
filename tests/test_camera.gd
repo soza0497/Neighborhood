@@ -93,9 +93,9 @@ func _test_low_pitch_controls() -> void:
 	_rig.rotation_degrees.y = 0.0
 	# Un gesto vertical chico (dentro de la zona muerta): no avanza.
 	_rig._drag_y = 0.0
-	_rig._pan(Vector2(500, 500), Vector2(500, 492))
+	_rig._pan(Vector2(500, 500), Vector2(500, 496))
 	_rig.flush_pending()
-	_check(absf(_rig.position.z) < 0.001, "8 px verticales (zona muerta): no se mueve (z=%.3f)" % _rig.position.z)
+	_check(absf(_rig.position.z) < 0.001, "4 px verticales (zona muerta): no se mueve (z=%.3f)" % _rig.position.z)
 	# Un gesto vertical grande: avanza, pero despacio.
 	_rig._drag_y = 0.0
 	var before_z := _rig.position.z
@@ -105,7 +105,8 @@ func _test_low_pitch_controls() -> void:
 	var forward := absf(_rig.position.z - before_z)
 	_check(forward > 0.0, "un gesto vertical grande sí avanza (%.2f m)" % forward)
 	var grab := 200.0 * _rig.meters_per_pixel()
-	_check(forward < grab * 0.5, "avanza despacio: %.2f m contra %.2f m de «agarrar el suelo»" % [forward, grab])
+	_check(forward <= grab, "no avanza más que «agarrar el suelo»: %.2f m contra %.2f m" % [forward, grab])
+	_check(forward > grab * 0.5, "pero tampoco se arrastra (Pulido 6C): %.2f m" % forward)
 	# Lateral: se mueve a los lados y es mucho más controlable.
 	_rig.position = Vector3.ZERO
 	_rig._pan(Vector2(500, 500), Vector2(600, 500))

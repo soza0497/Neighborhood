@@ -7,9 +7,9 @@
 	"frame_cap": 0.12,
 	"pending_cap": 0.5,
 	"damping": 18.0,
-	"low_side_factor": 0.8,
-	"low_forward_factor": 0.3,
-	"low_dead_zone_px": 14.0,
+	"low_side_factor": 1.0,
+	"low_forward_factor": 1.0,
+	"low_dead_zone_px": 6.0,
 	"lot_margin": 3.0,
 	"lot_soft_border": 6.0
 }

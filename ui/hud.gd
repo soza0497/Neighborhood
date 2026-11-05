@@ -96,6 +96,9 @@ var _character: Character
 var _pitch_slider: PitchSlider
 ## Márgenes normales de la interfaz (izquierda, arriba, derecha, abajo).
 const BASE_MARGINS := Vector4(16, 34, 16, 22)
+## Milisegundos en que un segundo toque se toma como eco del primero (ver `_is_tap`).
+const TAP_GUARD_MS := 250
+
 ## Cuántos grados por segundo cambia el ángulo con la perilla al tope.
 const PITCH_RATE := 60.0
 ## Contenedor de la columna izquierda: así la columna no empuja la pantalla
@@ -169,8 +172,7 @@ func _ready() -> void:
 	_info_close_button.pressed.connect(_info_panel.hide)
 	_builds_button.pressed.connect(EventBus.construction_accelerate_requested.emit)
 	_mood_button.gui_input.connect(func(event: InputEvent) -> void:
-		if (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) \
-				or (event is InputEventScreenTouch and event.pressed):
+		if _is_tap(event):
 			_toggle_mood_card())
 	_card_overlay.gui_input.connect(_on_overlay_input)
 	EventBus.economy_changed.connect(_on_economy_changed)
@@ -464,6 +466,7 @@ func _assign_room(room: Dictionary, type_id: String, main: bool) -> void:
 ## la interfaz: ☰, Info, tarjeta del ánimo, menú de una pieza y ventanitas. Antes
 ## vivían dentro de `Root` (un MarginContainer): su tamaño mínimo agrandaba a
 ## `Root` y corría las barras de arriba y de abajo. Aquí cada uno tiene sus anclas.
+var _last_tap_ms := -1000
 var _overlay: Control
 
 
@@ -654,6 +657,20 @@ func _on_intention_changed(intention: Dictionary) -> void:
 	_intention_text = Character.intention_text(intention)
 	if _mood_card.visible:
 		_fill_mood_card()
+
+
+## Un toque en el teléfono llega dos veces (el toque y el clic que Godot emula a partir de él):
+## sin esta guarda la tarjeta se abría y se cerraba sola. Devuelve true una sola vez por toque.
+func _is_tap(event: InputEvent) -> bool:
+	var pressed: bool = (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) \
+		or (event is InputEventScreenTouch and event.pressed)
+	if not pressed:
+		return false
+	var now := Time.get_ticks_msec()
+	if now - _last_tap_ms < TAP_GUARD_MS:
+		return false
+	_last_tap_ms = now
+	return true
 
 
 func _toggle_mood_card() -> void:
@@ -1005,10 +1022,36 @@ func _open_popup(title: String) -> VBoxContainer:
 	rows.add_child(label)
 	# Pulido 5C: flota en el centro de la capa libre (no en el contenedor de la interfaz).
 	_overlay.add_child(_popup)
-	_popup.set_anchors_preset(Control.PRESET_CENTER)
+	# Anclas al centro y márgenes en cero: `set_anchors_preset` conservaba la posición (0, 0) y el
+	# menú salía pegado a la esquina de arriba a la izquierda, medio fuera de la pantalla.
+	_popup.anchor_left = 0.5
+	_popup.anchor_right = 0.5
+	_popup.anchor_top = 0.5
+	_popup.anchor_bottom = 0.5
+	_popup.offset_left = 0.0
+	_popup.offset_right = 0.0
+	_popup.offset_top = 0.0
+	_popup.offset_bottom = 0.0
 	_popup.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_popup.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_keep_inside_screen.call_deferred(_popup)
 	return rows
+
+
+## Si un panel flotante es más grande que la pantalla o quedó fuera, lo vuelve a meter dentro
+## del área segura (con scroll si no entra). Se llama ya con el tamaño calculado.
+func _keep_inside_screen(control: Control) -> void:
+	if control == null or not is_instance_valid(control) or not control.is_inside_tree():
+		return
+	var margins := SafeArea.margins(BASE_MARGINS, SafeArea.insets(get_window()))
+	var view := get_viewport().get_visible_rect().size
+	var room := Rect2(Vector2(margins.x, margins.y), view - Vector2(margins.x + margins.z, margins.y + margins.w))
+	var rect := control.get_global_rect()
+	var pos := rect.position
+	pos.x = clampf(pos.x, room.position.x, maxf(room.position.x, room.end.x - rect.size.x))
+	pos.y = clampf(pos.y, room.position.y, maxf(room.position.y, room.end.y - rect.size.y))
+	if pos != rect.position:
+		control.global_position = pos
 
 
 func _close_popup() -> void:

@@ -28,6 +28,8 @@ signal catalog_loaded(item_count: int)
 signal camera_reset_requested
 ## Pulido 1: la brújula pide centrar la cámara en el personaje (y su piso).
 signal camera_focus_character_requested
+## Pulido 6C: la cámara pasa a seguir al personaje (true) o a quedar libre (false).
+signal camera_follow_changed(on: bool)
 
 # --- Modos de juego ---
 ## La interfaz pide cambiar de modo: "build" (construir) o "live" (vivir).

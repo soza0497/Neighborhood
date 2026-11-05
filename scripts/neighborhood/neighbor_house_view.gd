@@ -56,6 +56,7 @@ func _build_sign() -> void:
 	_sign.modulate = Color("#ffffff")
 	_sign.outline_modulate = Color("#2b2233")
 	_sign.no_depth_test = true
+	_sign.visible = false  # Pulido 6C: el nombre solo aparece al tocar la casa.
 	# Encima del techo, sin girar con la casa (billboard) y sin quedar dado vuelta.
 	_sign.position = Vector3(0.0, HouseGrid.WALL_HEIGHT + 3.4, 0.0)
 	add_child(_sign)

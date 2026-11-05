@@ -1,7 +1,9 @@
 class_name CompassButton
 extends Button
 ## Brújula (Pulido 1): una flechita de navegador que apunta hacia donde está
-## el personaje en la pantalla. Tocarla centra la cámara en él.
+## el personaje en la pantalla. Pulido 6C: tiene dos modos. LIBRE (apagada): la cámara va
+## donde la muevas y tocarla solo centra una vez al personaje. SIGUIENDO (encendida): la cámara
+## acompaña al personaje todo el tiempo, hasta que se vaya a trabajar o la vuelvas a tocar.
 
 ## El personaje al que apunta (lo pone la interfaz).
 var target: Node3D
@@ -18,7 +20,16 @@ func _ready() -> void:
 	_arrow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_arrow)
-	pressed.connect(EventBus.camera_focus_character_requested.emit)
+	pressed.connect(_on_pressed)
+	# Si otro lado cambia el modo (por ejemplo, el personaje se va a trabajar), se acompaña.
+	EventBus.camera_follow_changed.connect(func(on: bool) -> void:
+		set_pressed_no_signal(on))
+
+
+func _on_pressed() -> void:
+	if button_pressed:
+		EventBus.camera_focus_character_requested.emit()
+	EventBus.camera_follow_changed.emit(button_pressed)
 
 
 func _process(_delta: float) -> void:

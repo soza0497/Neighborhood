@@ -69,14 +69,59 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-func _process(_delta: float) -> void:
-	if state == "" or builder == null:
+## Segundos que se ve el nombre de una casa después de tocarla.
+const SIGN_SECONDS := 3.0
+## Un toque es un clic corto que casi no se mueve (si se mueve es un arrastre de cámara).
+const TAP_MAX_MOVE := 14.0
+const TAP_MAX_SECONDS := 0.35
+
+var _press_pos := Vector2.ZERO
+var _press_time := 0.0
+var _sign_lot := ""
+var _sign_left := 0.0
+
+
+## Pulido 6C: los nombres de las casas ya no están siempre a la vista. Tocar una casa muestra su
+## nombre unos segundos (más adelante, también sus opciones).
+func _unhandled_input(event: InputEvent) -> void:
+	if builder == null or rig == null:
 		return
-	# Los carteles de familia se ven desde lejos; de cerca estorban.
-	var show_signs := rig.current_distance() > 40.0
+	var button := event as InputEventMouseButton
+	if button == null or button.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if button.pressed:
+		_press_pos = button.position
+		_press_time = Time.get_ticks_msec() / 1000.0
+		return
+	var quick := Time.get_ticks_msec() / 1000.0 - _press_time <= TAP_MAX_SECONDS
+	if quick and button.position.distance_to(_press_pos) <= TAP_MAX_MOVE:
+		_show_sign_at(button.position)
+
+
+## Busca la casa de vecino bajo el dedo (el rayo de la cámara contra el suelo) y muestra su nombre.
+func _show_sign_at(screen_pos: Vector2) -> void:
+	var cam := rig.camera_node()
+	if cam == null:
+		return
+	var from := cam.project_ray_origin(screen_pos)
+	var dir := cam.project_ray_normal(screen_pos)
+	if absf(dir.y) < 0.001:
+		return
+	var point := from + dir * (-from.y / dir.y)
+	for id in builder.houses:
+		if NeighborhoodMap.lot_rect(str(id)).has_point(Vector2(point.x, point.z)):
+			_sign_lot = str(id)
+			_sign_left = SIGN_SECONDS
+			return
+
+
+func _process(delta: float) -> void:
+	if builder == null:
+		return
+	_sign_left = maxf(0.0, _sign_left - delta)
 	for id in builder.houses:
 		var house: NeighborHouseView = builder.houses[id]
-		house.set_sign_visible(show_signs and house != _open_house)
+		house.set_sign_visible(_sign_left > 0.0 and str(id) == _sign_lot and house != _open_house)
 
 
 # --- Entrar y salir ---
@@ -153,7 +198,7 @@ func return_home() -> void:
 		_env.fog_depth_end = _saved_fog.y
 	if builder != null:
 		for id in builder.houses:
-			builder.houses[id].set_sign_visible(true)
+			builder.houses[id].set_sign_visible(false)
 	EventBus.game_mode_change_requested.emit("live")
 	_set_state("", "")
 
