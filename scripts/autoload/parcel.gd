@@ -208,6 +208,64 @@ func call_service(id: String, house: HouseData) -> Dictionary:
 	return {"ok": true, "error": ""}
 
 
+## Pulido 6B: cuánto costaría llamar al servicio para varios obstáculos de una vez.
+## Devuelve {total, items: [{id, name, cost, seconds, service}], problems: [{id, reason}]}.
+## No cobra nada. El costo de cada uno NO sube por los que están en camino (solo por los ya
+## limpios), así que el total es la suma de los costos de hoy.
+func quote(ids: Array, house: HouseData) -> Dictionary:
+	var items: Array = []
+	var problems: Array = []
+	var total := 0
+	for raw_id in ids:
+		var id := str(raw_id)
+		var o := obstacle(id)
+		if o.is_empty() or cleared.has(id):
+			problems.append({"id": id, "reason": "Eso ya está limpio."})
+			continue
+		if pending.has(id):
+			problems.append({"id": id, "reason": "Ya viene un servicio para eso."})
+			continue
+		if not ParcelRules.in_zone(zone_rects(), o["x"], o["z"], o["w"], o["d"]):
+			problems.append({"id": id, "reason": "Ese terreno todavía no es tuyo: se abre al subir de nivel."})
+			continue
+		var route := access(id, house)
+		if not route["ok"]:
+			problems.append({"id": id, "reason": str(route["reason"])})
+			continue
+		var def := definition(id)
+		var cost := cost_of(id)
+		total += cost
+		items.append({"id": id, "name": str(def.get("name", "")), "cost": cost, "seconds": int(def.get("seconds", 0)),
+			"service": str(def.get("service", ""))})
+	return {"total": total, "items": items, "problems": problems}
+
+
+## Pulido 6B: llama al servicio para varios obstáculos con UNA sola confirmación. Si no alcanza
+## la plata para todos, no llama a ninguno. Un obstáculo que no se puede (sin camino, zona
+## cerrada…) se salta y se informa; los demás siguen. Devuelve
+## {ok, called: [ids], failed: [{id, reason}], spent, error}.
+func call_services(ids: Array, house: HouseData) -> Dictionary:
+	var plan := quote(ids, house)
+	var failed: Array = plan["problems"].duplicate()
+	var called: Array = []
+	if plan["items"].is_empty():
+		return {"ok": false, "called": called, "failed": failed, "spent": 0,
+			"error": str(failed[0]["reason"]) if not failed.is_empty() else "No hay nada que llamar."}
+	if Economy.money < int(plan["total"]) and not Economy.server_mode:
+		return {"ok": false, "called": called, "failed": failed, "spent": 0,
+			"error": "Te faltan $%d para llamar a todos." % (int(plan["total"]) - Economy.money)}
+	var spent := 0
+	for item in plan["items"]:
+		var result: Dictionary = await call_service(str(item["id"]), house)
+		if result["ok"]:
+			called.append(str(item["id"]))
+			spent += int(item["cost"])
+		else:
+			failed.append({"id": str(item["id"]), "reason": str(result["error"])})
+	return {"ok": not called.is_empty(), "called": called, "failed": failed, "spent": spent,
+		"error": "" if not called.is_empty() else str(failed[failed.size() - 1]["reason"])}
+
+
 ## El servicio llegó y terminó su trabajo: limpia. Devuelve
 ## {ok, blocked, reason}. Si el vehículo no puede entrar, sigue en camino.
 func finish(id: String, house: HouseData) -> Dictionary:

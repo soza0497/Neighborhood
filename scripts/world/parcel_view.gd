@@ -15,6 +15,9 @@ const HEIGHTS := {"tree": 3.0, "rock": 1.3, "bush": 0.9, "stump": 0.55, "lake": 
 
 var _nodes: Array[Node] = []
 var _hash_seed := 0
+## Pulido 6B: obstáculos elegidos para llamar al servicio (se marcan con un aro).
+var _marked: Dictionary = {}
+var _mark_nodes: Array[Node] = []
 
 
 func _ready() -> void:
@@ -147,3 +150,158 @@ func pick(origin: Vector3, direction: Vector3) -> String:
 			best_distance = origin.distance_to(hit)
 			best = o["id"]
 	return best
+
+
+# --- Pulido 6B: obstáculos elegidos y obstáculos que se van ---
+
+## Marca con un aro los obstáculos elegidos en «Eliminar» (lista de ids).
+func set_marked(ids: Array) -> void:
+	_marked.clear()
+	for id in ids:
+		_marked[str(id)] = true
+	for node in _mark_nodes:
+		node.queue_free()
+	_mark_nodes.clear()
+	for id in _marked:
+		var o := Parcel.obstacle(id)
+		if o.is_empty() or Parcel.cleared.has(id):
+			continue
+		var mesh := CylinderMesh.new()
+		mesh.top_radius = 0.5
+		mesh.bottom_radius = 0.5
+		mesh.height = 0.05
+		mesh.radial_segments = 20
+		mesh.rings = 1
+		var ring := MeshInstance3D.new()
+		ring.name = "Mark_" + id
+		ring.mesh = mesh
+		ring.scale = Vector3(maxf(float(o["w"]), 1.0) * 1.15, 1.0, maxf(float(o["d"]), 1.0) * 1.15)
+		ring.position = Vector3(o["x"] + o["w"] / 2.0, 0.07, o["z"] + o["d"] / 2.0)
+		ring.material_override = HousePieces.transparent_material(Color(1.0, 0.45, 0.35, 0.65))
+		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(ring)
+		_mark_nodes.append(ring)
+
+
+func marked_ids() -> Array:
+	return _marked.keys()
+
+
+## Cuántos aros hay dibujados (para pruebas).
+func mark_count() -> int:
+	return _mark_nodes.size()
+
+
+## Un obstáculo que acaba de limpiarse se va con una animación (el árbol cae y rueda un poco,
+## la roca se achica, el laguito se seca…). Se llama justo cuando termina el corte: el dibujo
+## "de verdad" ya desapareció (Parcel.finish) y esta copia hace el final. Devuelve el nodo
+## animado (para pruebas) o null.
+func play_removal(o: Dictionary) -> Node3D:
+	if o.is_empty():
+		return null
+	var cfg: Dictionary = VehicleSpace.data().get("removal", {})
+	var ghost := Node3D.new()
+	ghost.name = "Removal_" + str(o["id"])
+	ghost.position = Vector3(o["x"] + o["w"] / 2.0, 0.0, o["z"] + o["d"] / 2.0)
+	add_child(ghost)
+	var kind := str(o["kind"])
+	var color := Color(1, 1, 1, 0.85)
+	match kind:
+		"tree":
+			_animate_tree_fall(ghost, o, cfg)
+			color = Color(0.85, 0.8, 0.7, 0.8)
+		"lake":
+			var disc := CylinderMesh.new()
+			disc.top_radius = 0.5
+			disc.bottom_radius = 0.5
+			disc.height = 0.08
+			disc.radial_segments = 20
+			disc.rings = 1
+			var water := MeshInstance3D.new()
+			water.mesh = disc
+			water.scale = Vector3(o["w"], 1.0, o["d"])
+			water.position.y = 0.04
+			water.material_override = Style.toon_material(Style.color("water"))
+			ghost.add_child(water)
+			var tween := create_tween()
+			tween.tween_property(ghost, "scale", Vector3(0.05, 0.05, 0.05), float(cfg.get("fade_seconds", 0.5)) * 2.0)
+			tween.tween_callback(ghost.queue_free)
+			color = Color(0.6, 0.8, 1.0, 0.8)
+		_:
+			var mesh: Mesh = SphereMesh.new()
+			var shape := Vector3(0.5, 0.34, 0.5)
+			var base_color := Style.color("bush")
+			var lift := 0.34
+			if kind == "rock":
+				shape = Vector3(float(o["w"]) * 0.5, 0.7, float(o["d"]) * 0.45)
+				base_color = Style.color("rock")
+				lift = 0.5
+			elif kind == "stump":
+				mesh = _cylinder(0.32, 0.36)
+				shape = Vector3.ONE
+				base_color = Style.color("stump")
+				lift = 0.18
+			var blob := MeshInstance3D.new()
+			blob.mesh = mesh
+			blob.scale = shape * 2.0 if mesh is SphereMesh else shape
+			blob.position.y = lift
+			blob.material_override = Style.toon_material(base_color)
+			ghost.add_child(blob)
+			var shrink := create_tween()
+			shrink.tween_property(ghost, "scale", Vector3(1.1, 0.8, 1.1), 0.15)
+			shrink.tween_property(ghost, "scale", Vector3(0.05, 0.05, 0.05), float(cfg.get("fade_seconds", 0.5)))
+			shrink.tween_callback(ghost.queue_free)
+			color = Color(0.8, 0.8, 0.75, 0.8)
+	Fx.puff(self, ghost.position + Vector3(0, 0.4, 0), 10, color)
+	return ghost
+
+
+## El árbol: cae hacia un lado (siempre el mismo para el mismo árbol), rebota, rueda un poco y
+## se achica hasta desaparecer.
+func _animate_tree_fall(ghost: Node3D, o: Dictionary, cfg: Dictionary) -> void:
+	var s := 0.85 + _jitter(o, 1) * 0.5
+	var pivot := Node3D.new()
+	pivot.name = "TreePivot"
+	pivot.scale = Vector3.ONE * s
+	ghost.add_child(pivot)
+	var trunk := MeshInstance3D.new()
+	trunk.mesh = _cylinder(0.2, 1.3)
+	trunk.position.y = 0.65
+	trunk.material_override = Style.toon_material(Style.color("trunk"))
+	pivot.add_child(trunk)
+	var crown_mesh := SphereMesh.new()
+	crown_mesh.radius = 0.95
+	crown_mesh.height = 1.9
+	crown_mesh.radial_segments = 8
+	crown_mesh.rings = 4
+	var crown := MeshInstance3D.new()
+	crown.mesh = crown_mesh
+	crown.position.y = 1.95
+	crown.material_override = Style.toon_material(Style.color("leaf"))
+	pivot.add_child(crown)
+	# Hacia dónde cae: un ángulo fijo por árbol.
+	var heading := _jitter(o, 5) * TAU
+	var fall_axis := Vector3(cos(heading), 0.0, sin(heading))  # Dirección horizontal de la caída.
+	var tilt_axis := Vector3.UP.cross(fall_axis).normalized()  # Eje alrededor del que se vuelca.
+	var fall_seconds := float(cfg.get("tree_fall_seconds", 0.9))
+	var roll_seconds := float(cfg.get("tree_roll_seconds", 0.7))
+	var roll_distance := float(cfg.get("tree_roll_distance", 0.9))
+	var fade_seconds := float(cfg.get("fade_seconds", 0.5))
+	var tween := create_tween()
+	# 1) Se vuelca: empieza lento y acelera (ease in).
+	tween.tween_method(func(angle: float) -> void: pivot.transform.basis = Basis(tilt_axis, angle) * Basis().scaled(Vector3.ONE * s),
+		0.0, PI / 2.0 - 0.1, fall_seconds).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	# 2) Rebota un poquito al pegar contra el suelo.
+	tween.tween_method(func(angle: float) -> void: pivot.transform.basis = Basis(tilt_axis, angle) * Basis().scaled(Vector3.ONE * s),
+		PI / 2.0 - 0.1, PI / 2.0 - 0.32, 0.12).set_trans(Tween.TRANS_SINE)
+	tween.tween_method(func(angle: float) -> void: pivot.transform.basis = Basis(tilt_axis, angle) * Basis().scaled(Vector3.ONE * s),
+		PI / 2.0 - 0.32, PI / 2.0 - 0.05, 0.12).set_trans(Tween.TRANS_SINE)
+	# 3) Rueda un poco por el pasto (se mueve y gira sobre su eje).
+	var base_position: Vector3 = ghost.position
+	tween.tween_method(func(progress: float) -> void:
+		ghost.position = base_position + fall_axis * roll_distance * progress
+		pivot.transform.basis = Basis(fall_axis, progress * 1.6) * Basis(tilt_axis, PI / 2.0 - 0.05) * Basis().scaled(Vector3.ONE * s),
+		0.0, 1.0, roll_seconds).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	# 4) Se achica y desaparece.
+	tween.tween_property(ghost, "scale", Vector3(0.05, 0.05, 0.05), fade_seconds)
+	tween.tween_callback(ghost.queue_free)

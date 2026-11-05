@@ -17,14 +17,17 @@ var active := false
 ## también sirve con el constructor sin herramienta elegida).
 var parcel_view: ParcelView
 var builder: HouseBuilder
+## Pulido 6B: marca obstáculos para el servicio cuando está la herramienta Eliminar.
+var planner: ClearPlanner
 
 var _press_pos := Vector2.ZERO
 var _press_time := 0.0
 var _pressed := false
+var _last_hint_msec := -100000
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not active and not _builder_idle():
+	if not active and not _builder_idle() and not _erase_mode():
 		return
 	var position_2d := Vector2.ZERO
 	var pressed := false
@@ -59,6 +62,11 @@ func _builder_idle() -> bool:
 	return builder != null and builder.active and builder.tool == HouseBuilder.Tool.NONE
 
 
+## Pulido 6B: ¿está la herramienta Eliminar en uso? (ahí un toque marca obstáculos)
+func _erase_mode() -> bool:
+	return builder != null and builder.active and builder.tool == HouseBuilder.Tool.ERASE
+
+
 func _on_tap(screen_pos: Vector2) -> void:
 	# Pulido 4B: con el panel del modo desarrollador abierto, los toques en el mundo son para él.
 	if DevPanel.picking:
@@ -90,5 +98,12 @@ func _tap_obstacle(origin: Vector3, direction: Vector3) -> void:
 	if parcel_view == null:
 		return
 	var id := parcel_view.pick(origin, direction)
-	if id != "":
-		EventBus.parcel_obstacle_tapped.emit(id)
+	if id == "":
+		return
+	# Pulido 6B: el servicio se llama desde «Eliminar» (se pueden marcar varios y confirmar una
+	# sola vez). Tocar un árbol sin querer ya no abre ningún menú; solo una pista de vez en cuando.
+	if _erase_mode() and planner != null:
+		planner.toggle(id)
+	elif Time.get_ticks_msec() - _last_hint_msec > 20000:
+		_last_hint_msec = Time.get_ticks_msec()
+		EventBus.toast.emit("Para limpiar terreno: Construir → Eliminar y tocá el obstáculo.")

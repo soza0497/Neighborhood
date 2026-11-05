@@ -48,6 +48,7 @@ var _problems_dirty := true
 ## Pulido 2C: obstáculos de la parcela, servicios que llegan y entrega de compras.
 var _parcel_view: ParcelView
 var _services: Services
+var _planner: ClearPlanner
 var _delivery: Delivery
 var _problems_timer := 0.0
 var _neighborhood: NeighborhoodController
@@ -179,6 +180,27 @@ func _setup_parcel_nodes() -> void:
 	_delivery.setup(house, nav, _house_view, _services)
 	_live.parcel_view = _parcel_view
 	_live.builder = _builder
+	# Pulido 6B: el servicio se llama desde «Eliminar» (varios obstáculos, una sola confirmación).
+	_planner = ClearPlanner.new()
+	_planner.name = "ClearPlanner"
+	_planner.builder = _builder
+	_planner.parcel_view = _parcel_view
+	_planner.house = house
+	add_child(_planner)
+	_live.planner = _planner
+	var clear_layer := CanvasLayer.new()
+	clear_layer.name = "ClearLayer"
+	clear_layer.layer = 6
+	add_child(clear_layer)
+	var clear_panel := ClearPanel.new()
+	clear_layer.add_child(clear_panel)
+	clear_panel.setup(_planner)
+	# El equipo a pie le pide al personaje que le abra la reja cuando llega.
+	_services.gate_handler = func() -> void:
+		_character.go_open_gate()
+		await _character.gate_opened
+	_services.cut_finished.connect(_on_cut_finished)
+	_services.finished.connect(_on_service_finished)
 	Parcel.service_due.connect(_on_service_due)
 	EventBus.ambulance_requested.connect(func(patient: Node3D) -> void: _services.run_ambulance(patient))
 	EventBus.boxes_open_all_requested.connect(func() -> void: _character.open_all_boxes())
@@ -187,34 +209,37 @@ func _setup_parcel_nodes() -> void:
 	Parcel.check_now()
 
 
-## Pasó la espera de un servicio de limpieza: llega. Si solo hace falta una
-## persona, el personaje del jugador va a abrirle la puerta; si hace falta un
-## vehículo y no hay camino libre, avisa que no puede entrar.
+## Pasó la espera de un servicio de limpieza: llega el equipo (en su vehículo). Si ya hay un
+## equipo de ese tipo en la calle, este obstáculo se suma a su lista.
 func _on_service_due(id: String) -> void:
 	var def := Parcel.definition(id)
 	var obstacle := Parcel.obstacle(id)
 	if def.is_empty() or obstacle.is_empty():
 		return
 	var route := Parcel.access(id, house)
-	var needs_vehicle := str(def.get("vehicle", "")) != ""
-	if not needs_vehicle and route["ok"]:
-		_character.go_open_gate()
-		await _character.gate_opened
 	_services.run_clear(obstacle, def, route, not route["ok"])
-	var result: Dictionary = await _services.finished
-	while str(result.get("id", "")) != id:
-		result = await _services.finished
-	if result.get("blocked", false):
-		EventBus.toast.emit("El servicio no pudo entrar: %s" % str(result.get("reason", "")))
-		return
+
+
+## Terminó el corte: el obstáculo desaparece YA (con su animación), no cuando el equipo se va.
+func _on_cut_finished(id: String) -> void:
+	var def := Parcel.definition(id)
+	var obstacle := Parcel.obstacle(id).duplicate()
 	var done: Dictionary = await Parcel.finish(id, house)
 	if done["ok"]:
+		if _parcel_view != null:
+			_parcel_view.play_removal(obstacle)
 		EventBus.toast.emit("Listo: quedó limpio (%s)." % str(def.get("name", "")).to_lower())
 		_problems_dirty = true
 	elif done["blocked"]:
 		EventBus.toast.emit("El servicio no pudo entrar: %s" % done["reason"])
 	else:
 		EventBus.toast.emit(str(done["reason"]))
+
+
+## Un obstáculo que el equipo no pudo atender (no hay camino): se avisa; sigue en espera.
+func _on_service_finished(result: Dictionary) -> void:
+	if result.get("blocked", false):
+		EventBus.toast.emit("El servicio no pudo entrar: %s" % str(result.get("reason", "")))
 
 
 func _process(delta: float) -> void:

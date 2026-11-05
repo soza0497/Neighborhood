@@ -119,14 +119,15 @@ func _run_next_trip() -> void:
 
 func _run_trip(trip: Array) -> void:
 	var gate := Vector2i(lot_center_x(), HouseGrid.LOT_SIZE.y - 1)
-	var truck := services.make_vehicle("truck")
-	truck.position = services.road_in(gate)[0]
-	services.add_child(truck)
+	# Pulido 6B: el camión llega por su carril y se estaciona como cualquier otro vehículo.
+	var side := services.next_side("delivery")
+	await services.wait_road(side)
+	var truck := services.spawn_vehicle("truck", side)
 	Sound.play("truck")
-	await services.travel(truck, [Vector3(gate.x + 0.5, 0, services.road_z - 1.0)], Services.DRIVE_SPEED)
+	await services.park(truck, side, gate.x + 0.5)
 	# Baja el repartidor con las cajas apiladas.
 	var courier := services.make_worker("courier")
-	courier.position = truck.position + Vector3(-1.6, 0, 0)
+	courier.position = services.exit_point(truck)
 	services.add_child(courier)
 	var stack := Node3D.new()
 	stack.name = "Stack"
@@ -138,7 +139,7 @@ func _run_trip(trip: Array) -> void:
 		stack.add_child(crate)
 	var door := front_door_cell(house, nav)
 	var path := _walk_path(gate, door)
-	await services.travel(courier, [Vector3(gate.x + 0.5, 0, services.sidewalk_z)], Services.WALK_SPEED * 1.4)
+	await services.travel(courier, services.walk_route(courier.position, [Vector3(gate.x + 0.5, 0, services.sidewalk_z)]), Services.WALK_SPEED * 1.4)
 	await services.travel(courier, path, Services.WALK_SPEED * 1.4)
 	# En la puerta se le inclinan y se le caen (animación graciosa).
 	await _stumble(courier, stack)
@@ -147,10 +148,9 @@ func _run_trip(trip: Array) -> void:
 		await _deliver_one(courier, entry, door)
 	# Vuelve al camión y se van.
 	await services.travel(courier, _reversed(path), Services.WALK_SPEED * 1.6)
-	await services.travel(courier, [truck.position + Vector3(-1.6, 0, 0)], Services.WALK_SPEED * 1.6)
+	await services.travel(courier, services.walk_route(courier.position, [Vector3(gate.x + 0.5, 0, services.sidewalk_z), services.exit_point(truck)]), Services.WALK_SPEED * 1.6)
 	courier.queue_free()
-	await services.travel(truck, services.road_out(gate), Services.DRIVE_SPEED)
-	truck.queue_free()
+	await services.unpark(truck, side)
 
 
 static func lot_center_x() -> int:
