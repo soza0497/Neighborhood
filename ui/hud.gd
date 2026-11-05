@@ -39,6 +39,7 @@ const NEED_COLORS := {
 @onready var _mood_card: Control = %MoodCard
 @onready var _mood_rows: VBoxContainer = %Rows
 @onready var _card_overlay: Control = %CardOverlay
+@onready var _layout: Control = $Root/Layout
 @onready var _money_label: Label = %MoneyLabel
 @onready var _xp_bar: ProgressBar = %XpBar
 @onready var _builds_button: Button = %BuildsButton
@@ -632,8 +633,13 @@ func _process(delta: float) -> void:
 	# Pulido 3B: con la perilla del ángulo desviada, la cámara sube o baja.
 	if _pitch_slider != null and absf(_pitch_slider.value) > 0.05:
 		EventBus.camera_pitch_step_requested.emit(_pitch_slider.value * PITCH_RATE * delta)
+	# Pulido 6C: con un menú abierto, lo de atrás se esconde (no solo se tapa): no se ven asomar
+	# botones por los bordes ni se pueden tocar. Un toque afuera cierra el menú.
+	var menu_open := _any_menu_open()
+	_layout.visible = not menu_open
+	_card_overlay.visible = menu_open
 	if _pitch_slider != null:
-		_pitch_slider.visible = not _any_menu_open()
+		_pitch_slider.visible = not menu_open
 	var fps_text := "%d FPS" % Engine.get_frames_per_second()
 	if _fps_label.visible:
 		_fps_label.text = fps_text
@@ -683,7 +689,7 @@ func _toggle_mood_card() -> void:
 	_card_overlay.show()
 
 
-## Tocar afuera de la tarjeta la cierra.
+## Tocar afuera de cualquier menú abierto lo cierra.
 func _on_overlay_input(event: InputEvent) -> void:
 	if (event is InputEventMouseButton and event.pressed) or (event is InputEventScreenTouch and event.pressed):
 		_close_cards()
@@ -691,9 +697,7 @@ func _on_overlay_input(event: InputEvent) -> void:
 
 
 func _close_cards() -> void:
-	_mood_card.hide()
-	_card_overlay.hide()
-	_side_menu.hide()
+	_close_floating()
 
 
 ## Pulido 2: el menú hamburguesa se abre y se cierra con el mismo botón, y

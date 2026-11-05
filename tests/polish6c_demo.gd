@@ -40,6 +40,7 @@ func _run() -> void:
 	await _test_mood_tap()
 	await _test_popup_inside()
 	await _test_follow_button()
+	await _test_menu_hides_behind()
 	await _test_signs_hidden()
 	print("\nDEMO PULIDO 6C: %d pasaron, %d fallaron · capturas: %s" % [_passed, _failed, ", ".join(_shots)])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -119,6 +120,22 @@ func _test_follow_button() -> void:
 	_check(not compass.button_pressed, "al irse a trabajar el botón vuelve a libre")
 	_main._character.state = Character.State.IDLE
 	await _shot("p6c_centrar_arriba.png")
+
+
+## Con el ☰ abierto, los botones de atrás se esconden (no asoman) y un toque afuera lo cierra.
+func _test_menu_hides_behind() -> void:
+	print("\n5) Menú abierto: lo de atrás no está")
+	var layout: Control = _hud.get_node("Root/Layout")
+	var overlay: Control = _hud.get_node("%CardOverlay")
+	_check(layout.visible, "con todo cerrado la interfaz se ve")
+	_hud.get_node("%MenuButton").pressed.emit()
+	await _frames(4)
+	_check(not layout.visible, "con el ☰ abierto los botones de atrás se esconden")
+	_check(overlay.visible, "y hay un velo que recibe el toque de afuera")
+	await _shot("p6c_menu_abierto.png")
+	overlay.gui_input.emit(_click())
+	await _frames(4)
+	_check(layout.visible and not _hud.get_node("%SideMenu").visible, "tocar afuera cierra el menú y vuelve todo")
 
 
 ## Los carteles de las casas de vecinos están apagados hasta tocar la casa.
