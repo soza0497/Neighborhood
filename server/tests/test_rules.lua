@@ -685,6 +685,18 @@ put(open, 1, "floors", "11,11", FLOOR)
 check(not batch_ok(open, { w(0, "objects", "p1", nil) }), "no se puede quitar el pilar que sostiene el piso")
 check(supported(open, 0, "objects", "m1", { item = "stairs_metal", cell = { 14, 14 }, rot = 0 }), "escalera metálica afuera")
 
+-- Pulido 6A (6): muebles que se pueden poner afuera (outdoor = true en el catálogo).
+for _, id in ipairs({ "table_basic", "plant_pot", "plant_tall", "lamp_floor", "vase_basic", "bench_garden" }) do
+  check(data.items[id] ~= nil and data.items[id].outdoor == true, "6A: " .. id .. " se puede poner afuera")
+  check(supported(open, 0, "objects", "g_" .. id, { item = id, cell = { 20, 20 }, rot = 0 }), "6A: " .. id .. " sobre el pasto")
+end
+check(not supported(open, 1, "objects", "g_up", { item = "table_basic", cell = { 20, 20 }, rot = 0 }), "6A: afuera solo en la planta baja (arriba pide piso)")
+check(not supported(open, 0, "objects", "g_sofa", { item = "sofa_basic", cell = { 20, 20 }, rot = 0 }), "6A: el sofá no es de afuera")
+check(not supported(open, 0, "objects", "g_bed", { item = "bed_basic", cell = { 20, 20 }, rot = 0 }), "6A: la cama no es de afuera")
+for _, id in ipairs({ "wall_basic", "door_basic", "window_basic" }) do
+  check(data.items[id].outdoor ~= true, "6A: " .. id .. " sigue necesitando estructura")
+end
+
 -- Techos: bloqueados si los atraviesa una pared o un piso de arriba.
 local ROOF = { item = "roof_flat", rect = { 0, 0, 6, 6 } }
 local roofed = box_house()

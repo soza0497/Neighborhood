@@ -1,5 +1,15 @@
 # Progreso
 
+## ▶ PULIDO 6A (versión 0.13.0) — construcción y casa — rama `pulido-6a` (sale de `main`). **No se mergea, no se exporta APK.**
+
+**Estado:** 6A-1 y 6A-2 hechas (sin correr); 6A-3 (sótano, cimientos sobre obstáculos, mover la casa) en curso. Spec: `docs/pulido-6.md` §6A.
+**Todo el GDScript y Lua nuevo se escribió SIN ejecutar** (la nube no tiene Godot ni Lua): esperá errores de sintaxis o de tipos al primer arranque.
+
+**Próximo paso (el desarrollador principal, en la PC con Godot):**
+1. `godot --headless --path . --import` (registra `FurnitureQuickMenu`, `LongPressTip`, importa `dollar.svg`/`pencil.svg` y crea los `.uid` nuevos; commitearlos).
+2. `godot --headless --path . res://tests/test_build6a.tscn` (nueva) y todas las de antes (`test_house`, `test_art`, `test_camera`, `test_floor_map`, `test_template`, `test_dev_mode`…); `lua5.1 server/tests/test_rules.lua` (se agregaron comprobaciones de 6A).
+3. Con ventana: `SHOT_DIR=docs/capturas godot --path . res://tests/polish6a_demo.tscn` (genera `p6a_*.png`; **todavía no existen**) y `tests/ui_demo.tscn` (se ajustó a «Comprar» y al botón Pintar).
+
 ## ▶ Guías de arte: escritas en la rama `guias-arte`, sin verificar con Blender instalado
 Ocho guías para principiante total en `docs/arte/` (00 mapa, 01 instalar Blender, 02 primera silla, 03 muebles con
 partes, 04 Krita y paleta, 05 íconos SVG con Inkscape, 06 cuarto de prueba, 07 personaje, 08 problemas y atajos), más

@@ -5,7 +5,8 @@ extends Node
 ##   godot --headless --path . res://tests/test_build6a.tscn
 ## Al final dice cuántas pruebas pasaron. Si alguna falla, dice cuál.
 ##
-## Se va llenando por sub-fase: 6A-1 (contorno, pintura, íconos).
+## Se va llenando por sub-fase: 6A-1 (contorno, pintura, íconos), 6A-2 (cuadrícula, muebles
+## afuera, mini menú, maqueta).
 
 var _passed := 0
 var _failed := 0
@@ -17,6 +18,10 @@ func _ready() -> void:
 	_test_wall_faces()
 	_test_wall_paint_pieces()
 	_test_build_bar_titles()
+	_test_grid_zone_mask()
+	_test_outdoor_furniture()
+	_test_quick_menu_logic()
+	_test_floor_map_top_edges()
 	print("\nPRUEBAS 6A: %d pasaron, %d fallaron" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -154,3 +159,107 @@ func _test_build_bar_titles() -> void:
 	_check(LongPressTip.text_for(button) == "Comprar", "el cartel usa el tooltip del botón")
 	_check(LongPressTip.HOLD_SECONDS > 0.2 and LongPressTip.HOLD_SECONDS < 1.0, "mantener presionado: entre 0,2 y 1 s")
 	button.free()
+
+
+# --- 5. La cuadrícula solo dentro de la valla ---
+
+func _test_grid_zone_mask() -> void:
+	print("\n5) Cuadrícula: solo dentro de la valla")
+	var cfg := ParcelRules.config()
+	var rects := ParcelRules.zone_rects(cfg, 1)
+	var mask := ParcelRules.zone_mask_image(rects, 96)
+	_check(mask.get_width() == 96 and mask.get_height() == 96, "la máscara tiene una celda por píxel")
+	# Con la parcela real (96) solo se usa el centro pegado a la calle; con la de pruebas (32) es toda.
+	if int(cfg["lot"]) >= 96:
+		var first: Array = rects[0]
+		_check(mask.get_pixel(int(first[0]) + 1, int(first[1]) + 1).r > 0.5, "una celda dentro de la zona inicial es usable")
+		_check(mask.get_pixel(0, 0).r < 0.5, "la esquina lejana (zona por desbloquear) no se cuadricula")
+		var all_rects := ParcelRules.zone_rects(cfg, 99)
+		var open_mask := ParcelRules.zone_mask_image(all_rects, 96)
+		_check(open_mask.get_pixel(0, 0).r > 0.5 or all_rects.size() == 1, "al subir de nivel se abre más terreno")
+	var small := ParcelRules.zone_mask_image([[2, 3, 4, 5]], 16)
+	var white := 0
+	for x in 16:
+		for z in 16:
+			if small.get_pixel(x, z).r > 0.5:
+				white += 1
+	_check(white == 20, "un rectángulo de 4x5 pinta 20 celdas (%d)" % white)
+	_check(small.get_pixel(2, 3).r > 0.5 and small.get_pixel(5, 7).r > 0.5 and small.get_pixel(6, 7).r < 0.5 and small.get_pixel(5, 8).r < 0.5,
+		"los bordes del rectángulo están justo")
+	var clipped := ParcelRules.zone_mask_image([[14, 14, 10, 10]], 16)
+	_check(clipped.get_pixel(15, 15).r > 0.5, "un rectángulo que se sale del lote se recorta sin romper")
+
+
+# --- 6. Muebles afuera (outdoor en el catálogo) ---
+
+func _test_outdoor_furniture() -> void:
+	print("\n6) Muebles afuera")
+	var open := HouseData.new()
+	for id in ["table_basic", "plant_pot", "plant_tall", "lamp_floor", "vase_basic", "bench_garden"]:
+		var item := Catalog.get_item(id)
+		_check(not item.is_empty() and item.get("outdoor", false) == true, "%s está marcado outdoor en el catálogo" % id)
+		var value := {"item": id, "cell": [10, 10], "rot": 0}
+		_check(HouseRules.is_supported(open, 0, "objects", "x1", value), "%s se apoya en el pasto" % id)
+		_check(not HouseRules.is_supported(open, 1, "objects", "x1", value), "%s arriba pide piso" % id)
+	for id in ["sofa_basic", "bed_basic", "fridge_basic"]:
+		_check(not HouseRules.is_supported(open, 0, "objects", "x2", {"item": id, "cell": [10, 10], "rot": 0}), "%s no va afuera" % id)
+	for id in ["wall_basic", "door_basic", "window_basic"]:
+		_check(Catalog.get_item(id).get("outdoor", false) != true, "%s sigue necesitando estructura" % id)
+	# Dos muebles de afuera no se encima.
+	open.apply([HouseData.write(0, "objects", "t1", {"item": "table_basic", "cell": [10, 10], "rot": 0})])
+	_check(not HouseRules.is_supported(open, 0, "objects", "t2", {"item": "plant_pot", "cell": [11, 10], "rot": 0}), "afuera tampoco se encima")
+	_check(HouseRules.is_supported(open, 0, "objects", "t3", {"item": "plant_pot", "cell": [12, 10], "rot": 0}), "pero al lado sí")
+
+
+# --- 7. Mini menú de «mantener presionado un mueble» ---
+
+func _test_quick_menu_logic() -> void:
+	print("\n7) Mini menú al mantener presionado un mueble")
+	var points := {"0|o1": Vector2(100, 100), "0|o2": Vector2(180, 100), "1|o3": Vector2(400, 400)}
+	_check(FurnitureQuickMenu.nearest_key(points, Vector2(120, 100), 170.0) == "0|o1", "elige el mueble más cercano al dedo")
+	_check(FurnitureQuickMenu.nearest_key(points, Vector2(170, 105), 170.0) == "0|o2", "y si el dedo está más cerca de otro, ese")
+	_check(FurnitureQuickMenu.nearest_key(points, Vector2(800, 800), 170.0) == "", "lejos de todo: ninguno")
+	_check(FurnitureQuickMenu.nearest_key({}, Vector2.ZERO, 170.0) == "", "sin muebles: ninguno")
+	# Cámara de frente: el norte (-Z) sube en la pantalla.
+	var front := {"N": Vector2(0, -40), "S": Vector2(0, 40), "E": Vector2(60, 0), "O": Vector2(-60, 0)}
+	var map := FurnitureQuickMenu.screen_direction_map(front)
+	_check(map == {"up": "N", "down": "S", "left": "O", "right": "E"}, "de frente: arriba = norte (%s)" % [map])
+	# Cámara girada 90°: ahora el este sube en la pantalla.
+	var turned := {"E": Vector2(0, -40), "O": Vector2(0, 40), "S": Vector2(60, 0), "N": Vector2(-60, 0)}
+	map = FurnitureQuickMenu.screen_direction_map(turned)
+	_check(map == {"up": "E", "down": "O", "left": "N", "right": "S"}, "girada: arriba = este (%s)" % [map])
+	# En diagonal (isométrica) cada flecha igual se reparte sin repetir.
+	var iso := {"N": Vector2(30, -20), "S": Vector2(-30, 20), "E": Vector2(30, 20), "O": Vector2(-30, -20)}
+	map = FurnitureQuickMenu.screen_direction_map(iso)
+	var used := {}
+	for arrow in map:
+		used[map[arrow]] = true
+	_check(map.size() == 4 and used.size() == 4, "en diagonal no se repite ninguna dirección (%s)" % [map])
+	_check(FurnitureQuickMenu.is_movable({"item": "chair_basic", "cell": [1, 1], "rot": 0}), "una silla se puede correr")
+	_check(not FurnitureQuickMenu.is_movable({"item": "stairs_basic", "cell": [1, 1], "rot": 0}), "una escalera no")
+	_check(not FurnitureQuickMenu.is_movable(null), "nada tampoco")
+	var center := FurnitureQuickMenu.object_center(0, {"item": "table_basic", "cell": [4, 4], "rot": 0})
+	_check(is_equal_approx(center.x, 5.0) and is_equal_approx(center.z, 4.5), "el centro de una mesa 2x1 está entre sus dos celdas (%s)" % [center])
+	_check(FurnitureQuickMenu.HOLD_SECONDS > 0.3 and FurnitureQuickMenu.HOLD_SECONDS < 1.0, "mantener: entre 0,3 y 1 s")
+
+
+# --- 10. Maqueta de pisos: bordes de arriba ---
+
+func _test_floor_map_top_edges() -> void:
+	print("\n10) Maqueta de pisos: borde de arriba sin «hueco»")
+	var house := _box_house()
+	# Un segundo piso más chico en la esquina (3x3) sobre el primero, sin techo.
+	var writes: Array = []
+	for c in HouseGrid.cells_in_rect(Vector2i(0, 0), Vector2i(2, 2)):
+		writes.append(HouseData.write(1, "floors", HouseGrid.cell_key(c), {"item": "floor_basic"}))
+	house.apply(writes)
+	# Pared de afuera lejos del segundo piso: se ve desde arriba.
+	_check(FloorMap.top_edge_exposed(house, 0, "h:4,0"), "la pared del primero que NO tiene el segundo encima muestra su borde")
+	# Pared bajo el segundo piso: queda tapada.
+	_check(not FloorMap.top_edge_exposed(house, 0, "h:1,0"), "la que tiene el segundo piso encima no")
+	# Una pared del límite entre lo cubierto y lo libre: cubierta si UNA de sus celdas lo está.
+	_check(not FloorMap.top_edge_exposed(house, 0, "v:3,1"), "en el límite del segundo piso, también tapada")
+	# Con techo sobre una parte, solo esa parte se tapa.
+	house.apply([HouseData.write(0, "roofs", "o1", {"item": "roof_flat", "rect": [3, 3, 3, 3]})])
+	_check(not FloorMap.top_edge_exposed(house, 0, "h:4,5"), "bajo el techo no se ve")
+	_check(FloorMap.top_edge_exposed(house, 0, "h:4,0"), "fuera del techo, sí (antes todo el piso se apagaba por tener un techo)")

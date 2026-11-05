@@ -182,6 +182,7 @@ var _review_request: Dictionary = {}
 
 # --- Nodos 3D de ayuda ---
 var _grid: MeshInstance3D
+var _grid_material: ShaderMaterial
 var _cursor: MeshInstance3D
 var _ghost: Node3D
 var _selection_marker: MeshInstance3D
@@ -323,6 +324,16 @@ func pick_height() -> float:
 	return HouseGrid.level_y(level) + (HouseGrid.WALL_HEIGHT if tool == Tool.ROOF else 0.0)
 
 
+## Pulido 6A (5): vuelve a dibujar la máscara de la cuadrícula con las zonas abiertas hoy
+## (al subir de nivel se abre más terreno). Fuera de la valla no hay líneas.
+func refresh_grid_zone() -> void:
+	if _grid_material == null:
+		return
+	var mask := ParcelRules.zone_mask_image(Parcel.zone_rects(), HouseGrid.LOT_SIZE.x)
+	_grid_material.set_shader_parameter("zone_mask", ImageTexture.create_from_image(mask))
+	_grid_material.set_shader_parameter("use_mask", 1.0)
+
+
 func _sync_grid() -> void:
 	if _grid != null:
 		_grid.position.y = pick_height() + 0.03
@@ -442,6 +453,45 @@ func nudge_selected(direction: String) -> void:
 	var moved_key := selected_key if layer != "walls" else str(writes[1]["key"])
 	if await _apply(check["ok"]):
 		select_object(moved_key, layer)
+
+
+## Pulido 6A (7): corre UN mueble una celda sin entrar a construir (lo usa el mini menú de
+## «mantener presionado un mueble»). Funciona en cualquier modo. Devuelve true si se movió.
+func nudge_piece(piece_level: int, key: String, direction: String) -> bool:
+	if not DIRECTIONS.has(direction) or not house.has_piece(piece_level, "objects", key):
+		return false
+	var old_level := level
+	level = piece_level
+	var value: Dictionary = house.get_piece(level, "objects", key).duplicate(true)
+	var anchor := HouseData.object_anchor(value) + (DIRECTIONS[direction] as Vector2i)
+	value["cell"] = [anchor.x, anchor.y]
+	var check := _check_move(_object_writes(key, value))
+	var moved := false
+	if check["blocked"].is_empty():
+		moved = await _apply(check["ok"])
+	level = old_level
+	return moved
+
+
+## Pulido 6A (7): gira UN mueble un paso (45° los muebles, 90° lo demás) sin entrar a construir.
+func rotate_piece(piece_level: int, key: String) -> bool:
+	if not house.has_piece(piece_level, "objects", key):
+		return false
+	var old_level := level
+	level = piece_level
+	var value: Dictionary = house.get_piece(level, "objects", key).duplicate(true)
+	var next := next_orientation(value["item"], int(value.get("rot", 0)), value.get("diag", false))
+	value["rot"] = next[0]
+	if next[1]:
+		value["diag"] = true
+	else:
+		value.erase("diag")
+	var check := _check(_object_writes(key, value))
+	var turned := false
+	if check["blocked"].is_empty():
+		turned = await _apply(check["ok"])
+	level = old_level
+	return turned
 
 
 ## Botón "Confirmar": aplica la selección que estaba esperando.
@@ -2183,6 +2233,7 @@ func _create_helpers() -> void:
 	var grid_mat := ShaderMaterial.new()
 	grid_mat.shader = preload("res://assets/shaders/grid.gdshader")
 	grid_mat.set_shader_parameter("lot_size", Vector2(HouseGrid.LOT_SIZE))
+	_grid_material = grid_mat
 	_grid = MeshInstance3D.new()
 	_grid.name = "Grid"
 	_grid.mesh = plane
@@ -2190,6 +2241,10 @@ func _create_helpers() -> void:
 	_grid.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_grid.position = Vector3(HouseGrid.LOT_SIZE.x / 2.0, HouseGrid.level_y(0) + 0.03, HouseGrid.LOT_SIZE.y / 2.0)
 	add_child(_grid)
+	# Pulido 6A (5): la cuadrícula solo se dibuja dentro de la valla (zona usable).
+	refresh_grid_zone()
+	if not Parcel.changed.is_connected(refresh_grid_zone):
+		Parcel.changed.connect(refresh_grid_zone)
 
 	# Resaltado de la celda bajo el mouse.
 	var square := PlaneMesh.new()

@@ -286,7 +286,6 @@ func _draw_level(st: SurfaceTool, level: int, lo: Vector2, hi: Vector2, dir: Vec
 		# Piso agregado todavía vacío: marco tenue para poder tocarlo.
 		_quad(st, Vector3(lo.x, y0, hi.y), Vector3(hi.x, y0, hi.y), Vector3(hi.x, y1, hi.y), Vector3(lo.x, y1, hi.y), Color(base, FILL_ALPHA * 0.6))
 		_rect_outline(st, Vector3(lo.x, y0, hi.y), Vector3(hi.x, y0, hi.y), Vector3(hi.x, y1, hi.y), Vector3(lo.x, y1, hi.y), Color(base, 0.4), view_dir, width * 0.7)
-	var open_top := house.get_layer(level, "roofs").is_empty() and house.get_layer(level + 1, "floors").is_empty()
 	var corner_count := {}
 	for w in walls:
 		for v in HouseGrid.edge_vertices(w["key"]):
@@ -304,7 +303,9 @@ func _draw_level(st: SurfaceTool, level: int, lo: Vector2, hi: Vector2, dir: Vec
 		_quad(st, a, b, b + up, a + up, fill_color)
 		# Pulido 5D: sin techo ni piso encima, la cara de arriba de la casa se ve desde
 		# arriba: el borde de arriba de las paredes de atrás también es silueta.
-		if not facing and open_top:
+		# Pulido 6A (10): se decide pared por pared (antes era «todo el piso o nada»: con un segundo
+		# piso más chico, el borde de arriba del primero quedaba sin dibujar y parecía un hueco).
+		if not facing and top_edge_exposed(house, level, w["key"]):
 			_line(st, a + up, b + up, line_color, view_dir, width)
 		if not facing:
 			continue
@@ -334,6 +335,19 @@ func _draw_level(st: SurfaceTool, level: int, lo: Vector2, hi: Vector2, dir: Vec
 	for key in house.get_layer(level, "roofs"):
 		var value: Dictionary = house.get_piece(level, "roofs", key)
 		_draw_roof(st, HouseData.roof_rect(value), y1, Catalog.get_item(value.get("item", "")).get("roof_style", "") == "flat", line_color, view_dir, width)
+
+
+## Pulido 6A (10): ¿el borde de arriba de esta pared se ve desde arriba? Sí si NADA lo cubre:
+## ni un piso del nivel de arriba, ni un techo de este nivel, en ninguna de sus dos celdas vecinas.
+static func top_edge_exposed(target: HouseData, level: int, key: String) -> bool:
+	for cell in HouseGrid.edge_cells(key):
+		if target.has_piece(level + 1, "floors", HouseGrid.cell_key(cell)):
+			return false
+		for roof_key in target.get_layer(level, "roofs"):
+			var rect := HouseData.roof_rect(target.get_piece(level, "roofs", roof_key))
+			if rect.has_point(cell):
+				return false
+	return true
 
 
 ## Una esquina de verdad: dos paredes que no siguen en línea recta.

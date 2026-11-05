@@ -52,6 +52,7 @@ var _delivery: Delivery
 var _problems_timer := 0.0
 var _neighborhood: NeighborhoodController
 var _template_placer: TemplatePlacer
+var _quick_menu: FurnitureQuickMenu
 const PROBLEMS_INTERVAL := 0.4
 
 
@@ -79,6 +80,11 @@ func _ready() -> void:
 	_house_view.add_child(_template_placer)
 	_template_placer.setup(_builder, house, _house_view, _camera_rig)
 	_live.view = _house_view
+	# Pulido 6A (7): mini menú de «mantener presionado un mueble» (modo vivir).
+	_quick_menu = FurnitureQuickMenu.new()
+	_quick_menu.name = "FurnitureQuickMenu"
+	add_child(_quick_menu)
+	_quick_menu.setup(_builder, _house_view, house)
 	_setup_parcel_nodes()
 	_load_character()
 
@@ -279,6 +285,8 @@ func set_mode(new_mode: String) -> void:
 	mode = new_mode
 	_builder.set_active(mode == "build")
 	_live.active = mode == "live"
+	if _quick_menu != null:
+		_quick_menu.set_active(mode == "live")
 	# En modo construir el tiempo se detiene; al volver, el personaje se
 	# reubica (la casa pudo cambiar).
 	GameClock.set_paused(mode == "build")

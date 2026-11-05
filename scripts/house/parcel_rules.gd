@@ -58,6 +58,21 @@ static func zone_rects(cfg: Dictionary, player_level: int) -> Array:
 	return rects
 
 
+## Pulido 6A (5): imagen de L8 (1 píxel por celda del lote) con blanco en las celdas de la
+## parcela usable y negro afuera. El shader de la cuadrícula la usa para no dibujar fuera de la valla.
+static func zone_mask_image(rects: Array, lot: int) -> Image:
+	var image := Image.create(lot, lot, false, Image.FORMAT_L8)
+	image.fill(Color.BLACK)
+	for r in rects:
+		var x0: int = clampi(int(r[0]), 0, lot)
+		var z0: int = clampi(int(r[1]), 0, lot)
+		var x1: int = clampi(int(r[0]) + int(r[2]), 0, lot)
+		var z1: int = clampi(int(r[1]) + int(r[3]), 0, lot)
+		if x1 > x0 and z1 > z0:
+			image.fill_rect(Rect2i(x0, z0, x1 - x0, z1 - z0), Color.WHITE)
+	return image
+
+
 static func in_zone(rects: Array, x: int, z: int, w := 1, d := 1) -> bool:
 	for cx in range(x, x + w):
 		for cz in range(z, z + d):
