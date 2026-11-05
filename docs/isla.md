@@ -166,3 +166,12 @@ antes de seguir.**
 - ¿La pareja comparte una sola parcela o cada uno puede tener la suya?
 - ¿Qué pasa con una casa abandonada mucho tiempo (parcela que vuelve al pool)?
 - ¿Nombre de la isla?
+
+## 10. Observaciones de la prueba en el teléfono (2026-11-04)
+- **Rendimiento del prototipo 1A:** 58–60 FPS estables. Parpadeos al cambiar de LOD (100 casas en LOD 1: baja a ~15 FPS un instante; en LOD 2 a ~38). La opción «Medir» rompe la interfaz y deja una parcela amarilla (bug de la demo).
+- **Parcelas no cuadradas:** la isla es circular, así que las parcelas son **trapecios con un lado curvo** que siguen los anillos y las calles radiales. Los tamaños S/M/L pasan a ser de **área**, no de lado.
+- **Comprar:** no se «pintan» las parcelas libres en el mapa. Hay un **menú de compra** que lista las parcelas a la venta y lleva a cada una.
+- **Zoom con tres niveles (no LOD que se deshace):**
+  1. **Cerca:** modelo 3D completo con interacciones (la casa propia o la visitada).
+  2. **Medio:** el terreno alrededor.
+  3. **Lejos (vista de isla):** un **mapa tipo postal**, como el de ciudad de Los Sims: no se ve el 3D pintado desde arriba, se **elige a qué punto ir** y al acercarse entra el modelo 3D. Hoy las casas se ven «dibujadas» y se ve mal.
