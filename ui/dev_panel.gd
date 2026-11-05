@@ -30,6 +30,10 @@ var nav: HouseNav
 var view: HouseView
 
 var _panel: PanelContainer
+## Pulido 6B: todo el contenido va dentro de un scroll, así el panel nunca se sale de la pantalla.
+var _scroll: ScrollContainer
+## Pulido 6B: el jugador lo dejó abierto (se esconde al construir y vuelve al volver a vivir).
+var _open_wanted := false
 var _tabs: TabContainer
 var _target_label: Label
 var _target_box: VBoxContainer
@@ -60,9 +64,7 @@ func _ready() -> void:
 	visible = false
 	_panel.visible = false
 	EventBus.dev_mode_changed.connect(_on_dev_mode_changed)
-	EventBus.game_mode_changed.connect(func(mode: String) -> void:
-		_game_mode = mode
-		_update_picking())
+	EventBus.game_mode_changed.connect(_apply_game_mode)
 	EventBus.dev_log.connect(func(_text: String) -> void: _refresh_log())
 	EventBus.character_accident.connect(func(_k: String, _l: int, _c: Vector2i, _r: String) -> void: _refresh_log())
 	EventBus.character_intention_changed.connect(_on_intention_changed)
@@ -87,6 +89,12 @@ func is_open() -> bool:
 func open() -> void:
 	if not DevMode.is_enabled():
 		return
+	_open_wanted = true
+	if _game_mode != "live":
+		# Pulido 6B: al construir el panel no se ve; queda pedido y aparece al volver a vivir.
+		EventBus.toast.emit("El panel del modo desarrollador se usa en modo vivir.")
+		_update_picking()
+		return
 	_panel.visible = true
 	_sync_from_character()
 	_refresh_log()
@@ -95,6 +103,7 @@ func open() -> void:
 
 
 func close() -> void:
+	_open_wanted = false
 	_panel.visible = false
 	_set_pick_mode("inspect")
 	_update_picking()
@@ -107,9 +116,23 @@ func toggle() -> void:
 		open()
 
 
+## Pulido 6B: el panel flotante NO se ve al construir; al volver a vivir reaparece si estaba abierto.
+func _apply_game_mode(mode: String) -> void:
+	_game_mode = mode
+	if mode != "live":
+		_panel.visible = false
+	elif _open_wanted and DevMode.is_enabled():
+		_panel.visible = true
+		_sync_from_character()
+		_fit()
+	_update_picking()
+	_refresh_log()
+
+
 func _on_dev_mode_changed(on: bool) -> void:
 	visible = on
 	if not on:
+		_open_wanted = false
 		_panel.visible = false
 		_pick_mode = "inspect"
 		_last_target = {}
@@ -138,7 +161,12 @@ func _build() -> void:
 
 	var rows := VBoxContainer.new()
 	rows.add_theme_constant_override("separation", 6)
-	_panel.add_child(rows)
+	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll = ScrollContainer.new()
+	_scroll.name = "PanelScroll"
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_panel.add_child(_scroll)
+	_scroll.add_child(rows)
 	var head := HBoxContainer.new()
 	rows.add_child(head)
 	var title := _label("Modo desarrollador", 20, Color(1, 0.85, 0.5))
@@ -253,7 +281,7 @@ func _build_hazards_tab() -> void:
 	box.add_child(_button("Quitar todos los peligros", func() -> void:
 		DevMode.clear_hazards()
 		_refresh_log()))
-	box.add_child(_label("Charco = caerse · Caliente = quemarse · Desnivel = tropezar.", 12, Color(0.7, 0.75, 0.85)))
+	box.add_child(_label("Charco = resbalar (solo sobre piso resbaloso, como la baldosa, o frente a una puerta con piso de adentro) · Caliente = quemarse · Desnivel = tropezar.", 12, Color(0.7, 0.75, 0.85)))
 
 
 func _build_states_tab() -> void:
@@ -319,24 +347,38 @@ func _button(text: String, on_pressed: Callable) -> Button:
 # --- Posición (respeta el área segura) ---
 
 ## Panel a la derecha, debajo de los botones de arriba y a la izquierda de la barra del
-## ángulo de la cámara; nunca se sale de la pantalla.
+## ángulo de la cámara. Pulido 6B: NUNCA se sale de la pantalla: su tamaño máximo es el área
+## segura y, si el contenido es más largo, se desliza (scroll).
 func _fit() -> void:
 	if _panel == null:
 		return
-	var screen := get_viewport().get_visible_rect().size
-	var margins := SafeArea.margins(BASE_MARGINS, SafeArea.insets(get_window()))
+	fit_to(get_viewport().get_visible_rect().size, SafeArea.margins(BASE_MARGINS, SafeArea.insets(get_window())))
+
+
+## La misma cuenta con una pantalla y unos márgenes dados (las pruebas la usan con pantallas chicas).
+func fit_to(screen: Vector2, margins: Vector4) -> void:
+	if _panel == null:
+		return
 	var top := margins.y + float(Icons.BUTTON_SIZE) + 10.0
-	var width := minf(PANEL_WIDTH, screen.x - margins.x - margins.z - 16.0)
+	var width := minf(PANEL_WIDTH, screen.x - margins.x - margins.z)
 	var right_edge := screen.x - margins.z - PitchSlider.TRACK_WIDTH - 12.0
+	if right_edge - width < margins.x:
+		right_edge = screen.x - margins.z  # En una pantalla angosta no cabe junto a la barra: se pone encima.
 	var left := clampf(right_edge - width, margins.x, maxf(margins.x, screen.x - margins.z - width))
-	var height := maxf(160.0, screen.y - top - margins.w - 8.0)
-	_panel.position = Vector2(left, top)
-	_panel.size = Vector2(width, 0.0)
+	var available := maxf(120.0, screen.y - top - margins.w)
+	_tabs.custom_minimum_size = Vector2(maxf(120.0, width - 20.0), clampf(available - 200.0, 110.0, 300.0))
 	_panel.custom_minimum_size = Vector2(width, 0.0)
-	_tabs.custom_minimum_size = Vector2(width - 20.0, clampf(height - 190.0, 120.0, 300.0))
-	_panel.size = Vector2(width, minf(_panel.get_combined_minimum_size().y, height))
+	_panel.position = Vector2(left, top)
+	var content: Control = _scroll.get_child(0)
+	var wanted := content.get_combined_minimum_size().y + 20.0
+	_panel.size = Vector2(width, minf(wanted, available))
 	_float_log.position = Vector2(margins.x + 190.0, screen.y - margins.w - 62.0)
 	_float_log.size = Vector2(minf(560.0, screen.x - margins.x - margins.z - 200.0), 50.0)
+
+
+## Rectángulo que ocupa el panel en pantalla (para pruebas).
+func panel_rect() -> Rect2:
+	return Rect2(_panel.position, _panel.size)
 
 
 # --- Toques en el mundo ---
@@ -427,7 +469,10 @@ func show_target(target: Dictionary) -> void:
 	var level: int = target["level"]
 	var cell: Vector2i = target["cell"]
 	_target_label.text = "Elegido: %s · %s (%d, %d)" % [target["name"], HouseGrid.level_name(level).to_lower(), cell.x, cell.y]
-	_target_box.add_child(_button("Ir hasta ahí", func() -> void: _report(DevMode.force_go(character, level, cell))))
+	# Pulido 6B: va al piso y al punto que se tocó (no siempre a la planta baja).
+	var point: Vector3 = target.get("point", Vector3.INF)
+	_target_box.add_child(_button("Ir hasta ahí (%s)" % HouseGrid.level_name(level).to_lower(), func() -> void:
+		_report(DevMode.force_go(character, level, cell, point))))
 	if target["kind"] == "object":
 		for action in Catalog.get_item_actions(str(target["item"])):
 			var action_id: String = action["id"]

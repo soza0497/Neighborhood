@@ -1,16 +1,16 @@
 {
-	"_ayuda": "Acciones que los objetos 'anuncian' al personaje. Los muebles del catálogo dicen qué acciones ofrecen (campo actions). minutes = cuánto dura (minutos del juego; 1 segundo real = 1 minuto a velocidad x1). gains = cuánto sube cada necesidad durante TODA la acción (puede ser negativo). use_at: 'spot' = de pie junto al objeto; 'center' = encima del objeto (camas, sillas). anim = animación (idle, walk, sleep, sit, cook, eat, shower, use). bubble = texto en la burbuja. done = cómo se cuenta en el diario cuando termina. tags = etiquetas que usan los rasgos.",
+	"_ayuda": "Acciones que los objetos 'anuncian' al personaje. Los muebles del catálogo dicen qué acciones ofrecen (campo actions). minutes = cuánto dura (minutos del juego; 1 segundo real = 1 minuto a velocidad x1). gains = cuánto sube cada necesidad durante TODA la acción (puede ser negativo). use_at: 'spot' = de pie junto al objeto; 'center' = encima del objeto (camas, sillas). anim = animación (idle, walk, sleep, sit, cook, eat, shower, use). (Pulido 6B: lo que se ve sobre su cabeza mientras lo hace sale de data/expressions.json, situación action:<id>.) done = cómo se cuenta en el diario cuando termina. tags = etiquetas que usan los rasgos.",
 	"format_version": 1,
 	"actions": [
-		{ "id": "sleep", "done": "Durmió", "name": "Dormir", "verb": "durmiendo", "minutes": 240, "gains": { "energy": 95 }, "use_at": "center", "seat_height": 0.5, "anim": "sleep", "bubble": "Zzz", "tags": ["rest"] },
-		{ "id": "rest_sofa", "done": "Descansó", "name": "Descansar", "verb": "descansando", "minutes": 45, "gains": { "energy": 20, "fun": 10 }, "use_at": "center", "seat_height": 0.4, "anim": "sit", "bubble": "Ahh", "tags": ["rest"] },
-		{ "id": "sit", "done": "Se sentó un rato", "name": "Sentarse", "verb": "sentado", "minutes": 20, "gains": { "energy": 8 }, "use_at": "center", "seat_height": 0.45, "anim": "sit", "bubble": "", "tags": ["rest"] },
-		{ "id": "snack", "done": "Comió algo", "name": "Comer algo", "verb": "comiendo algo", "minutes": 15, "gains": { "hunger": 35 }, "use_at": "spot", "anim": "eat", "bubble": "Ñam", "tags": ["food"] },
-		{ "id": "cook", "done": "Cocinó y comió", "name": "Cocinar y comer", "verb": "cocinando", "minutes": 45, "gains": { "hunger": 75, "fun": 5 }, "use_at": "spot", "anim": "cook", "bubble": "¡Rico!", "tags": ["food", "cook"] },
-		{ "id": "shower", "done": "Se duchó", "name": "Ducharse", "verb": "duchándose", "minutes": 20, "gains": { "hygiene": 80 }, "use_at": "spot", "anim": "shower", "bubble": "Splash", "tags": ["clean"] },
-		{ "id": "toilet", "done": "Fue al baño", "name": "Ir al baño", "verb": "en el baño", "minutes": 10, "gains": { "hygiene": 20 }, "use_at": "spot", "anim": "use", "bubble": "...", "tags": ["clean"] },
-		{ "id": "watch_tv", "done": "Vio tele", "name": "Ver tele", "verb": "viendo tele", "minutes": 60, "gains": { "fun": 40 }, "use_at": "spot", "anim": "idle", "bubble": "Jaja", "tags": ["fun", "screen"] },
-		{ "id": "play_games", "done": "Jugó videojuegos", "name": "Jugar videojuegos", "verb": "jugando videojuegos", "minutes": 60, "gains": { "fun": 55, "energy": -5 }, "use_at": "spot", "anim": "use", "bubble": "¡Gané!", "tags": ["fun", "games", "screen"] },
-		{ "id": "read", "done": "Leyó", "name": "Leer", "verb": "leyendo", "minutes": 45, "gains": { "fun": 30 }, "use_at": "spot", "anim": "idle", "bubble": "Hmm", "tags": ["fun", "calm"] }
+		{ "id": "sleep", "done": "Durmió", "name": "Dormir", "verb": "durmiendo", "minutes": 240, "gains": { "energy": 95 }, "use_at": "center", "seat_height": 0.5, "anim": "sleep", "tags": ["rest"] },
+		{ "id": "rest_sofa", "done": "Descansó", "name": "Descansar", "verb": "descansando", "minutes": 45, "gains": { "energy": 20, "fun": 10 }, "use_at": "center", "seat_height": 0.4, "anim": "sit", "tags": ["rest"] },
+		{ "id": "sit", "done": "Se sentó un rato", "name": "Sentarse", "verb": "sentado", "minutes": 20, "gains": { "energy": 8 }, "use_at": "center", "seat_height": 0.45, "anim": "sit", "tags": ["rest"] },
+		{ "id": "snack", "done": "Comió algo", "name": "Comer algo", "verb": "comiendo algo", "minutes": 15, "gains": { "hunger": 35 }, "use_at": "spot", "anim": "eat", "tags": ["food"] },
+		{ "id": "cook", "done": "Cocinó y comió", "name": "Cocinar y comer", "verb": "cocinando", "minutes": 45, "gains": { "hunger": 75, "fun": 5 }, "use_at": "spot", "anim": "cook", "tags": ["food", "cook"] },
+		{ "id": "shower", "done": "Se duchó", "name": "Ducharse", "verb": "duchándose", "minutes": 20, "gains": { "hygiene": 80 }, "use_at": "spot", "anim": "shower", "tags": ["clean"] },
+		{ "id": "toilet", "done": "Fue al baño", "name": "Ir al baño", "verb": "en el baño", "minutes": 10, "gains": { "hygiene": 20 }, "use_at": "spot", "anim": "use", "tags": ["clean"] },
+		{ "id": "watch_tv", "done": "Vio tele", "name": "Ver tele", "verb": "viendo tele", "minutes": 60, "gains": { "fun": 40 }, "use_at": "spot", "anim": "idle", "tags": ["fun", "screen"] },
+		{ "id": "play_games", "done": "Jugó videojuegos", "name": "Jugar videojuegos", "verb": "jugando videojuegos", "minutes": 60, "gains": { "fun": 55, "energy": -5 }, "use_at": "spot", "anim": "use", "tags": ["fun", "games", "screen"] },
+		{ "id": "read", "done": "Leyó", "name": "Leer", "verb": "leyendo", "minutes": 45, "gains": { "fun": 30 }, "use_at": "spot", "anim": "idle", "tags": ["fun", "calm"] }
 	]
 }

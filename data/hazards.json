@@ -1,5 +1,5 @@
 {
-	"_ayuda": "Modo desarrollador (Pulido 4B). Mapa de PELIGROS y ATENCIÓN del personaje. hazards: cada tipo de celda peligrosa: name (para la interfaz), color (marcador chato), accident (el accidente de siempre de ese peligro: fall = caerse, slip = resbalar, trip = tropezar, burn = quemarse), rules (Pulido 6B: ids de reglas de data/accidents.json que deciden SI pasa: por ejemplo un charco solo hace resbalar sobre piso resbaloso o frente a una puerta con piso de adentro), log (texto para el registro). accidents: qué hace cada accidente: hurt (true = queda lastimado y llama a la ambulancia), anim (gancho de animación por nombre), bubble (texto de la burbuja), icon (ícono de assets/icons/), color de la burbuja, energy (cuánto cambia la energía), journal (lo que anota en el diario), seconds (si no es hurt, cuánto dura el tropiezo). attention: careful_at = desde este valor (0 a 1) el personaje ESQUIVA los peligros y no sufre accidentes; por debajo, los pisa y le pasa el accidente. presets = valores rápidos de atención (distraído, desorbitado, recién levantado): solo ponen el número; el juego los usará después con sus propias reglas. avoid_cost = cuánto 'cuesta' caminar sobre un peligro para quien SÍ esquiva (si no hay otro camino, lo cruza con cuidado).",
+	"_ayuda": "Modo desarrollador (Pulido 4B). Mapa de PELIGROS y ATENCIÓN del personaje. hazards: cada tipo de celda peligrosa: name (para la interfaz), color (marcador chato), accident (el accidente de siempre de ese peligro: fall = caerse, slip = resbalar, trip = tropezar, burn = quemarse), rules (Pulido 6B: ids de reglas de data/accidents.json que deciden SI pasa: por ejemplo un charco solo hace resbalar sobre piso resbaloso o frente a una puerta con piso de adentro), log (texto para el registro). accidents: qué hace cada accidente: hurt (true = queda lastimado y llama a la ambulancia), anim (gancho de animación por nombre), (Pulido 6B: la carita sobre su cabeza sale de data/expressions.json, situación accident:<tipo>) color, energy (cuánto cambia la energía), journal (lo que anota en el diario), seconds (si no es hurt, cuánto dura el tropiezo). attention: careful_at = desde este valor (0 a 1) el personaje ESQUIVA los peligros y no sufre accidentes; por debajo, los pisa y le pasa el accidente. presets = valores rápidos de atención (distraído, desorbitado, recién levantado): solo ponen el número; el juego los usará después con sus propias reglas. avoid_cost = cuánto 'cuesta' caminar sobre un peligro para quien SÍ esquiva (si no hay otro camino, lo cruza con cuidado).",
 	"format_version": 1,
 	"hazards": {
 		"wet": { "name": "Charco", "color": "#4aa3ff", "accident": "slip", "rules": ["puddle_slip", "puddle_door"], "log": "pisó un charco" },
@@ -7,10 +7,10 @@
 		"drop": { "name": "Desnivel", "color": "#ffd93d", "accident": "trip", "rules": ["drop_trip"], "log": "no vio el desnivel" }
 	},
 	"accidents": {
-		"fall": { "name": "Caerse", "hurt": true, "anim": "fall", "bubble": "¡Ay!", "icon": "warning", "color": "#ff9980", "energy": -12, "journal": "Se cayó (¡ay!)" },
-		"slip": { "name": "Resbalar", "hurt": false, "anim": "slip", "bubble": "¡Uy!", "icon": "warning", "color": "#8fd3ff", "energy": -4, "seconds": 2.4, "journal": "Resbaló en un charco (¡uy!)" },
-		"trip": { "name": "Tropezar", "hurt": false, "anim": "trip", "bubble": "¡Uy!", "icon": "warning", "color": "#ffe27a", "energy": -2, "seconds": 1.2, "journal": "Tropezó (¡uy!)" },
-		"burn": { "name": "Quemarse", "hurt": true, "anim": "burn", "bubble": "¡Quema!", "icon": "warning", "color": "#ff7a4d", "energy": -8, "journal": "Se quemó (¡ay, caliente!)" }
+		"fall": { "name": "Caerse", "hurt": true, "anim": "fall", "color": "#ff9980", "energy": -12, "journal": "Se cayó (¡ay!)" },
+		"slip": { "name": "Resbalar", "hurt": false, "anim": "slip", "color": "#8fd3ff", "energy": -4, "seconds": 2.4, "journal": "Resbaló en un charco (¡uy!)" },
+		"trip": { "name": "Tropezar", "hurt": false, "anim": "trip", "color": "#ffe27a", "energy": -2, "seconds": 1.2, "journal": "Tropezó (¡uy!)" },
+		"burn": { "name": "Quemarse", "hurt": true, "anim": "burn", "color": "#ff7a4d", "energy": -8, "journal": "Se quemó (¡ay, caliente!)" }
 	},
 	"attention": {
 		"default": 1.0,

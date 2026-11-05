@@ -81,12 +81,16 @@ static func recent_log() -> Array:
 
 # --- Forzar acciones y accidentes ---
 
-## Que vaya hasta una celda.
-static func force_go(character: Character, level: int, cell: Vector2i) -> Dictionary:
+## Que vaya hasta una celda, en ESE piso. Pulido 6B: si se pasa `point` (el lugar exacto que se
+## tocó, en coordenadas de la casa), llega justo ahí y no al centro de la celda.
+static func force_go(character: Character, level: int, cell: Vector2i, point := Vector3.INF) -> Dictionary:
 	var blocked := _guard(character)
 	if not blocked.is_empty():
 		return blocked
-	var result := character.force_action({"type": "go", "level": level, "cell": cell})
+	var spec := {"type": "go", "level": level, "cell": cell}
+	if point != Vector3.INF:
+		spec["point"] = point
+	var result := character.force_action(spec)
 	if result["ok"]:
 		log_line("Forzado: ir hasta %s (atención %.2f)" % [_cell_text(level, cell), character.attention])
 	return result
@@ -274,7 +278,7 @@ static func pick_floor(view: HouseView, camera: Camera3D, screen_pos: Vector2) -
 		if not HouseGrid.is_cell_in_lot(cell):
 			continue
 		if level == 0 or view.house.has_piece(level, "floors", HouseGrid.cell_key(cell)):
-			return {"kind": "floor", "level": level, "cell": cell, "name": "Suelo",
+			return {"kind": "floor", "level": level, "cell": cell, "name": "Suelo", "point": point,
 				"hazard": HazardMap.kind_at(level, cell)}
 	return {}
 

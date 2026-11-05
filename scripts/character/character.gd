@@ -101,9 +101,7 @@ var last_reason := ""
 ## Terminó de abrirle la puerta a un servicio (Pulido 2C).
 signal gate_opened
 var _animator: CharacterAnimator
-var _bubble: Label3D
-## Pulido 4B: ícono sobre la cabeza durante un accidente.
-var _accident_icon: Sprite3D
+var _bubble: ExpressionBubble
 
 # --- Fase 5: la pareja ---
 ## true = es el personaje de la pareja (ver arriba).
@@ -122,15 +120,8 @@ func _ready() -> void:
 	EventBus.models_toggled.connect(_on_models_toggled)
 	_animator = CharacterAnimator.new()
 	add_child(_animator)
-	_bubble = Label3D.new()
-	_bubble.position.y = 1.65
-	_bubble.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_bubble.no_depth_test = true
-	_bubble.font_size = 56
-	_bubble.outline_size = 14
-	_bubble.pixel_size = 0.006
-	_bubble.modulate = Color.WHITE
-	_bubble.outline_modulate = Color(0.15, 0.2, 0.3)
+	# Pulido 6B: en vez de diálogos escritos, una nubecita de cómic con una carita (ExpressionBubble).
+	_bubble = ExpressionBubble.new()
 	add_child(_bubble)
 
 
@@ -142,7 +133,7 @@ func setup(new_data: CharacterData, new_house: HouseData, new_nav: HouseNav, new
 	view = new_view
 	if is_partner and _name_tag == null:
 		_name_tag = Label3D.new()
-		_name_tag.position.y = 1.95  # Arriba de la burbuja.
+		_name_tag.position.y = 2.6  # Arriba de la nubecita.
 		_name_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		_name_tag.no_depth_test = true
 		_name_tag.font_size = 40
@@ -224,7 +215,7 @@ func order(object_level: int, key: String, action_id: String) -> void:
 		return
 	var option := _option_for(object_level, key, action)
 	if option.is_empty():
-		_bubble.text = "No llego"
+		_say("no_reach", 2.0)
 		return
 	_stop_action()
 	option["why"] = "orden del jugador"
@@ -730,8 +721,7 @@ func _start_open_box() -> void:
 	state = State.OPENING
 	_open_timer = 1.8
 	_animator.play("cough")
-	_bubble.text = "¡Cof, cof!"
-	_bubble.modulate = Color.WHITE
+	_say("cough", 1.8)
 	_mark_intention()
 	if delivery != null:
 		delivery.open_box(box["level"], box["key"])
@@ -759,12 +749,11 @@ func go_open_gate(wait := 25.0) -> void:
 
 
 func _finish_gate() -> void:
-	_bubble.text = "¡Adelante!"
+	_say("welcome", 1.6)
 	_animator.play("wave")
 	gate_opened.emit()
 	await get_tree().create_timer(1.4).timeout
 	if state == State.WALKING or state == State.IDLE:
-		_bubble.text = ""
 		_set_idle()
 
 
@@ -813,8 +802,7 @@ func recover() -> void:
 	hurt = false
 	data.add_journal("La ambulancia lo revisó y lo curó")
 	data.add_need("fun", 5.0)
-	_bubble.text = "¡Gracias!"
-	_bubble.modulate = Color.WHITE
+	_say("thanks", 2.2, true)
 	_set_idle()
 
 
@@ -823,12 +811,10 @@ func _arrive_home() -> void:
 	_show_work_props(false)
 	_set_idle()
 	_animator.play("arrive")
-	_bubble.text = "¡Ya volví!"
-	_bubble.modulate = Color.WHITE
+	_say("arrive", 1.8, true)
 	await get_tree().create_timer(1.6).timeout
 	if state == State.IDLE and _animator.current == "arrive":
 		_animator.play("idle")
-		_bubble.text = ""
 
 
 func _show_work_props(on: bool) -> void:
@@ -863,16 +849,22 @@ func _note_emotion() -> void:
 
 
 func _update_bubble() -> void:
+	if _bubble.is_held() or state == State.HURT:
+		return  # Un mensaje con tiempo sigue vigente; lastimado, se queda la expresión del accidente.
 	if state == State.ACTING:
-		_bubble.text = _plan["action"].get("bubble", "")
-		_bubble.modulate = Color.WHITE
+		_say("action:" + str(_plan["action"].get("id", "")))
 		return
 	var lowest := data.lowest_need()
 	if data.needs[lowest] < CharacterData.LOW_NEED:
-		_bubble.text = "¡%s!" % CharacterData.NEED_NAMES[lowest]
-		_bubble.modulate = Color(1, 0.75, 0.4)
-	else:
-		_bubble.text = ""
+		_say("need:" + str(lowest))
+	elif _bubble.key.begins_with("action:") or _bubble.key.begins_with("need:"):
+		_bubble.clear()
+
+
+## Pone la nubecita de una situación (data/expressions.json elige una de sus variantes).
+## `seconds` = cuánto dura (0 = hasta que cambie la situación).
+func _say(event: String, seconds := 0.0, force := false) -> void:
+	_bubble.say_event(event, _rng, seconds, force)
 
 
 ## Resumen pequeño de lo que hace (para la interfaz y, en la Fase 5, para la
@@ -1011,7 +1003,16 @@ func force_action(spec: Dictionary) -> Dictionary:
 			if target_level != level or target != cell:
 				path = _find_path(level, cell, target_level, target)
 				if path.is_empty():
-					return {"ok": false, "reason": "no hay camino hasta ahí"}
+					var hint := " (¿falta una escalera hasta ese piso?)" if target_level != level else ""
+					return {"ok": false, "reason": "no hay camino hasta ahí" + hint}
+			# Pulido 6B: si se tocó un punto exacto de esa celda, llega justo ahí.
+			var point: Vector3 = spec.get("point", Vector3.INF)
+			if point != Vector3.INF and Vector2i(floori(point.x), floori(point.z)) == target:
+				var stand := Vector3(point.x, nav.ground_y(target_level, target), point.z)
+				if path.is_empty():
+					path = PackedVector3Array([stand])
+				else:
+					path[path.size() - 1] = stand
 			option = {"level": target_level, "spot": target, "path": path}
 		"use":
 			var action: Dictionary = Catalog.actions.get(str(spec.get("action", "")), {})
@@ -1071,9 +1072,8 @@ func _accident(kind: String, reason: String, drop_to := Vector2i(-100000, -10000
 	data.add_need("energy", float(info.get("energy", 0.0)))
 	data.add_journal(str(info.get("journal", "Tuvo un accidente")))
 	_animator.play(str(info.get("anim", "hurt")))
-	_bubble.text = str(info.get("bubble", "¡Ay!"))
-	_bubble.modulate = Color(str(info.get("color", "#ffffff")))
-	_show_accident_icon(info)
+	# Lastimado: la carita se queda hasta que llegue la ambulancia; si no, dura lo que el accidente.
+	_say("accident:" + kind, 0.0 if info.get("hurt", false) else float(info.get("seconds", 1.2)) + 0.6, true)
 	last_accident = {"kind": kind, "reason": reason, "level": level, "cell": cell}
 	EventBus.character_accident.emit(kind, level, cell, reason)
 	if info.get("hurt", false):
@@ -1091,9 +1091,7 @@ func _accident(kind: String, reason: String, drop_to := Vector2i(-100000, -10000
 		var anim_name := str(info.get("anim", ""))
 		get_tree().create_timer(seconds).timeout.connect(func() -> void:
 			if is_instance_valid(self) and state == State.IDLE and not hurt and _animator.current == anim_name:
-				_animator.play("idle")
-				_bubble.text = ""
-				_bubble.modulate = Color.WHITE)
+				_animator.play("idle"))
 	return true
 
 
@@ -1110,26 +1108,6 @@ func _animate_drop(from: Vector3, to: Vector3) -> void:
 		0.0, 1.0, seconds)
 	tween.tween_callback(func() -> void:
 		position = to)
-
-
-## Un ícono chato (billboard) sobre la cabeza durante el accidente.
-func _show_accident_icon(info: Dictionary) -> void:
-	var texture := Icons.texture(str(info.get("icon", "warning")))
-	if texture == null:
-		return
-	if _accident_icon == null:
-		_accident_icon = Sprite3D.new()
-		_accident_icon.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		_accident_icon.no_depth_test = true
-		_accident_icon.pixel_size = 0.0045
-		_accident_icon.position.y = 2.1
-		add_child(_accident_icon)
-	_accident_icon.texture = texture
-	_accident_icon.modulate = Color(str(info.get("color", "#ffffff")))
-	_accident_icon.visible = true
-	get_tree().create_timer(2.5).timeout.connect(func() -> void:
-		if is_instance_valid(self) and is_instance_valid(_accident_icon):
-			_accident_icon.visible = false)
 
 
 ## Teletransporta al personaje a una celda caminable (modo desarrollador). Cancela lo

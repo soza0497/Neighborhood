@@ -174,7 +174,7 @@ func _walk_path(gate: Vector2i, door: Vector2i) -> Array:
 
 ## Se resbala: se inclina, las cajas salen volando y caen revueltas.
 func _stumble(courier: Node3D, stack: Node3D) -> void:
-	services._bubble(courier, "¡Ay!", 1.6)
+	services._bubble(courier, "ouch", 1.6)
 	Sound.play("box_fall")
 	var tilt := create_tween()
 	tilt.tween_property(courier, "rotation:x", -0.45, 0.25)

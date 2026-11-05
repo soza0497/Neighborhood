@@ -169,7 +169,7 @@ func _test_person_service() -> void:
 				await _shot("p2c_3_jardinero.png")
 		if _character.state == Character.State.WALKING and _character._plan.has("gate"):
 			seen_open_gate = true
-	_check(seen_open_gate or _character._bubble.text == "¡Adelante!", "el personaje fue a abrirle la puerta al jardinero")
+	_check(seen_open_gate or _character._bubble.key == "welcome", "el personaje fue a abrirle la puerta al jardinero")
 	_check(seen_worker, "llegó el jardinero")
 	_check(Parcel.cleared.has(bush["id"]) and not HouseData.blocked_cells.has("%d,%d" % [bush["x"], bush["z"]]), "quedó limpio (%.0f s)" % waited)
 	_check(Parcel.count == 1 and Parcel.cost_of(_nearest("rock")["id"]) == 255, "y el próximo servicio cuesta un poco más")

@@ -469,18 +469,14 @@ func _reversed(points: Array) -> Array:
 	return copy
 
 
-func _bubble(node: Node3D, text: String, seconds := 3.0) -> void:
-	var label := Label3D.new()
-	label.text = text
-	label.position = Vector3(0, 3.0, 0)
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	label.font_size = 52
-	label.outline_size = 12
-	label.pixel_size = 0.006
-	label.outline_modulate = Color(0.15, 0.2, 0.3)
-	node.add_child(label)
-	get_tree().create_timer(seconds).timeout.connect(label.queue_free)
+## Una nubecita de cómic sobre un vehículo o una persona (Pulido 6B: nada de diálogos escritos).
+## `expression` es una id de data/expressions.json (no_entry, medic, ouch…).
+func _bubble(node: Node3D, expression: String, seconds := 3.0) -> void:
+	var cloud := ExpressionBubble.new()
+	cloud.set_height(2.6 if node.has_meta("footprint") else 1.55)
+	node.add_child(cloud)
+	cloud.show_expression(expression, seconds)
+	get_tree().create_timer(seconds + 0.6).timeout.connect(cloud.queue_free)
 
 
 # --- Limpieza de terreno ---
@@ -584,7 +580,7 @@ func _run_foot_crew(crew: Dictionary) -> void:
 		var route: Dictionary = job["route"]
 		var path: Array = route.get("path", [])
 		if job["blocked"] or path.is_empty():
-			_bubble(worker, "No hay paso")
+			_bubble(worker, "no_entry")
 			await get_tree().create_timer(2.5 / speed_scale).timeout
 			_done(job, false, true, str(route.get("reason", "No hay paso.")))
 			continue
@@ -646,7 +642,7 @@ func _machine_trip(jobs: Array) -> void:
 		approach.append(Vector3(entry_x, 0, sidewalk_z if not (job["blocked"] or path.is_empty()) else lane))
 		await _drive(machine, approach, speed)
 		if job["blocked"] or path.is_empty():
-			_bubble(machine, "No puedo entrar: no hay camino libre")
+			_bubble(machine, "no_entry")
 			Sound.play("truck")
 			await get_tree().create_timer(3.2 / speed_scale).timeout
 			_done(job, false, true, str(route.get("reason", "No hay camino libre.")))
@@ -721,7 +717,7 @@ func run_ambulance(patient: Character) -> void:
 	var gate_point := Vector3(gate_x, 0, sidewalk_z)
 	await travel(medic, walk_route(medic.position, [gate_point] + points), WALK_SPEED * 1.8)
 	# Lo revisa un rato (cruz roja y humito) y lo cura.
-	_bubble(medic, "Lo revisamos…", 2.4)
+	_bubble(medic, "medic", 2.4)
 	var elapsed := 0.0
 	while elapsed < 2.6 / speed_scale:
 		await get_tree().process_frame
