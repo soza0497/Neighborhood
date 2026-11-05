@@ -1387,3 +1387,26 @@ pivote en el centro de la base, **contorno por shader (no modelado)**; el arte s
 - **La demo viaja en el APK** aunque `tests/*` se excluye del export: el script y la escena están en `scripts/island/` y `scenes/island/`; `tests/island_demo.tscn` solo la instancia.
 - **Sin correr:** la nube no tenía Godot ni Lua. Ver `PROGRESO.md`.
 
+
+## Pulido 6A — construcción y casa (rama `pulido-6a`, sale de `main` 0.12.0)
+
+### 6A-1 — Pintura, íconos y contorno
+- **Pared = cuerpo neutro + dos láminas.** El cuerpo mide el grosor entero y es del color del catálogo (también el canto de arriba y las
+  columnas de las esquinas). La pintura son dos láminas de 1,2 cm, una por cara (`color_a` / `color_b`, formato de datos igual que antes: no hay
+  migración), sin contorno y sin sombra, que se detienen 2 cm antes del borde de arriba (queda el canto neutro). Así no hay franjas partidas ni
+  choques de color en las esquinas. Las láminas llegan hasta el eje de la columna para que el color no se corte en la juntura.
+- **Interior / exterior** (`WallFaces.is_exterior`): una cara es de adentro si la celda a la que mira tiene piso en ese nivel; si no, es de afuera.
+  Es una regla simple a propósito (no hace falta que el cuarto esté cerrado). En Pintar hay tres botones: «Cara tocada» (como siempre), «Adentro» y
+  «Afuera» (`HouseBuilder.paint_scope`): pintan la cara de ese tipo de la pared tocada aunque se haya tocado la otra. Entre dos cuartos las dos son
+  de adentro (queda la tocada).
+- **Pared nueva:** hereda `color_a`/`color_b` de la pared vecina en su línea (de la casa o del mismo gesto). Sin vecina pintada queda neutra.
+  No usé «el color elegido» como respaldo: pintaría de golpe todo lo nuevo apenas el jugador probó un color una vez.
+- **Pintar es su propio botón** (`build_mode = "paint"`, ícono de brocha). «Modificar» pasó a llamarse **Mover** (cruz de flechas). Se sacó «Pintar» del
+  menú contextual de Mover. No se agregó a la Tienda (no hizo falta).
+- **Íconos:** Comprar = `dollar.svg`, Obra y Construir = `pencil.svg` (lápiz). El casco (`helmet.svg`) queda solo en el botón de modo del HUD.
+- **Tooltip con el dedo** (`ui/long_press_tip.gd`, lo agrega `Icons.setup` a todo botón con ícono): a los 0,5 s apretado sale un cartel con su nombre.
+  Mientras se ve, el botón queda desactivado para que soltar no ejecute la acción; al soltar vuelve. Título arriba de la barra (`TitleLabel`).
+- **Brújula:** se esconde en modo construir (en horizontal empujaba la barra). La reubicación definitiva es de 6C.
+- **Contorno:** `Style.outline_mode` = `thin` (1,2 px) / `normal` (2,2 px) / `off`. Por defecto **fino**. Se guarda en `settings["outline_mode"]`
+  (y `outline_enabled` sigue existiendo por compatibilidad). Partida vieja: `outline_enabled=false` → apagado; si no, fino. Un solo material de
+  contorno compartido: cambiar el grosor cambia todo al instante.

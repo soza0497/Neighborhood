@@ -170,13 +170,13 @@ func _test_builder() -> void:
 	var tips: Array = []
 	for button in _hud.get_node("%ToolButtons").get_children():
 		tips.append(button.tooltip_text)
-	_check(tips == ["Tienda", "Obra"], "herramientas: %s" % ", ".join(tips))
+	_check(tips == ["Comprar", "Obra"], "herramientas: %s" % ", ".join(tips))
 
-	print("\n8) Pintar una cara de pared (Obra → Modificar → color)")
+	print("\n8) Pintar una cara de pared (Obra → Pintar → color)")
 	bar._tool_buttons["build"].button_pressed = true
-	bar._mode_buttons["modify"].button_pressed = true
+	bar._mode_buttons["paint"].button_pressed = true
 	await _frames(2)
-	_check(_builder.tool == HouseBuilder.Tool.MODIFY, "Obra › Modificar")
+	_check(_builder.tool == HouseBuilder.Tool.PAINT, "Obra › Pintar (botón propio)")
 	var paint_button := _find_item_button(bar, "Rosado")
 	paint_button.button_pressed = true
 	await _frames(2)

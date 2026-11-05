@@ -451,7 +451,7 @@ func _refresh_post(level: int, vertex: Vector2i) -> void:
 	for edge in walls:
 		if not _wall_is_flat(level, edge, house.get_piece(level, "walls", edge)):
 			flat = false
-	var post := HousePieces.build_post(vertex, HousePieces.wall_face_color(first, "b"), wall_height(level),
+	var post := HousePieces.build_post(vertex, HousePieces.wall_neutral_color(first), wall_height(level),
 		_merged_window(level, vertex), flat and _merged_window(level, vertex).is_empty())
 	_levels[HouseGrid.level_index(level)].add_child(post)
 	_posts[id] = post

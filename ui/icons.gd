@@ -37,6 +37,7 @@ static func setup(button: Button, icon_name: String, tooltip: String, size := BU
 		style.content_margin_bottom = margin
 		button.add_theme_stylebox_override(state, style)
 	button.add_theme_color_override("icon_disabled_color", Color(1, 1, 1, 0.35))
+	LongPressTip.attach(button)
 
 
 ## Botón nuevo con ícono.

@@ -50,3 +50,49 @@ static func face_center(edge: String, side: String) -> Vector3:
 	var cell := cell_for_side(edge, side)
 	var toward := HouseGrid.cell_center(cell) - center
 	return center + toward * 0.2
+
+
+# --- Pulido 6A (1): cara interior y cara exterior ---
+
+## ¿Esta cara da hacia afuera? La cara es interior si en la celda a la que mira hay piso
+## en ese nivel (hay "adentro"); si no, es exterior (mira al pasto, al aire o al vacío).
+static func is_exterior(house: HouseData, level: int, edge: String, side: String) -> bool:
+	var cell := cell_for_side(edge, side)
+	return not house.has_piece(level, "floors", HouseGrid.cell_key(cell))
+
+
+## El lado que hay que pintar según lo que pidió el jugador:
+##   "touch"   = la cara que tocó (como siempre),
+##   "inside"  = la interior de esa pared (aunque haya tocado la de afuera),
+##   "outside" = la exterior.
+## Si la pared no tiene esa clase de cara (por ejemplo, entre dos cuartos las dos son
+## interiores), queda la que tocó.
+static func resolve_scope(house: HouseData, level: int, edge: String, side: String, scope: String) -> String:
+	if scope != "inside" and scope != "outside":
+		return side
+	var other := "b" if side == "a" else "a"
+	var side_outside := is_exterior(house, level, edge, side)
+	var other_outside := is_exterior(house, level, edge, other)
+	if scope == "inside" and side_outside and not other_outside:
+		return other
+	if scope == "outside" and not side_outside and other_outside:
+		return other
+	return side
+
+
+## Colores que hereda una pared NUEVA de la que ya está seguida en la misma línea (la de
+## antes o la de después): así una pared que se alarga queda del mismo color por fuera y por
+## dentro. `pending` = paredes que se están agregando en el mismo gesto (clave → valor).
+## Devuelve {color_a?, color_b?} (vacío si no hay vecina pintada).
+static func inherited_colors(house: HouseData, level: int, edge: String, pending: Dictionary = {}) -> Dictionary:
+	for neighbor in [HouseGrid.previous_in_line(edge), HouseGrid.next_in_line(edge)]:
+		var value: Variant = pending.get(neighbor, house.get_piece(level, "walls", neighbor))
+		if value == null:
+			continue
+		var colors := {}
+		for field in ["color_a", "color_b"]:
+			if (value as Dictionary).has(field):
+				colors[field] = value[field]
+		if not colors.is_empty():
+			return colors
+	return {}

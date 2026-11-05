@@ -75,6 +75,8 @@ signal history_changed(can_undo: bool, can_redo: bool)
 ## pieza, borrar varias cosas a la vez, y copiar el contorno de abajo.
 signal build_nudge_requested(direction: String)
 signal build_paint_step_requested(direction: int)
+## Pulido 6A (1): qué cara pinta el toque: "touch", "inside" u "outside".
+signal build_paint_scope_requested(scope: String)
 signal build_context_action_requested(action: String)
 signal build_erase_multi_toggled(enabled: bool)
 signal build_copy_outline_requested

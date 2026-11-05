@@ -2,15 +2,17 @@ class_name BuildBar
 extends PanelContainer
 ## Barra de abajo del modo construir (Pulido 1: constructor 2.0).
 ##
-## Tres herramientas, con nombres, íconos y orden propios:
-##   1. Tienda (bolsa): muebles, electrodomésticos, electrónica, plantas y
+## Herramientas, con nombres, íconos y orden propios (Pulido 6A: sobre la barra hay un
+## título con el menú actual y todos los botones muestran su nombre al mantenerlos presionados):
+##   1. Comprar (símbolo de dólar): muebles, electrodomésticos, electrónica, plantas y
 ##      adornos. Primero lo que recomienda el cuarto que se está mirando.
-##   2. Obra (casco), con tres modos de íconos claros (Pulido 2):
-##        Construir (llave inglesa y martillo): cimientos, pisos, paredes,
+##   2. Obra (lápiz), con modos de íconos claros (Pulido 2 y 6A):
+##        Construir (lápiz): cimientos, pisos, paredes,
 ##                 puertas, ventanas, techos, escaleras y pilares (+ "Copiar
 ##                 contorno de abajo"). Aparte, "Agregar piso".
-##        Modificar (cruz de flechas): tocar algo para moverlo, girarlo,
-##                 pintarlo o borrarlo (abajo, los colores de pintura).
+##        Mover (cruz de flechas): tocar algo para moverlo, girarlo o borrarlo.
+##        Pintar (brocha): los colores de pintura; tocar una cara de pared o un piso
+##                 (a la derecha, elegir si se pinta la cara de adentro o la de afuera).
 ##        Borrar (basurero): borra cualquier pieza, con "modo selección"
 ##                 para borrar varias cosas.
 ##
@@ -27,10 +29,12 @@ const RECOMMENDED := "__recommended__"
 const ITEM_BUTTON_SIZE := Vector2(150, 76)
 const CATEGORY_BUTTON_SIZE := Vector2(0, 56)
 const ACTION_SIZE := 60
+## Título que se ve arriba de la barra según el modo de Obra.
+const MODE_TITLES := {"add": "Construir", "modify": "Mover", "paint": "Pintar", "rooms": "Cuartos", "erase": "Borrar"}
 
 ## "shop" o "build" ("" = ninguna).
 var tool := ""
-## En Obra: "add" (Construir), "modify", "rooms" (Cuartos) o "erase" (Borrar).
+## En Obra: "add" (Construir), "modify" (Mover), "paint" (Pintar), "rooms" (Cuartos) o "erase" (Borrar).
 var build_mode := "add"
 var current_category := ""
 
@@ -39,6 +43,8 @@ var _character: Node3D
 var _action_row: HBoxContainer
 var _add_floor_button: Button
 var _add_basement_button: Button
+var _title_label: Label
+var _scope_buttons: Dictionary = {}
 var _tool_buttons: Dictionary = {}
 var _mode_buttons: Dictionary = {}
 var _tool_group := ButtonGroup.new()
@@ -69,7 +75,17 @@ var _room: Dictionary = {}
 func _ready() -> void:
 	_item_group.allow_unpress = true
 	_tool_group.allow_unpress = true
-	for entry in [["shop", "shop", "Tienda"], ["build", "helmet", "Obra"]]:
+	# Pulido 6A (2): título del menú actual, arriba de la barra.
+	_title_label = Label.new()
+	_title_label.name = "TitleLabel"
+	_title_label.add_theme_font_size_override("font_size", 20)
+	_title_label.add_theme_color_override("font_color", Color(1, 0.93, 0.75))
+	_title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_title_label.visible = false
+	var rows: Node = _tool_box.get_parent().get_parent()
+	rows.add_child(_title_label)
+	rows.move_child(_title_label, 0)
+	for entry in [["shop", "dollar", "Comprar"], ["build", "pencil", "Obra"]]:
 		var button := Icons.make_button(entry[1], entry[2], 56, true)
 		button.button_group = _tool_group
 		button.toggled.connect(_on_tool_toggled.bind(entry[0]))
@@ -77,7 +93,7 @@ func _ready() -> void:
 		_tool_buttons[entry[0]] = button
 	var separator := VSeparator.new()
 	_sub_modes.add_child(separator)
-	for entry in [["add", "build_tools", "Construir"], ["modify", "move", "Modificar"], ["rooms", "room", "Cuartos: elegí qué es cada uno"], ["erase", "trash", "Borrar"]]:
+	for entry in [["add", "pencil", "Construir"], ["modify", "move", "Mover"], ["paint", "paint", "Pintar"], ["rooms", "room", "Cuartos"], ["erase", "trash", "Borrar"]]:
 		var button := Icons.make_button(entry[1], entry[2], 56, true)
 		button.button_group = _mode_group
 		button.toggled.connect(func(on: bool) -> void:
@@ -161,6 +177,21 @@ func _create_actions() -> void:
 	# Las flechas cardinales: el mismo ícono girado (N arriba, E derecha...).
 	for pair in [["N", 0.0], ["E", 90.0], ["S", 180.0], ["O", 270.0]]:
 		_actions[pair[0]].icon = _rotated_arrow(pair[1])
+	# Pulido 6A (1): qué cara de la pared pinta el toque (solo en Pintar).
+	var scope_group := ButtonGroup.new()
+	for entry in [["touch", "Cara tocada"], ["inside", "Adentro"], ["outside", "Afuera"]]:
+		var scope_button := Button.new()
+		scope_button.name = "Scope_" + entry[0]
+		scope_button.text = entry[1]
+		scope_button.toggle_mode = true
+		scope_button.button_group = scope_group
+		scope_button.button_pressed = entry[0] == "touch"
+		scope_button.custom_minimum_size = Vector2(0, ACTION_SIZE)
+		scope_button.focus_mode = Control.FOCUS_NONE
+		scope_button.add_theme_font_size_override("font_size", 16)
+		scope_button.pressed.connect(EventBus.build_paint_scope_requested.emit.bind(entry[0]))
+		_action_row.add_child(scope_button)
+		_scope_buttons[entry[0]] = scope_button
 	var multi := Icons.make_button("select", "Modo selección: borrar varias cosas", ACTION_SIZE, true)
 	multi.toggled.connect(EventBus.build_erase_multi_toggled.emit)
 	_action_row.add_child(multi)
@@ -173,10 +204,13 @@ func _update_actions() -> void:
 		return
 	var level: int = _builder.level if _builder != null else 0
 	var modifying := tool == "build" and build_mode == "modify"
+	var painting := tool == "build" and build_mode == "paint"
 	var placing := _selected_kind in ["furniture", "stairs", "pillar"] and not modifying
 	_actions["copy"].visible = tool == "build" and build_mode == "add" and level > 0
-	_actions["paint_left"].visible = modifying and _paint_arrows
-	_actions["paint_right"].visible = modifying and _paint_arrows
+	_actions["paint_left"].visible = painting and _paint_arrows
+	_actions["paint_right"].visible = painting and _paint_arrows
+	for scope_button in _scope_buttons.values():
+		scope_button.visible = painting
 	for direction in ["N", "S", "E", "O"]:
 		_actions[direction].visible = modifying and _has_selection
 	_actions["rotate"].visible = (modifying and _has_selection) or placing
@@ -202,6 +236,7 @@ func _on_tool_toggled(on: bool, id: String) -> void:
 func _set_tool(id: String) -> void:
 	tool = id
 	_sub_modes.visible = id == "build"
+	_update_title()
 	_select_item("", "")
 	match id:
 		"shop":
@@ -217,6 +252,7 @@ func _set_tool(id: String) -> void:
 
 func _set_build_mode(mode: String) -> void:
 	build_mode = mode
+	_update_title()
 	if tool != "build":
 		return
 	_select_item("", "")
@@ -229,11 +265,36 @@ func _set_build_mode(mode: String) -> void:
 		# Pulido 4A: herramienta «Cuartos» (resalta los cuartos; tocar uno abre su tipo).
 		_fill_categories([], false)
 		EventBus.build_item_selected.emit(HouseBuilder.ROOMS_TOOL_ID)
+	elif mode == "paint":
+		# Pulido 6A (1): Pintar es su propio botón; arranca con el primer color elegido.
+		_fill_categories([], false)
+		_show_paints()
+		# (Los botones viejos siguen ahí hasta el fin del cuadro: se salta lo que se va a liberar.)
+		for child in _items_box.get_children():
+			if child is Button and not child.is_queued_for_deletion():
+				(child as Button).button_pressed = true
+				break
 	else:
 		_fill_categories([], false)
 		EventBus.build_item_selected.emit(HouseBuilder.MODIFY_TOOL_ID)
-		_show_paints()
 	_update_actions()
+
+
+## Pulido 6A (2): nombre del menú actual (Comprar, Construir, Mover, Pintar…).
+func menu_title() -> String:
+	match tool:
+		"shop":
+			return "Comprar"
+		"build":
+			return MODE_TITLES.get(build_mode, "Obra")
+	return ""
+
+
+func _update_title() -> void:
+	if _title_label == null:
+		return
+	_title_label.text = menu_title()
+	_title_label.visible = _title_label.text != ""
 
 
 ## Pestañas de categorías (y en la Tienda, "Para este cuarto" primero).
@@ -341,7 +402,7 @@ func _on_item_toggled(on: bool, item_id: String, kind: String) -> void:
 	if on:
 		_select_item(item_id, kind)
 	elif _item_group.get_pressed_button() == null:
-		# Sin pieza elegida: en Modificar se vuelve a la mano.
+		# Sin pieza elegida: en Mover se vuelve a la mano.
 		_select_item("", "")
 		if tool == "build" and build_mode == "modify":
 			EventBus.build_item_selected.emit(HouseBuilder.MODIFY_TOOL_ID)

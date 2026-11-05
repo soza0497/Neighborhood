@@ -892,6 +892,8 @@ func _on_game_mode_changed(mode: String) -> void:
 	_bottom_bar.visible = building
 	# Pulido 5C: al construir se ocultan el ánimo y las necesidades (quedan el dinero y el nivel).
 	_mood_button.visible = not building
+	# Pulido 6A (2): la brújula (centrar la cámara) no tapa la barra de construcción.
+	_compass_button.visible = not building
 	_close_cards()
 	_undo_button.visible = building
 	_redo_button.visible = building

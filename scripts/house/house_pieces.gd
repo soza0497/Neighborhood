@@ -25,6 +25,11 @@ static var _quad_mesh: QuadMesh = QuadMesh.new()
 static var _materials: Dictionary = {}
 
 
+## Pulido 6A (1): grosor de la lámina de pintura de cada cara de pared (m) y cuánto
+## falta para llegar al borde de arriba (ahí se ve el canto neutro sin pintar).
+const PAINT_PLATE := 0.012
+const PAINT_CAP := 0.02
+
 ## Material de una pieza: toon con contorno (uno por color, compartido).
 ## Todo el arte pasa por acá y por Style: ver data/style.json.
 static func material(color: Color) -> Material:
@@ -66,6 +71,13 @@ static func piece_color(value: Dictionary) -> Color:
 		return Color.from_string(value["color"], Color.MAGENTA)
 	var item := Catalog.get_item(value.get("item", ""))
 	return Color.from_string(item.get("color", "#ff00ff"), Color.MAGENTA)
+
+
+## Pulido 6A (1): el color NEUTRO de una pared: el del catálogo, sin pintura. Lo usan el
+## "canto" de arriba y las columnas de las esquinas: la pintura solo cubre las dos caras.
+static func wall_neutral_color(value: Dictionary) -> Color:
+	var item := Catalog.get_item(value.get("item", ""))
+	return Color.from_string(item.get("color", "#fff4dc"), Color.WHITE)
 
 
 ## Color de una cara de pared ("a" o "b", ver HouseData): la pintada, o el
@@ -240,18 +252,32 @@ static func build_wall(key: String, value: Dictionary, visible_height: float, fu
 
 	# Pulido 3C: con `flat_edges` el tramo no lleva contorno propio (lo lleva la
 	# caja de toda la pared; las columnas de las esquinas tapan la juntura).
+	# Pulido 6A (1): el cuerpo de la pared es SIEMPRE del color neutro (también el
+	# canto de arriba) y la pintura son dos láminas finas, una por cada cara. Así
+	# pintar el lado de adentro no toca el de afuera, no hay franjas partidas y el
+	# canto que se ve desde arriba nunca se pinta. Las láminas llegan hasta el eje
+	# de las columnas de las esquinas para que el color no se corte en la juntura.
+	var neutral := wall_neutral_color(value)
+	var plate_length := length if full_length else 1.0
+	var top_limit := minf(HouseGrid.WALL_HEIGHT, visible_height)
 	for part in solid:
 		var bottom: float = part[0]
 		var top: float = minf(part[1], visible_height)
 		if top - bottom <= 0.01:
 			continue
-		var mat_a := material_no_outline(color_a) if flat_edges else material(color_a)
-		var mat_b := material_no_outline(color_b) if flat_edges else material(color_b)
-		if color_a == color_b:
-			add_box(node, Vector3(0, (bottom + top) / 2.0, 0), Vector3(length, top - bottom, t), mat_a)
-		else:
-			add_box(node, Vector3(0, (bottom + top) / 2.0, -t / 4.0), Vector3(length, top - bottom, t / 2.0), mat_a)
-			add_box(node, Vector3(0, (bottom + top) / 2.0, t / 4.0), Vector3(length, top - bottom, t / 2.0), mat_b)
+		var core_mat := material_no_outline(neutral) if flat_edges else material(neutral)
+		add_box(node, Vector3(0, (bottom + top) / 2.0, 0), Vector3(length, top - bottom, t), core_mat)
+		# La lámina no llega al borde de arriba: queda el canto neutro.
+		var plate_top := top - PAINT_CAP if is_equal_approx(top, top_limit) else top
+		if plate_top - bottom <= 0.01:
+			continue
+		var offset := t / 2.0 + PAINT_PLATE / 2.0
+		for face in [["a", color_a, -offset], ["b", color_b, offset]]:
+			if face[1] == neutral:
+				continue
+			var plate := add_box(node, Vector3(0, (bottom + plate_top) / 2.0, face[2]),
+				Vector3(plate_length, plate_top - bottom, PAINT_PLATE), material_no_outline(face[1]))
+			plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return node
 
 

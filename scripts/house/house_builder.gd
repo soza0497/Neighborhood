@@ -15,7 +15,7 @@ extends Node3D
 ##     mantener una pared, techo, piso o cimiento abre un menú (mover, pintar,
 ##     borrar). Las junturas entre ventanas se ven como puntitos: tocarlos une
 ##     o separa esas dos ventanas.
-##   - Pintura (PAINT, desde Modificar): tocar pinta UNA cara de pared (o un
+##   - Pintura (PAINT, botón propio «Pintar» de la barra, Pulido 6A): tocar pinta UNA cara de pared (o un
 ##     piso) y aparecen flechas para seguir con la pared de al lado; mantener
 ##     presionado pinta arrastrando, solo sobre lo que se empezó (paredes o pisos).
 ##   - Borrar (ERASE): tocar resalta y pregunta "¿Borrar techo? Te devuelven
@@ -65,7 +65,7 @@ const JOINT_PICK_PIXELS := 40.0
 const DIRECTIONS := {"N": Vector2i(0, -1), "S": Vector2i(0, 1), "E": Vector2i(1, 0), "O": Vector2i(-1, 0)}
 
 const HINTS := {
-	Tool.NONE: "Elegí Tienda u Obra (Construir, Modificar o Borrar).",
+	Tool.NONE: "Elegí Comprar u Obra (Construir, Mover, Pintar o Borrar).",
 	Tool.FOUNDATION: "Arrastrá para marcar el terreno de la casa (cimientos).",
 	Tool.FLOOR: "Arrastrá sobre los cimientos para poner piso.",
 	Tool.EXCAVATE: "Arrastrá en un sótano para excavar (un servicio con costo y espera). Después van los cimientos.",
@@ -114,6 +114,9 @@ var selected_key := ""
 var erase_multi := false
 ## Color de pintura elegido (id del catálogo).
 var paint_item_id := ""
+## Pulido 6A (1): qué cara de la pared se pinta: "touch" (la que se toca), "inside"
+## (la de adentro de esa pared) u "outside" (la de afuera). Ver WallFaces.resolve_scope.
+var paint_scope := "touch"
 ## Pulido 2: construcción planificada. Lo que se agrega queda como "previsto"
 ## (brilla cada pocos segundos) hasta que se toca Factura → Confirmar. Se
 ## puede apagar (las pruebas viejas construyen de una).
@@ -274,6 +277,14 @@ func select_item(item_id: String) -> void:
 	_update_camera_pan()
 	_show_tool_hint()
 	refresh_room_overlay()
+
+
+## Pulido 6A (1): elige qué cara de la pared pinta el toque (touch / inside / outside).
+func set_paint_scope(scope: String) -> void:
+	paint_scope = scope if scope in ["touch", "inside", "outside"] else "touch"
+	_paint_face = {}
+	EventBus.build_paint_arrows.emit(false)
+	_show_tool_hint()
 
 
 ## Borrar: una cosa por vez, o varias (modo selección).
@@ -1020,7 +1031,7 @@ func _on_tap(screen_pos: Vector2) -> void:
 			else:
 				_open_context_menu(target)
 		Tool.PAINT:
-			var face := _pick_wall_face(screen_pos)
+			var face := _pick_paint_face(screen_pos)
 			if not face.is_empty():
 				_paint_tap_face(face)
 				return
@@ -1085,7 +1096,7 @@ func _on_long_press(screen_pos: Vector2) -> void:
 				_open_context_menu(target)
 				return
 		Tool.PAINT:
-			var face := _pick_wall_face(screen_pos)
+			var face := _pick_paint_face(screen_pos)
 			_paint_surface = "walls" if not face.is_empty() else ("floors" if _pick_floor(screen_pos) != "" else "")
 			if _paint_surface == "":
 				_long_pressed = false
@@ -1127,7 +1138,7 @@ func _update_long_drag(screen_pos: Vector2) -> void:
 			_show_preview()
 		Tool.PAINT:
 			if _paint_surface == "walls":
-				var face := _pick_wall_face(screen_pos)
+				var face := _pick_paint_face(screen_pos)
 				if not face.is_empty():
 					_paint_targets["walls|%s|%s" % [face["edge"], face["side"]]] = true
 			else:
@@ -1355,7 +1366,6 @@ func _open_context_menu(target: Dictionary) -> void:
 	var options: Array = []
 	match target["layer"]:
 		"walls":
-			options.append({"id": "paint", "text": "Pintar esta cara"})
 			options.append({"id": "move", "text": "Mover"})
 			if value.has("opening"):
 				var opening_name: String = Catalog.get_item(value["opening"]).get("name", "abertura")
@@ -1365,7 +1375,6 @@ func _open_context_menu(target: Dictionary) -> void:
 			options.append({"id": "move", "text": "Mover"})
 			options.append({"id": "erase", "text": "Borrar techo"})
 		"floors":
-			options.append({"id": "paint", "text": "Pintar"})
 			# Pulido 3B: si el piso es de un cuarto cerrado, se le puede elegir el tipo.
 			var room := HouseRooms.room_at(house, level, HouseGrid.key_to_cell(target["key"]))
 			if not room.is_empty():
@@ -1623,6 +1632,14 @@ func _add_wall(writes: Array, edge: String, wall_item: String) -> void:
 		for field in ["opening", "join_end", "color_a", "color_b"]:
 			if current.has(field):
 				value[field] = current[field]
+	else:
+		# Pulido 6A (1): una pared nueva hereda el color de la que sigue en su línea
+		# (la de este mismo gesto o una ya construida).
+		var pending := {}
+		for write in writes:
+			if write["layer"] == "walls" and write["value"] != null:
+				pending[write["key"]] = write["value"]
+		value.merge(WallFaces.inherited_colors(house, level, edge, pending))
 	writes.append(HouseData.write(level, "walls", edge, value))
 
 
@@ -2017,6 +2034,16 @@ func _pick_wall_face(screen_pos: Vector2) -> Dictionary:
 	return {"edge": edge, "side": side}
 
 
+## Pulido 6A (1): la cara de pared que se va a pintar, ya con el filtro
+## interior / exterior aplicado ({edge, side} o {}).
+func _pick_paint_face(screen_pos: Vector2) -> Dictionary:
+	var face := _pick_wall_face(screen_pos)
+	if face.is_empty():
+		return {}
+	face["side"] = WallFaces.resolve_scope(house, level, face["edge"], face["side"], paint_scope)
+	return face
+
+
 ## Piso del nivel actual bajo la pantalla ("" si no hay).
 func _pick_floor(screen_pos: Vector2) -> String:
 	var point: Variant = _point_on_level(screen_pos)
@@ -2135,6 +2162,8 @@ func _show_tool_hint() -> void:
 		EventBus.build_hint.emit("%s: %s" % [item.get("name", ""), HINTS[tool]])
 	elif tool == Tool.ERASE and erase_multi:
 		EventBus.build_hint.emit("Modo selección: tocá todo lo que querés borrar y después «Borrar».")
+	elif tool == Tool.PAINT and paint_scope != "touch":
+		EventBus.build_hint.emit("Pintás la cara %s de cada pared que toques." % ("de adentro" if paint_scope == "inside" else "de afuera"))
 	else:
 		EventBus.build_hint.emit(HINTS[tool])
 

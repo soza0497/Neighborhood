@@ -105,6 +105,7 @@ func _ready() -> void:
 	# Constructor 2.0 (Pulido 1).
 	EventBus.build_nudge_requested.connect(_builder.nudge_selected)
 	EventBus.build_paint_step_requested.connect(_builder.paint_step)
+	EventBus.build_paint_scope_requested.connect(_builder.set_paint_scope)
 	EventBus.build_context_action_requested.connect(_builder.context_action)
 	EventBus.build_erase_multi_toggled.connect(_builder.set_erase_multi)
 	EventBus.build_copy_outline_requested.connect(_builder.copy_outline)
